@@ -1,0 +1,32 @@
+{
+  "_dataset_path": "stackoverflow",
+  "_datatable_path": "so_countries_col_new_half.csv",
+  "_dag_path": "so.dot",
+  "_immutable_attributes": [
+    "Gender",
+    "SexualOrientation",
+    "EducationParents",
+    "RaceEthnicity",
+    "Age",
+    "YearsCoding",
+    "Dependents",
+    "RaceEthnicity",
+    "Country",
+    "GDP",
+    "Student"
+  ],
+  "_protected_attributes": "GDP",
+  "_protected_values": [
+    "Low",
+    true
+  ],
+  "_mutable_attributes": [
+    "Exercise",
+    "HoursComputer",
+    "DevType",
+    "FormalEducation",
+    "UndergradMajor",
+    "Hobby"
+  ],
+  "_target_outcome": "ConvertedSalary"
+}

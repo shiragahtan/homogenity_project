@@ -1,0 +1,73 @@
+{
+  "_dataset_path": "stackoverflow",
+  "_datatable_path": "so_countries_col_new_500.csv",
+  "_dag_path": "so.dot",
+  "_immutable_attributes": [
+    "Gender",
+    "SexualOrientation",
+    "EducationParents",
+    "RaceEthnicity",
+    "Age",
+    "YearsCoding",
+    "Dependents",
+    "RaceEthnicity",
+    "Country",
+    "GDP",
+    "Student"
+  ],
+  "_protected_attributes": "GDP",
+  "_protected_values": [
+    "Low",
+    true
+  ],
+  "_ordinal_attributes": {
+    "Exercise": [
+      "I don't typically exercise",
+      "Daily or almost every day",
+      "1 - 2 times per week",
+      "3 - 4 times per week",
+      "UNKNOWN"
+    ],
+    "HoursComputer": [
+      "Less than 1 hour",
+      "1 - 4 hours",
+      "5 - 8 hours",
+      "9 - 12 hours",
+      "Over 12 hours",
+      "UNKNOWN"
+    ],
+    "FormalEducation": [
+      "I never completed any formal education",
+      "Primary/elementary school",
+      "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)",
+      "Associate degree",
+      "Some college/university study without earning a degree",
+      "Bachelor’s degree (BA, BS, B.Eng., etc.)",
+      "Master’s degree (MA, MS, M.Eng., MBA, etc.)",
+      "Other doctoral degree (Ph.D, Ed.D., etc.)",
+      "Professional degree (JD, MD, etc.)"
+    ],
+    "YearsCoding": [
+      "0-2 years",
+      "3-5 years",
+      "6-8 years",
+      "9-11 years",
+      "12-14 years",
+      "15-17 years",
+      "18-20 years",
+      "21-23 years",
+      "24-26 years",
+      "27-29 years",
+      "30 or more years"
+    ]
+  },
+  "_mutable_attributes": [
+    "Exercise",
+    "HoursComputer",
+    "DevType",
+    "FormalEducation",
+    "UndergradMajor",
+    "Hobby"
+  ],
+  "_target_outcome": "ConvertedSalary"
+}

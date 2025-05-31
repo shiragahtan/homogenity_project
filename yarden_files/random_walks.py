@@ -93,8 +93,8 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     available_itemsets = len(max_size_itemsets)
     sample_size = min(k, available_itemsets)
     print(f"Available itemsets: {available_itemsets}, Requested k: {k}, Using sample size: {sample_size}")
-
-    random_choices = max_size_itemsets.sample(k)['formatted_itemsets'].values
+    
+    random_choices = max_size_itemsets.sample(sample_size)['formatted_itemsets'].values
 
     diff_values = []
 
@@ -213,10 +213,17 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
 
-    original_types = df.select_dtypes(include=['int', 'float', 'bool']).dtypes.to_dict()
-    df = df.astype({col: str for col in original_types.keys()})
+    # Store original types for ALL columns
+    original_types = df.dtypes.to_dict()
     
-    df_filtered = df[attributes_for_apriori]
+    # Only convert the attributes_for_apriori columns to strings for Apriori
+    # Keep treatment and outcome columns as numeric
+    df_for_apriori = df.copy()
+    for col in attributes_for_apriori:
+        if col in df_for_apriori.columns:
+            df_for_apriori[col] = df_for_apriori[col].astype(str)
+    
+    df_filtered = df_for_apriori[attributes_for_apriori]
     df_encoded = pd.get_dummies(df_filtered, prefix_sep='::')
 
     start_time_apriori = time.time()
@@ -247,11 +254,11 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 if __name__ == "__main__":
-    csv_name = "../stackoverflow/so_countries_col_new.csv"
-    attributes_for_apriori = ["Continent", "Age", "Gender", "RaceEthnicity"] #shira keren update
+    csv_name = "stackoverflow_data_encoded.csv"
+    attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     treatment = "FormalEducation"
     outcome = "ConvertedSalary"
-    desired_ate = 16900
+    desired_ate = 14236
     k=1000
     size_threshold=0.2
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights

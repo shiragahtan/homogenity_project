@@ -254,7 +254,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 if __name__ == "__main__":
-    csv_name = "stackoverflow_data_encoded.csv"
+    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     treatment = "FormalEducation"
     outcome = "ConvertedSalary"

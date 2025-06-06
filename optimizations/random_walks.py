@@ -84,6 +84,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
     start_ate_time = time.time()  # Start timing ATE calculation
     df_ate = ate_update_obj.get_original_ate()
+    print(f"shira ate all : df_ate: {df_ate}")
     end_ate_time = time.time()  # End timing ATE calculation
     total_ate_calculations += 1
     total_ate_time += (end_ate_time - start_ate_time)
@@ -130,17 +131,31 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
         df_to_remove = None
 
         for key, value in reversed(key_value):
+            ipdb.set_trace()
             if df_to_remove is None:
                 df_to_remove = df[df[key] == value]
             else:
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
             dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
+        
+        # Get complement indices - all indices NOT in the filtered subset
+        all_indices = set(df.index)
+        filtered_indices = set(df_to_remove.index)
+        complement_indices = list(all_indices - filtered_indices)
+        complement_size = len(complement_indices)
+        
+        # Create complement data structure similar to dfs_to_remove_data
+        dfs_to_remove_data_shira_keren = [(complement_indices, complement_size)]
+        
+        print(f"Debug: Original filtered indices: {len(filtered_indices)} rows")
+        print(f"Debug: Complement indices: {complement_size} rows")
+        print(f"Debug: Total dataset size: {df.shape[0]} rows")
 
         tuples_removed_num = set()
         calc_idx = 0
 
         already_removed_indices = []
-        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(reversed(dfs_to_remove_data)):
+        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
 
             if df_to_remove_shape / df_shape > size_threshold:
                 print(f"More than {size_threshold*100}% of tuples. Breaking")
@@ -180,7 +195,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                     print(f"Total ATE calculations: {total_ate_calculations}")
                     print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
                     print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
-                    return
+                    return True
 
                 calc_idx += 1
 
@@ -212,6 +227,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     print(f"T-test Statistic: {t_statistic}, P-value: {p_value}")
     print(f"Max Diff: {max_diff}")
     print(f"Min Diff: {min_diff}")
+    return False
 
 def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method):
     start_time = time.time()
@@ -253,19 +269,40 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     print(frequent_itemsets[['formatted_itemsets', 'itemset_size']])
 
     df = df.astype(original_types)
-    k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method)
+    ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method)
     elapsed_time = time.time() - start_time
     print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
+    return ret
 
 
-if __name__ == "__main__":
+
+
+def check_homogenity_with_random_walks(desired_ate):
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     treatment = "FormalEducation"
     outcome = "ConvertedSalary"
-    desired_ate = 14236
     k=1000
     size_threshold=0.2
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
-    main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method)
+    return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method)
+
+
+if __name__ == "__main__":
+    epsilon = 500
+    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
+    df = pd.read_csv(csv_name)
+    treatment = "FormalEducation"
+    outcome = "ConvertedSalary"
+    features_cols = [col for col in df.columns if col not in [treatment, outcome]]
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
+    utility_all = ate_update_obj.get_original_ate() # to check it this is the utility_all
+    
+    if (check_homogenity_with_random_walks(utility_all - epsilon)):
+        print("not homogenous")
+    elif (check_homogenity_with_random_walks(utility_all + epsilon)):
+        print("not homogenous")
+    else:
+        print("probably homogenous")
+

@@ -78,7 +78,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     total_ate_time = 0
     global_used_combinations = set()
     global_key_value_score = dict()
-    delta = 3000
+    delta = 8000
     max_size_of_group = 100000
 
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
@@ -166,19 +166,11 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
         calc_idx = 0
 
         already_removed_indices = []
-        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(dfs_to_remove_data_shira_keren):
+        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
 
             if df_to_remove_shape / df_shape < size_threshold:
                 print(f"the size of the dataset is too big. too close to the original dataset. Breaking")
                 break
-            
-            # Skip if the subgroup is too large (more than 25% of original dataset)
-            max_subgroup_ratio = 0.25
-            if df_to_remove_shape / df_shape > (1 - max_subgroup_ratio):
-                print(f"Subgroup too large ({df_to_remove_shape}/{df_shape} = {df_to_remove_shape/df_shape:.2%}). Skipping to avoid performance issues.")
-                continue
-                
-            ipdb.set_trace()
 
             if i > 0:
                 print(f"key & value to remove now from combo: {key_value[i-1]}")
@@ -190,8 +182,8 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 unique_indices = [i for i in df_to_remove_index if i not in already_removed_indices]
                 
                 # Process large batches in smaller chunks to avoid performance issues
-                batch_size = 1000  # Process 1000 indices at a time
-                max_indices_to_process = 5000  # Maximum number of indices to process
+                batch_size = 14000  # Process 1000 indices at a time
+                max_indices_to_process = 14000  # Maximum number of indices to process
                 
                 # If we have too many indices, sample a subset
                 if len(unique_indices) > max_indices_to_process:
@@ -207,6 +199,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         batch_end = min(batch_start + batch_size, len(unique_indices))
                         batch_indices = unique_indices[batch_start:batch_end]
                         print(f"  Processing batch {batch_start//batch_size + 1}: indices {batch_start} to {batch_end-1}")
+                        ipdb.set_trace()
                         ate = ate_update_obj.calculate_updated_ATE(batch_indices)
                     end_ate_time = time.time()
                 else:
@@ -341,10 +334,10 @@ if __name__ == "__main__":
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
     utility_all = ate_update_obj.get_original_ate() # to check it this is the utility_all
     
-    if (check_homogenity_with_random_walks(utility_all - epsilon)):
-        print("not homogenous (negative side)")
-    elif (check_homogenity_with_random_walks(utility_all + epsilon)):
+    if (check_homogenity_with_random_walks(utility_all + epsilon)):
         print("not homogenous (positive side)")
+    elif (check_homogenity_with_random_walks(utility_all - epsilon)):
+        print("not homogenous (negative side)")
     else:
         print("probably homogenous")
 

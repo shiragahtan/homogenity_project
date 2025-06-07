@@ -325,7 +325,7 @@ def check_homogenity_with_random_walks(desired_ate):
 
 
 if __name__ == "__main__":
-    epsilon = 100
+    epsilon = 3000
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     df = pd.read_csv(csv_name)
     treatment = "FormalEducation"

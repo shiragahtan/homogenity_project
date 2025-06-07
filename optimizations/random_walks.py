@@ -9,7 +9,7 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import sys
 import os
-
+import ipdb
 # Add the yarden_files directory to the Python path to import ATE_update
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
 from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
@@ -78,6 +78,8 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     total_ate_time = 0
     global_used_combinations = set()
     global_key_value_score = dict()
+    delta = 3000
+    max_size_of_group = 100000
 
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
 
@@ -129,37 +131,54 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
         dfs_to_remove_data = []
         df_to_remove = None
-
         for key, value in reversed(key_value):
-            ipdb.set_trace()
             if df_to_remove is None:
                 df_to_remove = df[df[key] == value]
             else:
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
-            dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
+            if (df_to_remove.shape[0] > delta and df_to_remove.shape[0] < max_size_of_group):
+                dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
+            else:
+                break
         
-        # Get complement indices - all indices NOT in the filtered subset
+        # Create complement data structure - progressive complements matching original structure
+        dfs_to_remove_data_shira_keren = []
         all_indices = set(df.index)
-        filtered_indices = set(df_to_remove.index)
-        complement_indices = list(all_indices - filtered_indices)
-        complement_size = len(complement_indices)
         
-        # Create complement data structure similar to dfs_to_remove_data
-        dfs_to_remove_data_shira_keren = [(complement_indices, complement_size)]
-        
-        print(f"Debug: Original filtered indices: {len(filtered_indices)} rows")
-        print(f"Debug: Complement indices: {complement_size} rows")
+        for original_indices, original_size in dfs_to_remove_data:
+            # Get complement of each progressive filter
+            filtered_indices = set(original_indices)
+            complement_indices = list(all_indices - filtered_indices)
+            complement_size = len(complement_indices)
+            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size))
+        # ipdb.set_trace()
+
+        # Reverse the order of the list
+        dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
+
+        print(f"Debug: Original progressive filtering had {len(dfs_to_remove_data)} steps")
+        print(f"Debug: Complement progressive filtering has {len(dfs_to_remove_data_shira_keren)} steps")
+        for i, ((orig_indices, orig_size), (comp_indices, comp_size)) in enumerate(zip(dfs_to_remove_data, dfs_to_remove_data_shira_keren)):
+            print(f"  Step {i}: Original {orig_size} rows -> Complement {comp_size} rows")
         print(f"Debug: Total dataset size: {df.shape[0]} rows")
 
         tuples_removed_num = set()
         calc_idx = 0
 
         already_removed_indices = []
-        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
+        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(dfs_to_remove_data_shira_keren):
 
-            if df_to_remove_shape / df_shape > size_threshold:
-                print(f"More than {size_threshold*100}% of tuples. Breaking")
+            if df_to_remove_shape / df_shape < size_threshold:
+                print(f"the size of the dataset is too big. too close to the original dataset. Breaking")
                 break
+            
+            # Skip if the subgroup is too large (more than 25% of original dataset)
+            max_subgroup_ratio = 0.25
+            if df_to_remove_shape / df_shape > (1 - max_subgroup_ratio):
+                print(f"Subgroup too large ({df_to_remove_shape}/{df_shape} = {df_to_remove_shape/df_shape:.2%}). Skipping to avoid performance issues.")
+                continue
+                
+            ipdb.set_trace()
 
             if i > 0:
                 print(f"key & value to remove now from combo: {key_value[i-1]}")
@@ -169,10 +188,33 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 print(f"Combo to remove: {combo_to_remove[i][0]} already exist in other random walk")
             else:
                 unique_indices = [i for i in df_to_remove_index if i not in already_removed_indices]
-                start_ate_time = time.time()  # Start timing ATE calculation
-                ate = ate_update_obj.calculate_updated_ATE(unique_indices)
-                end_ate_time = time.time()  # End timing ATE calculation
-                already_removed_indices+=unique_indices
+                
+                # Process large batches in smaller chunks to avoid performance issues
+                batch_size = 1000  # Process 1000 indices at a time
+                max_indices_to_process = 5000  # Maximum number of indices to process
+                
+                # If we have too many indices, sample a subset
+                if len(unique_indices) > max_indices_to_process:
+                    print(f"Too many indices ({len(unique_indices)}). Sampling {max_indices_to_process} random indices.")
+                    import random
+                    unique_indices = random.sample(unique_indices, max_indices_to_process)
+                
+                if len(unique_indices) > batch_size:
+                    print(f"Processing {len(unique_indices)} indices in batches of {batch_size}")
+                    
+                    start_ate_time = time.time()
+                    for batch_start in range(0, len(unique_indices), batch_size):
+                        batch_end = min(batch_start + batch_size, len(unique_indices))
+                        batch_indices = unique_indices[batch_start:batch_end]
+                        print(f"  Processing batch {batch_start//batch_size + 1}: indices {batch_start} to {batch_end-1}")
+                        ate = ate_update_obj.calculate_updated_ATE(batch_indices)
+                    end_ate_time = time.time()
+                else:
+                    start_ate_time = time.time()  # Start timing ATE calculation
+                    ate = ate_update_obj.calculate_updated_ATE(unique_indices)
+                    end_ate_time = time.time()  # End timing ATE calculation
+                
+                already_removed_indices += unique_indices
                 total_ate_calculations += 1
                 total_ate_time += (end_ate_time - start_ate_time)
 
@@ -214,13 +256,13 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     t_statistic, p_value = stats.ttest_1samp(diff_values, 0)
 
     # Bin the diff values and plot histogram
-    plt.figure(figsize=(10, 6))
-    plt.hist(diff_values, bins=30, edgecolor="black")
-    plt.xlabel("Diff Values (Binned)")
-    plt.ylabel("Number of Subgroups")
-    plt.title("Distribution of Diff Values Across Subgroups")
-    plt.savefig("diff_histogram.png") 
-    plt.show()
+    # plt.figure(figsize=(10, 6))
+    # plt.hist(diff_values, bins=30, edgecolor="black")
+    # plt.xlabel("Diff Values (Binned)")
+    # plt.ylabel("Number of Subgroups")
+    # plt.title("Distribution of Diff Values Across Subgroups")
+    # plt.savefig("diff_histogram.png") 
+    # plt.show()
 
     print(f"Average Diff: {average_diff}")
     print(f"Variance of Diff: {variance_diff}")
@@ -283,14 +325,14 @@ def check_homogenity_with_random_walks(desired_ate):
     treatment = "FormalEducation"
     outcome = "ConvertedSalary"
     k=1000
-    size_threshold=0.2
+    size_threshold=0.2 # we want to look only at sub datasets that are less than 80% in their size from the original dataset
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
     return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method)
 
 
 if __name__ == "__main__":
-    epsilon = 500
+    epsilon = 100
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     df = pd.read_csv(csv_name)
     treatment = "FormalEducation"
@@ -300,9 +342,9 @@ if __name__ == "__main__":
     utility_all = ate_update_obj.get_original_ate() # to check it this is the utility_all
     
     if (check_homogenity_with_random_walks(utility_all - epsilon)):
-        print("not homogenous")
+        print("not homogenous (negative side)")
     elif (check_homogenity_with_random_walks(utility_all + epsilon)):
-        print("not homogenous")
+        print("not homogenous (positive side)")
     else:
         print("probably homogenous")
 

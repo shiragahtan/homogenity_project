@@ -9,7 +9,6 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import sys
 import os
-import ipdb
 # Add the yarden_files directory to the Python path to import ATE_update
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
 from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
@@ -151,7 +150,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
             complement_indices = list(all_indices - filtered_indices)
             complement_size = len(complement_indices)
             dfs_to_remove_data_shira_keren.append((complement_indices, complement_size))
-        # ipdb.set_trace()
 
         # Reverse the order of the list
         dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
@@ -199,7 +197,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         batch_end = min(batch_start + batch_size, len(unique_indices))
                         batch_indices = unique_indices[batch_start:batch_end]
                         print(f"  Processing batch {batch_start//batch_size + 1}: indices {batch_start} to {batch_end-1}")
-                        ipdb.set_trace()
                         ate = ate_update_obj.calculate_updated_ATE(batch_indices)
                     end_ate_time = time.time()
                 else:

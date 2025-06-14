@@ -7,6 +7,9 @@ import multiprocessing as mp
 from typing import Dict, List, Tuple, Callable, Any
 
 
+EPSILON = 5000
+
+
 def filter_by_attribute(df: pd.DataFrame, filters: dict, delta: int) -> pd.DataFrame:
     """
     Filters the DataFrame based on the given attribute-value pairs.
@@ -102,6 +105,7 @@ def generate_pruned_levels_mp(df: pd.DataFrame,
 
 
 def calc_utility_for_subgroups(
+        mode: int,
         attr_vals: Dict[str, List],
         df: pd.DataFrame,
         treatment: Dict[str, Any],
@@ -109,7 +113,8 @@ def calc_utility_for_subgroups(
         attrOrdinal: Any,
         tgtO: str,
         CATE_func: Callable,
-        delta: int = 20_000
+        delta: int,
+        epsilon: int
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     Calculate utility for each subgroup in the DataFrame.
@@ -144,17 +149,29 @@ def calc_utility_for_subgroups(
             filtered_df = filter_by_attribute(df, filt, delta)
             if not filtered_df.empty:
                 cate_value, p_value = CATE_func(filtered_df, DAG_str, treatment, attrOrdinal, tgtO)
+                if cate_value != 0 and mode == 0 and abs(utility_all - cate_value) > epsilon:
+                    print(
+                        f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
+                        f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
+                    )
+                    return False
+
                 utility_diff = cate_value - utility_all
 
                 num_subgroups += 1
                 # Append subgroup data to the list
-                subgroup_data.append({
-                    "AttributeValues": str(filt),
-                    "Size": sz,
-                    "Utility": cate_value,
-                    "UtilityDiff": utility_diff,
-                    "PValue": p_value
-                })
+                if mode != 0:
+                    subgroup_data.append({
+                        "AttributeValues": str(filt),
+                        "Size": sz,
+                        "Utility": cate_value,
+                        "UtilityDiff": utility_diff,
+                        "PValue": p_value
+                    })
 
     # Return the data needed for saving to Excel
-    return subgroup_data, num_subgroups
+    if mode != 0:
+        return subgroup_data, num_subgroups
+
+    print("\033[92mHomogenous\033[0m")
+    return True

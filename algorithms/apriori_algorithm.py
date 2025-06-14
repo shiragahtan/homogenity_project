@@ -70,6 +70,7 @@ def filter_by_attribute(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 
 
 def calc_utility_for_subgroups(
+    mode: int,
     algorithm: Callable,
     df: pd.DataFrame,
     treatment: Dict[str, object],
@@ -78,7 +79,8 @@ def calc_utility_for_subgroups(
     target_col: str,
     cate_func: Callable,
     delta: int,
-) -> Tuple[List[Dict[str, Any]], int]:
+    epsilon: int
+):
     """
     Calculate utility for each subgroup in the DataFrame using Apriori algorithm.
 
@@ -107,14 +109,25 @@ def calc_utility_for_subgroups(
 
         # Calculate CATE for this subgroup
         cate, p = cate_func(sub_df, dag_str, treatment, attr_ordinal, target_col)
+        if cate != 0 and mode == 0 and abs(utility_all - cate) > epsilon:
+            print(
+                f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
+                f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
+            )
+            return False
 
         # Store subgroup information
-        subgroup_records.append({
-            "AttributeValues": str(filt),
-            "Size": sz,
-            "Utility": cate,
-            "UtilityDiff": cate - utility_all,
-            "PValue": p,
-        })
+        if mode != 0:
+            subgroup_records.append({
+                "AttributeValues": str(filt),
+                "Size": sz,
+                "Utility": cate,
+                "UtilityDiff": cate - utility_all,
+                "PValue": p,
+            })
 
-    return subgroup_records, len(subgroup_records)
+    if mode != 0:
+        return subgroup_records, len(subgroup_records)
+
+    print("\033[92mHomogenous\033[0m")
+    return True

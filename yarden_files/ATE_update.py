@@ -53,6 +53,7 @@ class ATEUpdateLinear:
         self.original_model = BaseLinearRegression(self.X_matrix, self.Y_matrix)
         
         # Store original ATE (treatment effect)
+        import ipdb; ipdb.set_trace()
         self.original_ate = float(self.original_model.beta[1])
     
     def _identify_confounders(self):

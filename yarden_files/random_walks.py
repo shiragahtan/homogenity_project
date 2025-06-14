@@ -75,7 +75,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     global_key_value_score = dict()
 
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
-
+    import ipdb; ipdb.set_trace()
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
     start_ate_time = time.time()  # Start timing ATE calculation
     df_ate = ate_update_obj.get_original_ate()
@@ -131,8 +131,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
             dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
 
-
-        import ipdb;ipdb.set_trace()
         dfs_to_remove_data_shira_keren = []
         all_indices = set(df.index)
 
@@ -146,8 +144,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
         # Reverse the order of the list
         dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
-        import ipdb;ipdb.set_trace()
-
         tuples_removed_num = set()
         calc_idx = 0
 
@@ -232,7 +228,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
     # Store original types for ALL columns
     original_types = df.dtypes.to_dict()
-    import ipdb;ipdb.set_trace()
+    #import ipdb;ipdb.set_trace()
     # Only convert the attributes_for_apriori columns to strings for Apriori
     # Keep treatment and outcome columns as numeric
     df_for_apriori = df.copy()

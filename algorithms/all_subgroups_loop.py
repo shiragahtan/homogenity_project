@@ -140,7 +140,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_
     Run experiments for each treatment and save results to an Excel file.
     """
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
-    epsilons = [5000, 5500, 3000, 3500, 60000, 65000]
+    epsilons = [3000, 3500, 5000, 5500, 60000, 65000]
     for i, good_treatment in enumerate(good_treatments):
         for epsilon in epsilons:
             condition = good_treatment["condition"]

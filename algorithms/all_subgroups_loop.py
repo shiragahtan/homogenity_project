@@ -142,22 +142,23 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
     epsilons = [3000, 3500, 5000, 5500, 60000, 65000]
     for i, good_treatment in enumerate(good_treatments):
-        for epsilon in epsilons:
-            condition = good_treatment["condition"]
-            attr, val = list(condition.items())[0]
-            treatment = good_treatment["treatment"]
-            # Filter the DataFrame based on the condition
-            df = (pd.read_csv(DATA_PATH)
-                  .query(f'{attr} == "{val}"')
-                  .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
-                  .drop(columns=[f'{attr}'])  # Remove the filter column since it now contains only one value
-                  .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
-                  .reset_index(drop=True))
+        condition = good_treatment["condition"]
+        attr, val = list(condition.items())[0]
+        treatment = good_treatment["treatment"]
+        # Filter the DataFrame based on the condition
+        df = (pd.read_csv(DATA_PATH)
+              .query(f'{attr} == "{val}"')
+              .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
+              .drop(columns=[f'{attr}'])  # Remove the filter column since it now contains only one value
+              .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
+              .reset_index(drop=True))
 
-            if len(df) < delta:
-                continue  # Skip if the filtered DataFrame is too small
-            # Calculate utility for subgroups
-            print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
+        if len(df) < delta:
+            continue  # Skip if the filtered DataFrame is too small
+        # Calculate utility for subgroups
+        print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
+        for epsilon in epsilons:
+            print(f"Running with epsilon: {epsilon}")
             common = dict(
                 df=df,
                 treatment=treatment,

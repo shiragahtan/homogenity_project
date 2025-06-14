@@ -151,8 +151,8 @@ def calc_utility_for_subgroups(
                 cate_value, p_value = CATE_func(filtered_df, DAG_str, treatment, attrOrdinal, tgtO)
                 if cate_value != 0 and mode == 0 and abs(utility_all - cate_value) > epsilon:
                     print(
-                        f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
-                        f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
+                        f"\n\033[91msubgroup's cate is: {cate_value} while utility_all is {utility_all} "
+                        f"(Δ={abs(utility_all - cate_value)}>{epsilon}) → NOT homogeneous\033[0m\n"
                     )
                     return False
 

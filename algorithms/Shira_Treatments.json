@@ -1,0 +1,3 @@
+{"condition": {"RaceEthnicity": "White or of European descent"}, "treatment": {"Exercise": "3 - 4 times per week"}, "utility": 16709.099540637442, "p_value": 2.87409682e-08}
+{"condition": {"Gender": "Male"}, "treatment": {"HoursComputer": "5 - 8 hours"}, "utility": 8666.36348933776, "p_value": 0.00053494}
+{"condition": {"RaceEthnicity": "White or of European descent"}, "treatment": {"HoursComputer": "1 - 4 hours", "FormalEducation": "Master’s degree (MA, MS, M.Eng., MBA, etc.)"}, "utility": 46010.51950819451, "p_value": 0.09441451}

@@ -131,6 +131,23 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
             dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
 
+
+        import ipdb;ipdb.set_trace()
+        dfs_to_remove_data_shira_keren = []
+        all_indices = set(df.index)
+
+        for original_indices, original_size in dfs_to_remove_data:
+            # Get complement of each progressive filter
+            filtered_indices = set(original_indices)
+            complement_indices = list(all_indices - filtered_indices)
+            complement_size = len(complement_indices)
+            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size))
+        # ipdb.set_trace()
+
+        # Reverse the order of the list
+        dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
+        import ipdb;ipdb.set_trace()
+
         tuples_removed_num = set()
         calc_idx = 0
 
@@ -215,7 +232,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
     # Store original types for ALL columns
     original_types = df.dtypes.to_dict()
-    
+    import ipdb;ipdb.set_trace()
     # Only convert the attributes_for_apriori columns to strings for Apriori
     # Keep treatment and outcome columns as numeric
     df_for_apriori = df.copy()

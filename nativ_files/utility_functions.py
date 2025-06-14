@@ -23,7 +23,7 @@ from dowhy import CausalModel
 import warnings
 import pygraphviz as pgv
 
-from prescription import Prescription
+# from prescription import Prescription
 
 warnings.filterwarnings("ignore")
 SRC_PATH = Path(__file__).parent.parent.parent

@@ -1,12 +1,15 @@
 import sys
+from pathlib import Path
+# Add project root to sys.path for module resolution
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 import json
 import time
 import datetime
 import pandas as pd
-from pathlib import Path
 import multiprocessing as mp
 
-from project_updated.homogenity_project.nativ_files.utility_functions import CATE
+from nativ_files.utility_functions import CATE
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
@@ -218,11 +221,13 @@ def main():
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
-    for chosen_algorithm in range(1, 4):
-        for delta in range(MIN_DELTA, MAX_DELTA + 1, 5000):
-            print(f"Running for delta: {delta}")
-            run_experiments(chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
+    chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
+    delta = 20000  # Initial delta value
+    run_experiments(chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
+    # for chosen_algorithm in range(1, 4):
+    #     for delta in range(MIN_DELTA, MAX_DELTA + 1, 5000):
+    #         print(f"Running for delta: {delta}")
+    #         run_experiments(chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
 
 
 if __name__ == "__main__":

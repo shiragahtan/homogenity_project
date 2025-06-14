@@ -120,7 +120,7 @@ def run_experiments(chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str
                 for col in df.columns
                 if col not in attr
             }
-            start_time = time.time()
+            start_time = time.time() # stop when discovered that the rule is not homogeneous
             subgroup_data, num_subgroups = naive_calc_utility_for_subgroups(
                 attr_vals,
                 df,

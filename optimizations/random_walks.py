@@ -9,9 +9,54 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import sys
 import os
+import json
+from pathlib import Path
+import ipdb
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 # Add the yarden_files directory to the Python path to import ATE_update
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
+# Add the nativ_files directory to the Python path to import CATE
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
+from utility_functions import CATE
+
+# Global DAG structure
+DAG_str = """digraph {
+    Continent -> UndergradMajor;
+    Continent -> FormalEducation;
+    Continent -> Country;
+    Continent -> RaceEthnicity;
+    Continent -> ConvertedSalary;
+    HoursComputer -> ConvertedSalary;
+    UndergradMajor -> DevType;
+    FormalEducation -> UndergradMajor;
+    FormalEducation -> DevType;
+    Age -> FormalEducation;
+    Age -> Dependents;
+    Age -> DevType;
+    Age -> ConvertedSalary;
+    Gender -> UndergradMajor;
+    Gender -> FormalEducation;
+    Gender -> DevType;
+    Gender -> ConvertedSalary;
+    Dependents -> HoursComputer;
+    Country -> FormalEducation;
+    Country -> RaceEthnicity;
+    Country -> ConvertedSalary;
+    DevType -> HoursComputer;
+    DevType -> ConvertedSalary;
+    RaceEthnicity -> ConvertedSalary;
+    HDI -> GINI;
+    GINI -> ConvertedSalary;
+    GINI -> GDP;
+    GDP -> ConvertedSalary;
+}
+"""
+
+# Global CATE parameters
+attrOrdinal = None
+tgtO = "ConvertedSalary"
 
 warnings.filterwarnings("ignore")
 
@@ -72,7 +117,20 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
         return random.choices(keys, weights=normalized_weights, k=1)[0]
 
 
-def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method):
+def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
+                   mode='hybrid', unlearning_threshold=0.1):
+    """
+    Perform k random walks with two modes:
+    - hybrid: Use unlearning for small removals (≤ unlearning_threshold), direct CATE for large ones
+    - direct: Always use direct CATE calculation
+    
+    Parameters:
+    -----------
+    mode : str
+        'hybrid' or 'direct'
+    unlearning_threshold : float
+        Threshold for switching between unlearning and direct CATE (as fraction of dataset size)
+    """
     total_ate_calculations = 0
     total_ate_time = 0
     global_used_combinations = set()
@@ -83,6 +141,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
 
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
+    ipdb.set_trace()
     start_ate_time = time.time()  # Start timing ATE calculation
     df_ate = ate_update_obj.get_original_ate()
     print(f"shira ate all : df_ate: {df_ate}")
@@ -107,8 +166,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
     for walk_idx, random_choice in enumerate(random_choices):
         print(f"\nwalk idx: {walk_idx}")
-        ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
-
+        
         combo_to_remove = []
         key_value = []
         random_choice = {k:int(v) for k,v in random_choice.items()}
@@ -179,30 +237,34 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
             else:
                 unique_indices = [i for i in df_to_remove_index if i not in already_removed_indices]
                 
-                # Process large batches in smaller chunks to avoid performance issues
-                batch_size = 14000  # Process 1000 indices at a time
-                max_indices_to_process = 14000  # Maximum number of indices to process
+                # Calculate the fraction of data to be removed
+                removal_fraction = len(unique_indices) / df_shape
                 
-                # If we have too many indices, sample a subset
-                if len(unique_indices) > max_indices_to_process:
-                    print(f"Too many indices ({len(unique_indices)}). Sampling {max_indices_to_process} random indices.")
-                    import random
-                    unique_indices = random.sample(unique_indices, max_indices_to_process)
+                start_ate_time = time.time()
                 
-                if len(unique_indices) > batch_size:
-                    print(f"Processing {len(unique_indices)} indices in batches of {batch_size}")
+                if mode == 'direct':
+                    # Always use direct CATE calculation
+                    print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                    subgroup_df = df.iloc[unique_indices]
+                    ate, _ = CATE(subgroup_df, DAG_str, treatment, attrOrdinal, tgtO)
                     
-                    start_ate_time = time.time()
-                    for batch_start in range(0, len(unique_indices), batch_size):
-                        batch_end = min(batch_start + batch_size, len(unique_indices))
-                        batch_indices = unique_indices[batch_start:batch_end]
-                        print(f"  Processing batch {batch_start//batch_size + 1}: indices {batch_start} to {batch_end-1}")
-                        ate = ate_update_obj.calculate_updated_ATE(batch_indices)
-                    end_ate_time = time.time()
-                else:
-                    start_ate_time = time.time()  # Start timing ATE calculation
-                    ate = ate_update_obj.calculate_updated_ATE(unique_indices)
-                    end_ate_time = time.time()  # End timing ATE calculation
+                elif mode == 'hybrid':
+                    if removal_fraction <= unlearning_threshold:
+                        # Use unlearning for small removals
+                        print(f"Using unlearning for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                        ate = ate_update_obj.calculate_updated_ATE(unique_indices)
+                    else:
+                        # Use direct CATE calculation for large removals
+                        print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                        subgroup_df = df.iloc[unique_indices]
+                        ate, _ = CATE(subgroup_df, DAG_str, treatment, attrOrdinal, tgtO)
+                
+                end_ate_time = time.time()
+                
+                # Skip if CATE is 0 (invalid result)
+                if ate == 0:
+                    print(f"Skipping result: CATE is 0 (invalid calculation)")
+                    continue
                 
                 already_removed_indices += unique_indices
                 total_ate_calculations += 1
@@ -239,29 +301,25 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
     print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
 
-    average_diff = np.mean(diff_values)
-    variance_diff = np.var(diff_values)
-    max_diff = np.max(diff_values)
-    min_diff = np.min(diff_values)
-    t_statistic, p_value = stats.ttest_1samp(diff_values, 0)
+    if len(diff_values) > 0:
+        average_diff = np.mean(diff_values)
+        variance_diff = np.var(diff_values)
+        max_diff = np.max(diff_values)
+        min_diff = np.min(diff_values)
+        t_statistic, p_value = stats.ttest_1samp(diff_values, 0)
 
-    # Bin the diff values and plot histogram
-    # plt.figure(figsize=(10, 6))
-    # plt.hist(diff_values, bins=30, edgecolor="black")
-    # plt.xlabel("Diff Values (Binned)")
-    # plt.ylabel("Number of Subgroups")
-    # plt.title("Distribution of Diff Values Across Subgroups")
-    # plt.savefig("diff_histogram.png") 
-    # plt.show()
-
-    print(f"Average Diff: {average_diff}")
-    print(f"Variance of Diff: {variance_diff}")
-    print(f"T-test Statistic: {t_statistic}, P-value: {p_value}")
-    print(f"Max Diff: {max_diff}")
-    print(f"Min Diff: {min_diff}")
+        print(f"Average Diff: {average_diff}")
+        print(f"Variance of Diff: {variance_diff}")
+        print(f"T-test Statistic: {t_statistic}, P-value: {p_value}")
+        print(f"Max Diff: {max_diff}")
+        print(f"Min Diff: {min_diff}")
+    else:
+        print("No diff values calculated.")
+    
     return False
 
-def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method):
+def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
+         mode='hybrid', unlearning_threshold=0.1):
     start_time = time.time()
     df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
@@ -301,7 +359,8 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     print(frequent_itemsets[['formatted_itemsets', 'itemset_size']])
 
     df = df.astype(original_types)
-    ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method)
+    ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
+                        mode, unlearning_threshold)
     elapsed_time = time.time() - start_time
     print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
     return ret
@@ -309,31 +368,65 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 
-def check_homogenity_with_random_walks(desired_ate):
+def check_homogenity_with_random_walks(desired_ate, treatment, mode='hybrid', unlearning_threshold=0.1):
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
-    treatment = "FormalEducation"
     outcome = "ConvertedSalary"
     k=1000
     size_threshold=0.2 # we want to look only at sub datasets that are less than 80% in their size from the original dataset
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
-    return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method)
+    return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, 
+               weights_optimization_method, mode, unlearning_threshold)
 
 
 if __name__ == "__main__":
     epsilon = 3000
+    
+    # Define mode and threshold as variables
+    mode = 'hybrid'  # Options: 'hybrid' or 'direct'
+    unlearning_threshold = 0.1  # 10% threshold for hybrid mode
+    
+    print(f"Using {mode} mode")
+    if mode == 'hybrid':
+        print(f"Hybrid mode: unlearning ≤{unlearning_threshold*100:.0f}%, direct CATE >{unlearning_threshold*100:.0f}%")
+    else:
+        print("Direct mode: always use direct CATE calculation")
+    
+    # Read treatment data from JSON file using same logic as all_subgroups_loop.py
+    treatment_file = "../algorithms/Shira_Treatments.json"
+    with open(treatment_file, "r") as f:
+        good_treatments = [json.loads(line) for line in f]
+    
+    # Use the first treatment from the file
+    good_treatment = good_treatments[0]
+    condition = good_treatment["condition"]
+    
+    # Extract condition information
+    attr, val = list(condition.items())[0]
+    
+    # Extract treatment information - use only the column name for ATE calculations
+    # treatment_dict = good_treatment["treatment"]
+    # treatment_key = list(treatment_dict.keys())[0]  # Get only the treatment column name - to update to ours
+
+    treatment_key = "FormalEducation"
+    treatment_dict = {"FormalEducation": "Bachelor's degree"}
+    
+    print(f"Using condition: {attr} = '{val}'")
+    print(f"Using treatment column: {treatment_key} (looking for value: '{treatment_dict[treatment_key]}')")
+    
+    # Load and filter the DataFrame based on the condition (same as all_subgroups_loop.py)
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     df = pd.read_csv(csv_name)
-    treatment = "FormalEducation"
     outcome = "ConvertedSalary"
-    features_cols = [col for col in df.columns if col not in [treatment, outcome]]
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
-    utility_all = ate_update_obj.get_original_ate() # to check it this is the utility_all
     
-    if (check_homogenity_with_random_walks(utility_all + epsilon)):
+    # Calculate initial utility using direct CATE for consistency
+    utility_all, _ = CATE(df, DAG_str, treatment_dict, attrOrdinal, tgtO)
+    print(f"Initial utility_all: {utility_all}")
+    
+    if (check_homogenity_with_random_walks(utility_all + epsilon, treatment_key, mode, unlearning_threshold)):
         print("not homogenous (positive side)")
-    elif (check_homogenity_with_random_walks(utility_all - epsilon)):
+    elif (check_homogenity_with_random_walks(utility_all - epsilon, treatment_key, mode, unlearning_threshold)):
         print("not homogenous (negative side)")
     else:
         print("probably homogenous")

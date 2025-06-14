@@ -26,7 +26,7 @@ import pygraphviz as pgv
 # from prescription import Prescription
 
 warnings.filterwarnings("ignore")
-SRC_PATH = Path(__file__).parent.parent.parent
+SRC_PATH = Path(__file__).parent.parent
 sys.path.append(os.path.join(SRC_PATH, "tools"))
 from MutePrint import MutePrint
 

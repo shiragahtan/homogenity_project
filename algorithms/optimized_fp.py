@@ -132,8 +132,8 @@ def calc_utility_for_subgroups(
             cate, _ = _compute_cate(cate_func, filt)
             if cate and abs(util_all - cate) > epsilon:
                 print(
-                    f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
-                    f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
+                    f"\n\033[91msubgroup's cate is: {cate} while utility_all is {util_all} "
+                    f"(Δ={abs(util_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
                 )
                 return False
         print("\033[92mHomogenous\033[0m")

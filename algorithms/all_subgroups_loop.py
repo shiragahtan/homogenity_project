@@ -276,8 +276,8 @@ def main():
     # chosen_algorithm = 3  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
-    for chosen_algorithm in range(3,-1, -1): # Loop through all algorithms from end to start
-        for delta in range(MIN_DELTA, MAX_DELTA + 1, 5000):
+    for delta in range(MAX_DELTA, MIN_DELTA - 1, -5000):
+        for chosen_algorithm in range(3,-1, -1): # Loop through all algorithms from end to start
             print(f"Running for delta: {delta}")
             run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
 

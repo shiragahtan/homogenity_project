@@ -141,6 +141,8 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_
     """
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
     epsilons = [3000, 3500, 5000, 5500, 60000, 65000]
+    if chosen_mode != 0:
+        epsilons = [epsilons[0]]
     for i, good_treatment in enumerate(good_treatments):
         condition = good_treatment["condition"]
         attr, val = list(condition.items())[0]

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Define the input file name (output from the previous script)
-input_file = 'average_times_per_algorithm.xlsx'
+input_file = '../algorithms/average_times_per_algorithm.xlsx'
 # Define the output image file name for the chart
 output_chart_file = 'algorithm_overall_average_performance_chart.png'
 

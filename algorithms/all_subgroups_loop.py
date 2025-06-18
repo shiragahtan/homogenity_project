@@ -11,16 +11,21 @@ import multiprocessing as mp
 from functools import partial
 from contextlib import contextmanager
 
+# Load config
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+DELTAS = config['DELTAS']
+ALGORITHM_NAMES = config['ALGORITHM_NAMES']
+MODES = config['MODES']
+EPSILONS = config['EPSILONS']
+
 from nativ_files.utility_functions import CATE
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
 from optimized_fp import calc_utility_for_subgroups as optimized_fp_calc_utility_for_subgroups
 
-MAX_DELTA = 20_000
-MIN_DELTA = 5_000
-ALGORITHM_NAMES = ["NaiveDFS", "Apriori", "FP", "FP_Multi"]
-MODES = ["HomogeneityCheck", "AllSubgroups"]
 
 """ Timing helper """
 @contextmanager
@@ -128,7 +133,6 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-
 # description:
 # Loads a dataset and a list of treatment/condition pairs.
 # For each pair, filters the data and finds all subgroups of a minimum size (DELTA) based on attribute combinations.
@@ -140,7 +144,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_
     Run experiments for each treatment and save results to an Excel file.
     """
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
-    epsilons = [3000, 3500, 5000, 5500, 60000, 65000]
+    epsilons = EPSILONS
     if chosen_mode != 0:
         epsilons = [epsilons[0]]
     for i, good_treatment in enumerate(good_treatments):
@@ -278,7 +282,7 @@ def main():
     # chosen_algorithm = 3  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
-    for delta in range(MAX_DELTA, MIN_DELTA - 1, -5000):
+    for delta in DELTAS:
         for chosen_algorithm in range(3,-1, -1): # Loop through all algorithms from end to start
             print(f"Running for delta: {delta}")
             run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)

@@ -7,11 +7,12 @@ import warnings
 import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
+import seaborn as sns
 import sys
 import os
 import json
 from pathlib import Path
-import ipdb
+# import ipdb
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Add the yarden_files directory to the Python path to import ATE_update
@@ -20,6 +21,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
 from utility_functions import CATE
+
+# Configuration
+CONFIG = {
+    "DELTAS": [20000, 15000, 10000, 5000],
+    "MODES": ["hybrid", "direct"],
+    "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000]
+}
 
 # Global DAG structure
 DAG_str = """digraph {
@@ -118,7 +126,7 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
 
 
 def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
-                   mode='hybrid', unlearning_threshold=0.1):
+                   delta, mode='hybrid', unlearning_threshold=0.1):
     """
     Perform k random walks with two modes:
     - hybrid: Use unlearning for small removals (≤ unlearning_threshold), direct CATE for large ones
@@ -135,13 +143,11 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     total_ate_time = 0
     global_used_combinations = set()
     global_key_value_score = dict()
-    delta = 8000
     max_size_of_group = 100000
 
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
 
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
-    ipdb.set_trace()
     start_ate_time = time.time()  # Start timing ATE calculation
     df_ate = ate_update_obj.get_original_ate()
     print(f"shira ate all : df_ate: {df_ate}")
@@ -319,7 +325,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     return False
 
 def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
-         mode='hybrid', unlearning_threshold=0.1):
+         delta, mode='hybrid', unlearning_threshold=0.1):
     start_time = time.time()
     df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
@@ -360,7 +366,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
     df = df.astype(original_types)
     ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
-                        mode, unlearning_threshold)
+                        delta, mode, unlearning_threshold)
     elapsed_time = time.time() - start_time
     print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
     return ret
@@ -368,7 +374,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 
-def check_homogenity_with_random_walks(desired_ate, treatment, mode='hybrid', unlearning_threshold=0.1):
+def check_homogenity_with_random_walks(desired_ate, treatment, delta, mode='hybrid', unlearning_threshold=0.1):
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     outcome = "ConvertedSalary"
@@ -377,57 +383,66 @@ def check_homogenity_with_random_walks(desired_ate, treatment, mode='hybrid', un
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
     return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, 
-               weights_optimization_method, mode, unlearning_threshold)
+               weights_optimization_method, delta, mode, unlearning_threshold)
 
 
 if __name__ == "__main__":
-    epsilon = 3000
+    unlearning_threshold = 0.1
     
-    # Define mode and threshold as variables
-    mode = 'hybrid'  # Options: 'hybrid' or 'direct'
-    unlearning_threshold = 0.1  # 10% threshold for hybrid mode
-    
-    print(f"Using {mode} mode")
-    if mode == 'hybrid':
-        print(f"Hybrid mode: unlearning ≤{unlearning_threshold*100:.0f}%, direct CATE >{unlearning_threshold*100:.0f}%")
-    else:
-        print("Direct mode: always use direct CATE calculation")
-    
-    # Read treatment data from JSON file using same logic as all_subgroups_loop.py
-    treatment_file = "../algorithms/Shira_Treatments.json"
-    with open(treatment_file, "r") as f:
-        good_treatments = [json.loads(line) for line in f]
-    
-    # Use the first treatment from the file
-    good_treatment = good_treatments[0]
-    condition = good_treatment["condition"]
-    
-    # Extract condition information
-    attr, val = list(condition.items())[0]
-    
-    # Extract treatment information - use only the column name for ATE calculations
-    # treatment_dict = good_treatment["treatment"]
-    # treatment_key = list(treatment_dict.keys())[0]  # Get only the treatment column name - to update to ours
-
+    # Setup treatment information
     treatment_key = "FormalEducation"
     treatment_dict = {"FormalEducation": "Bachelor's degree"}
     
-    print(f"Using condition: {attr} = '{val}'")
-    print(f"Using treatment column: {treatment_key} (looking for value: '{treatment_dict[treatment_key]}')")
-    
-    # Load and filter the DataFrame based on the condition (same as all_subgroups_loop.py)
+    # Load and calculate initial utility
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     df = pd.read_csv(csv_name)
     outcome = "ConvertedSalary"
     
-    # Calculate initial utility using direct CATE for consistency
-    utility_all, _ = CATE(df, DAG_str, treatment_dict, attrOrdinal, tgtO)
+    # utility_all, _ = CATE(df, DAG_str, treatment_dict, attrOrdinal, tgtO)
+    utility_all = 7000
+    
     print(f"Initial utility_all: {utility_all}")
     
-    if (check_homogenity_with_random_walks(utility_all + epsilon, treatment_key, mode, unlearning_threshold)):
-        print("not homogenous (positive side)")
-    elif (check_homogenity_with_random_walks(utility_all - epsilon, treatment_key, mode, unlearning_threshold)):
-        print("not homogenous (negative side)")
-    else:
-        print("probably homogenous")
+    # Run for each mode
+    for mode in CONFIG["MODES"]:
+        print(f"\n{'='*50}")
+        print(f"RUNNING MODE: {mode.upper()}")
+        print(f"{'='*50}")
+        
+        results = []
+        
+        # Run for each delta and epsilon combination
+        for delta in CONFIG["DELTAS"]:
+            for epsilon in CONFIG["EPSILONS"]:
+                print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
+                
+                start_time = time.time()
+                
+                # Test positive and negative directions
+                positive_result = check_homogenity_with_random_walks(
+                    utility_all + epsilon, treatment_key, delta, mode, unlearning_threshold)
+                negative_result = check_homogenity_with_random_walks(
+                    utility_all - epsilon, treatment_key, delta, mode, unlearning_threshold)
+                
+                total_runtime = time.time() - start_time
+                is_homogeneous = not (positive_result or negative_result)
+                
+                results.append({
+                    'Mode': mode,
+                    'Delta': delta,
+                    'Epsilon': epsilon,
+                    'Homogeneous': is_homogeneous,
+                    'Runtime': total_runtime
+                })
+                
+                status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
+                print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
+        
+        # Save results and create heatmap for this mode
+        results_df = pd.DataFrame(results)
+        filename = f"homogeneity_results_{mode}.csv"
+        results_df.to_csv(filename, index=False)
+        print(f"\nResults saved to: {filename}")
+        
+        # create_heatmap(results_df, mode)
 

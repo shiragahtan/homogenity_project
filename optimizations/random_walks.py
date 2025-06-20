@@ -365,57 +365,66 @@ if __name__ == "__main__":
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
     
-    for i, dataset in enumerate(treated_rules_datasets):
-        df = pd.read_csv(dataset)
-        condition = good_treatments[i]["condition"]
-        attr, _ = list(condition.items())[0]  # Condition key (attr/label name)
-        treatment = good_treatments[i]["treatment"]
- 
-        # Calculate utility_all
-        features_cols = [col for col in df.columns if col not in [*treatment.keys(), TREATMENT_COL, tgtO]]
-        ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
-        utility_all = ate_update_obj.get_original_ate()    
-        print(f"Initial utility_all: {utility_all}")
+    # Setup treatment information
+    treatment_key = "FormalEducation"    
+    # Load and calculate initial utility
+    csv_name = "../stackoverflow/so_countries_encoded_treatment_1_encoded.csv"
+    # csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
+    df = pd.read_csv(csv_name)
+    outcome = "ConvertedSalary"
+        
+    # Create ATE update object
+    features_cols = [col for col in df.columns if col not in [treatment_key, outcome]]
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
     
-        # Run for each mode
-        for mode in MODES:
-            print(f"\n{'='*50}")
-            print(f"RUNNING MODE: {mode.upper()}")
-            print(f"{'='*50}")
-            
-            results = []
-            # Run for each delta and epsilon combination
-            for delta in DELTAS:
-                for epsilon in EPSILONS:
-                    print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
-                    
-                    start_time = time.time()
-                    
-                    # Test positive and negative directions
-                    positive_result = check_homogenity_with_random_walks(
-                        utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                    negative_result = check_homogenity_with_random_walks(
-                        utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                    
-                    total_runtime = time.time() - start_time
-                    is_homogeneous = not (positive_result or negative_result)
-                    
-                    results.append({
-                        'Mode': mode,
-                        'Delta': delta,
-                        'Epsilon': epsilon,
-                        'Homogeneous': is_homogeneous,
-                        'Runtime': total_runtime
-                    })
-                    
-                    status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
-                    print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
-            
-            # Save results and create heatmap for this mode
-            results_df = pd.DataFrame(results)
-            filename = f"homogeneity_results_{mode}.csv"
-            results_df.to_csv(filename, index=False)
-            print(f"\nResults saved to: {filename}")
+    utility_all = ate_update_obj.get_original_ate()
+
+    utility_all_2 = ate_update_obj.calculate_direct_ate(df[features_cols], df[treatment_key], df[outcome])
+    # import ipdb; ipdb.set_trace()
+    print("utility_all_2: ", utility_all_2, "utility_all: ", utility_all)
+    
+    print(f"Initial utility_all: {utility_all}")
+    
+    # Run for each mode
+    for mode in CONFIG["MODES"]:
+        print(f"\n{'='*50}")
+        print(f"RUNNING MODE: {mode.upper()}")
+        print(f"{'='*50}")
+        
+        results = []
+        
+        # Run for each delta and epsilon combination
+        for delta in CONFIG["DELTAS"]:
+            for epsilon in CONFIG["EPSILONS"]:
+                print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
+                
+                start_time = time.time()
+                
+                # Test positive and negative directions
+                positive_result = check_homogenity_with_random_walks(
+                    utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
+                negative_result = check_homogenity_with_random_walks(
+                    utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
+                
+                total_runtime = time.time() - start_time
+                is_homogeneous = not (positive_result or negative_result)
+                
+                results.append({
+                    'Mode': mode,
+                    'Delta': delta,
+                    'Epsilon': epsilon,
+                    'Homogeneous': is_homogeneous,
+                    'Runtime': total_runtime
+                })
+                
+                status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
+                print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
+        
+        # Save results and create heatmap for this mode
+        results_df = pd.DataFrame(results)
+        filename = f"homogeneity_results_{mode}.csv"
+        results_df.to_csv(filename, index=False)
+        print(f"\nResults saved to: {filename}")
         
         # create_heatmap(results_df, mode)
 

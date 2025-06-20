@@ -105,35 +105,14 @@ class ATEUpdateLinear:
         X_matrix = design_matrix.values
         Y_matrix = Y_local.values.reshape(-1, 1)
         
-        # Remove constant columns (features with zero variance) to avoid singular matrix
-        if exclude_cols is None:
-            exclude_cols = ['intercept', 'treatment']  # Default columns to keep
-            
-        constant_cols = []
-        for col in design_matrix.columns:
-            if col not in exclude_cols:  # Only check columns not in exclude list
-                if design_matrix[col].nunique() <= 1:
-                    constant_cols.append(col)
-        
-        if constant_cols:
-            # print(f"Removing constant columns: {constant_cols}")
-            design_matrix = design_matrix.drop(columns=constant_cols)
-            X_matrix = design_matrix.values
-        
-        # Check if we have enough observations after removing constant features
-        if X_matrix.shape[0] < X_matrix.shape[1]:
-            # print("Warning: Dataset is too small to fit the model after removing constant features.")
-            return np.nan
-        
         # Compute linear regression
         try:
             model = BaseLinearRegression(X_matrix, Y_matrix)
             # Return ATE (treatment effect)
-            return float(model.beta[1].item())
+            return float(model.beta[1])
         except np.linalg.LinAlgError:
-            # Handle singular matrix error (e.g., perfect multicollinearity)
-            # print("Warning: Singular matrix encountered. Dataset may have constant features.")
-            return np.nan
+            print(f"Singular matrix - returning ATE=0 for subgroup size {len(Y_local)}")
+            return 0.0
     
     def _identify_confounders(self):
         """

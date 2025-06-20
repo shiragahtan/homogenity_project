@@ -2,39 +2,68 @@ import pandas as pd
 import json
 import os
 
-input_file = os.path.join('..', 'stackoverflow', 'so_countries_col_new.csv')
-output_file = os.path.join('..', 'stackoverflow', 'so_countries_col_new_encoded.csv')
-mappings_file = os.path.join('..', 'stackoverflow', 'categorical_mappings.json')
+# List of treatment files to process
+treatment_files = [
+    'so_countries_encoded_treatment_1.csv',
+    'so_countries_encoded_treatment_2.csv',
+    'so_countries_encoded_treatment_3.csv'
+]
 
-# Load the dataset
-df = pd.read_csv(input_file)
+# Process each treatment file
+for treatment_file in treatment_files:
+    input_file = os.path.join('..', 'stackoverflow', treatment_file)
 
-# Remove the unnamed column if it exists
-unnamed_columns = [col for col in df.columns if 'Unnamed' in col]
-if unnamed_columns:
-    print(f"Removing unnamed columns: {unnamed_columns}")
-    df = df.drop(columns=unnamed_columns)
+    # Create output filename by adding "_encoded" before the extension
+    base_name = os.path.splitext(treatment_file)[0]
+    output_file = os.path.join('..', 'stackoverflow', f"{base_name}_encoded.csv")
 
-# Identify categorical columns
-categorical_columns = df.select_dtypes(include=['object']).columns.tolist()
+    # Use a consistent mappings file for all encodings
+    mappings_file = os.path.join('..', 'stackoverflow', 'categorical_mappings.json')
 
-mappings = {}
+    print(f"Processing {treatment_file}...")
 
-for column in categorical_columns:
-    unique_values = df[column].unique()
+    try:
+        # Load the dataset
+        df = pd.read_csv(input_file)
 
-    column_mapping = {value: idx + 1 for idx, value in enumerate(unique_values)}
+        # Remove the unnamed column if it exists
+        unnamed_columns = [col for col in df.columns if 'Unnamed' in col]
+        if unnamed_columns:
+            print(f"  Removing unnamed columns: {unnamed_columns}")
+            df = df.drop(columns=unnamed_columns)
 
-    mappings[column] = column_mapping
+        # Identify categorical columns
+        categorical_columns = df.select_dtypes(include=['object']).columns.tolist()
 
-    df[column] = df[column].map(column_mapping)
+        if not categorical_columns:
+            print(f"  No categorical columns found in {treatment_file}. The file may already be encoded.")
+            continue
 
-df.to_csv(output_file, index=False)
+        mappings = {}
 
-with open(mappings_file, 'w') as f:
-    json.dump(mappings, f, indent=4)
+        for column in categorical_columns:
+            unique_values = df[column].unique()
 
-print("Transformation complete!")
-print(f"Categorical columns transformed: {categorical_columns}")
-print(f"Mappings saved to {mappings_file}")
-print(f"Transformed dataset saved to {output_file}")
+            column_mapping = {value: idx + 1 for idx, value in enumerate(unique_values)}
+
+            mappings[column] = column_mapping
+
+            df[column] = df[column].map(column_mapping)
+
+        # Save the encoded dataset
+        df.to_csv(output_file, index=False)
+
+        # Save the mappings to a file
+        with open(mappings_file, 'w') as f:
+            json.dump(mappings, f, indent=4)
+
+        print(f"  Transformation complete for {treatment_file}!")
+        print(f"  Categorical columns transformed: {categorical_columns}")
+        print(f"  Mappings saved to {mappings_file}")
+        print(f"  Transformed dataset saved to {output_file}")
+        print("-" * 60)
+
+    except FileNotFoundError:
+        print(f"  Error: File {input_file} not found. Skipping.")
+        print("-" * 60)
+        continue

@@ -54,6 +54,57 @@ class ATEUpdateLinear:
         
         # Store original ATE (treatment effect)
         self.original_ate = float(self.original_model.beta[1])
+
+
+    def calculate_direct_ate(self, X, T, Y, find_confounders=False):
+        """
+        Calculate ATE for given dataset without modifying object state.
+        
+        Parameters:
+        ----------
+        X : pandas.DataFrame or numpy.ndarray
+            Covariates/features
+        T : pandas.Series or numpy.ndarray
+            Treatment indicator (0 or 1)
+        Y : pandas.Series or numpy.ndarray
+            Outcome variable
+        find_confounders : bool
+            Whether to identify confounders using DoWhy
+            
+        Returns:
+        --------
+        float : The calculated ATE
+        """
+        # Convert inputs to appropriate formats
+        X_local = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
+        T_local = T.copy() if isinstance(T, pd.Series) else pd.Series(T)
+        Y_local = Y.copy() if isinstance(Y, pd.Series) else pd.Series(Y)
+        
+        if find_confounders:
+            # Try to identify confounders using DoWhy
+            confounders = self._identify_confounders()
+            confounders = confounders if isinstance(confounders, list) else confounders.get('backdoor')
+            # Create design matrix with treatment and confounders
+            X_confounders = X_local[confounders] if confounders else X_local
+            design_matrix = pd.concat([T_local.reset_index(drop=True), 
+                                     X_confounders.reset_index(drop=True)], axis=1)
+            column_names = ['treatment'] + (confounders if confounders else X_local.columns.tolist())
+            design_matrix.columns = column_names
+        else:
+            # Use all features as confounders
+            intercept = pd.Series(1, index=range(len(T_local)), name='intercept')
+            design_matrix = pd.concat([intercept, T_local.reset_index(drop=True), X_local.reset_index(drop=True)], axis=1)
+            design_matrix.columns = ['intercept', 'treatment'] + X_local.columns.tolist()
+
+        # Convert to numpy for faster computation
+        X_matrix = design_matrix.values
+        Y_matrix = Y_local.values.reshape(-1, 1)
+        
+        # Compute linear regression
+        model = BaseLinearRegression(X_matrix, Y_matrix)
+        
+        # Return ATE (treatment effect)
+        return float(model.beta[1])
     
     def _identify_confounders(self):
         """

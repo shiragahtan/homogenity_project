@@ -17,10 +17,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Add the yarden_files directory to the Python path to import ATE_update
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
-# Add the nativ_files directory to the Python path to import CATE
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
-from utility_functions import CATE
 
 # Configuration
 CONFIG = {
@@ -62,7 +60,6 @@ DAG_str = """digraph {
 }
 """
 
-# Global CATE parameters
 attrOrdinal = None
 tgtO = "ConvertedSalary"
 
@@ -126,7 +123,7 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
 
 
 def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
-                   delta, mode='hybrid', unlearning_threshold=0.1):
+                   delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     """
     Perform k random walks with two modes:
     - hybrid: Use unlearning for small removals (≤ unlearning_threshold), direct CATE for large ones
@@ -146,8 +143,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     max_size_of_group = 100000
 
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
-
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
     start_ate_time = time.time()  # Start timing ATE calculation
     df_ate = ate_update_obj.get_original_ate()
     print(f"shira ate all : df_ate: {df_ate}")
@@ -252,7 +247,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                     # Always use direct CATE calculation
                     print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                     subgroup_df = df.iloc[unique_indices]
-                    ate, _ = CATE(subgroup_df, DAG_str, treatment, attrOrdinal, tgtO)
+                    ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
                     
                 elif mode == 'hybrid':
                     if removal_fraction <= unlearning_threshold:
@@ -263,7 +258,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         # Use direct CATE calculation for large removals
                         print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                         subgroup_df = df.iloc[unique_indices]
-                        ate, _ = CATE(subgroup_df, DAG_str, treatment, attrOrdinal, tgtO)
+                        ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
                 
                 end_ate_time = time.time()
                 
@@ -325,7 +320,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     return False
 
 def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
-         delta, mode='hybrid', unlearning_threshold=0.1):
+         delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     start_time = time.time()
     df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
@@ -366,7 +361,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
     df = df.astype(original_types)
     ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
-                        delta, mode, unlearning_threshold)
+                        delta, ate_update_obj, mode, unlearning_threshold)
     elapsed_time = time.time() - start_time
     print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
     return ret
@@ -374,7 +369,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 
-def check_homogenity_with_random_walks(desired_ate, treatment, delta, mode='hybrid', unlearning_threshold=0.1):
+def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     outcome = "ConvertedSalary"
@@ -383,23 +378,24 @@ def check_homogenity_with_random_walks(desired_ate, treatment, delta, mode='hybr
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
     return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, 
-               weights_optimization_method, delta, mode, unlearning_threshold)
+               weights_optimization_method, delta, ate_update_obj, mode, unlearning_threshold)
 
 
 if __name__ == "__main__":
     unlearning_threshold = 0.1
     
     # Setup treatment information
-    treatment_key = "FormalEducation"
-    treatment_dict = {"FormalEducation": "Bachelor's degree"}
-    
+    treatment_key = "FormalEducation"    
     # Load and calculate initial utility
-    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
+    csv_name = "../stackoverflow/so_countries_encoded_treatment_1_encoded.csv"
     df = pd.read_csv(csv_name)
     outcome = "ConvertedSalary"
+        
+    # Create ATE update object
+    features_cols = [col for col in df.columns if col not in [treatment_key, outcome]]
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
     
-    # utility_all, _ = CATE(df, DAG_str, treatment_dict, attrOrdinal, tgtO)
-    utility_all = 7000
+    utility_all = ate_update_obj.get_original_ate()
     
     print(f"Initial utility_all: {utility_all}")
     
@@ -420,9 +416,9 @@ if __name__ == "__main__":
                 
                 # Test positive and negative directions
                 positive_result = check_homogenity_with_random_walks(
-                    utility_all + epsilon, treatment_key, delta, mode, unlearning_threshold)
+                    utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
                 negative_result = check_homogenity_with_random_walks(
-                    utility_all - epsilon, treatment_key, delta, mode, unlearning_threshold)
+                    utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
                 
                 total_runtime = time.time() - start_time
                 is_homogeneous = not (positive_result or negative_result)

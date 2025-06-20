@@ -1,0 +1,166 @@
+{
+    "Hobby": {
+        "Yes": 1,
+        "No": 2
+    },
+    "Country": {
+        "United Kingdom": 1,
+        "United States": 2,
+        "Netherlands": 3,
+        "Sweden": 4,
+        "Australia": 5,
+        "India": 6,
+        "Poland": 7,
+        "Russian Federation": 8,
+        "Germany": 9,
+        "France": 10,
+        "Italy": 11,
+        "Turkey": 12,
+        "Brazil": 13,
+        "Canada": 14,
+        "Spain": 15,
+        "Ukraine": 16,
+        "Israel": 17,
+        "Belgium": 18,
+        "Switzerland": 19,
+        "Austria": 20
+    },
+    "Student": {
+        "No": 1,
+        "Yes, full-time": 2,
+        "Yes, part-time": 3
+    },
+    "UndergradMajor": {
+        "Other Disciplines": 1,
+        "CS & IT": 2,
+        "Engineering & Math": 3
+    },
+    "DevType": {
+        "Database administrator": 1,
+        "Back-end developer": 2,
+        "Mobile developer": 3,
+        "Front-end developer": 4,
+        "Full-stack developer": 5,
+        "Designer": 6,
+        "Embedded applications or devices developer": 7,
+        "Engineering manager": 8,
+        "Data scientist or machine learning specialist": 9,
+        "Desktop or enterprise applications developer": 10,
+        "C-suite executive (CEO, CTO, etc.)": 11,
+        "QA or test developer": 12,
+        "System administrator": 13,
+        "Data or business analyst": 14,
+        "DevOps specialist": 15,
+        "Educator or academic researcher": 16,
+        "Student": 17,
+        "Game or graphics developer": 18,
+        "Product manager": 19,
+        "Marketing or sales professional": 20
+    },
+    "YearsCoding": {
+        "30 or more years": 1,
+        "6-8 years": 2,
+        "9-11 years": 3,
+        "0-2 years": 4,
+        "15-17 years": 5,
+        "18-20 years": 6,
+        "3-5 years": 7,
+        "12-14 years": 8,
+        "24-26 years": 9,
+        "21-23 years": 10,
+        "27-29 years": 11
+    },
+    "HoursComputer": {
+        "5 - 8 hours": 1,
+        "9 - 12 hours": 2,
+        "Over 12 hours": 3,
+        "1 - 4 hours": 4,
+        "Less than 1 hour": 5,
+        "UNKNOWN": 6
+    },
+    "Exercise": {
+        "Daily or almost every day": 1,
+        "1 - 2 times per week": 2,
+        "I don't typically exercise": 3,
+        "3 - 4 times per week": 4,
+        "UNKNOWN": 5
+    },
+    "Gender": {
+        "Male": 1,
+        "Female;Male;Transgender;Non-binary, genderqueer, or gender non-conforming": 2,
+        "Female;Male": 3,
+        "Female": 4,
+        "Male;Non-binary, genderqueer, or gender non-conforming": 5,
+        "UNKNOWN": 6,
+        "Non-binary, genderqueer, or gender non-conforming": 7,
+        "Transgender": 8,
+        "Female;Transgender": 9,
+        "Transgender;Non-binary, genderqueer, or gender non-conforming": 10,
+        "Female;Non-binary, genderqueer, or gender non-conforming": 11,
+        "Female;Transgender;Non-binary, genderqueer, or gender non-conforming": 12,
+        "Male;Transgender": 13,
+        "Female;Male;Non-binary, genderqueer, or gender non-conforming": 14,
+        "Male;Transgender;Non-binary, genderqueer, or gender non-conforming": 15,
+        "Female;Male;Transgender": 16
+    },
+    "SexualOrientation": {
+        "Straight or heterosexual": 1,
+        "Bisexual or Queer": 2,
+        "Gay or Lesbian": 3,
+        "Asexual": 4
+    },
+    "EducationParents": {
+        "Bachelor's degree (BA, BS, B.Eng., etc.)": 1,
+        "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)": 2,
+        "Master's degree (MA, MS, M.Eng., MBA, etc.)": 3,
+        "Some college/university study without earning a degree": 4,
+        "Associate degree": 5,
+        "They never completed any formal education": 6,
+        "Other doctoral degree (Ph.D, Ed.D., etc.)": 7,
+        "Professional degree (JD, MD, etc.)": 8,
+        "Primary/elementary school": 9,
+        "UNKNOWN": 10
+    },
+    "RaceEthnicity": {
+        "European Descent": 1,
+        "Other": 2,
+        "Asian Descent": 3
+    },
+    "Dependents": {
+        "Yes": 1,
+        "No": 2,
+        "UNKNOWN": 3
+    },
+    "Continent": {
+        "EU": 1,
+        "North America": 2,
+        "OC": 3,
+        "AS": 4,
+        "SA": 5
+    },
+    "Age": {
+        "35 - 44 years old": 1,
+        "18 - 24 years old": 2,
+        "25 - 34 years old": 3,
+        "45 - 54 years old": 4,
+        "55 - 64 years old": 5,
+        "Under 18 years old": 6,
+        "65 years or older": 7,
+        "UNKNOWN": 8
+    },
+    "HDI": {
+        "High": 1,
+        "Medium": 2,
+        "Low": 3
+    },
+    "GDP": {
+        "Medium": 1,
+        "High": 2,
+        "Low": 3
+    },
+    "GINI": {
+        "Medium": 1,
+        "High": 2,
+        "Low": 3
+    }
+}

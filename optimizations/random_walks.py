@@ -23,7 +23,8 @@ from ATE_update import ATEUpdateLinear, ATEUpdateLogistic
 # Configuration
 CONFIG = {
     "DELTAS": [20000, 15000, 10000, 5000],
-    "MODES": ["hybrid", "direct"],
+    # "MODES": ["hybrid", "direct"],
+    "MODES": ["direct"],
     "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000]
 }
 
@@ -248,6 +249,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                     print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                     subgroup_df = df.iloc[unique_indices]
                     ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
+                    # ate = utility_all
                     
                 elif mode == 'hybrid':
                     if removal_fraction <= unlearning_threshold:
@@ -258,7 +260,8 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         # Use direct CATE calculation for large removals
                         print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                         subgroup_df = df.iloc[unique_indices]
-                        ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
+                        # ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
+                        ate = utility_all
                 
                 end_ate_time = time.time()
                 
@@ -387,7 +390,8 @@ if __name__ == "__main__":
     # Setup treatment information
     treatment_key = "FormalEducation"    
     # Load and calculate initial utility
-    csv_name = "../stackoverflow/so_countries_encoded_treatment_1_encoded.csv"
+    # csv_name = "../stackoverflow/so_countries_encoded_treatment_1_encoded.csv"
+    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     df = pd.read_csv(csv_name)
     outcome = "ConvertedSalary"
         
@@ -396,6 +400,10 @@ if __name__ == "__main__":
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
     
     utility_all = ate_update_obj.get_original_ate()
+
+    utility_all_2 = ate_update_obj.calculate_direct_ate(df[features_cols], df[treatment_key], df[outcome])
+    # import ipdb; ipdb.set_trace()
+    print("utility_all_2: ", utility_all_2, "utility_all: ", utility_all)
     
     print(f"Initial utility_all: {utility_all}")
     

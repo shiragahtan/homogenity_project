@@ -2,15 +2,18 @@ import pandas as pd
 import json
 
 # --- 1. Load your numerical dataset ---
+DATASET = '../stackoverflow/so_countries_col_new.csv'
+# DATASET = '../yarden_files/yarden_so_decoded_master_is_bacholer.csv'
 try:
     # Load the dataset
-    df = pd.read_csv('../stackoverflow/so_countries_col_new.csv')
+    df = pd.read_csv(f'{DATASET}')
 except FileNotFoundError:
-    print("Error: Dataset not found. Please make sure '../stackoverflow/so_countries_col_new.csv' exists.")
+    print(f"Error: DATASET not found. Please make sure '{DATASET}' exists.")
     exit(1)
 
 # --- 2. Load treatments from the JSON file ---
 treatments_file = 'Shira_Treatments.json'
+# treatments_data = [{"condition": {"a":"a"}, "treatment": {"FormalEducation": "Bachelor’s degree (BA, BS, B.Eng., etc.)"}}]
 treatments_data = []
 try:
     with open(treatments_file, 'r') as f:
@@ -29,13 +32,20 @@ for i, treatment_data in enumerate(treatments_data):
     treatment = treatment_data["treatment"]
 
     # Create a fresh copy of the original DataFrame for each iteration
-    df_g = pd.read_csv('../stackoverflow/so_countries_col_new.csv')
-    df_filtered = (pd.read_csv('../stackoverflow/so_countries_col_new.csv')
+    df_g = pd.read_csv(f'{DATASET}')
+
+    # Filter the DataFrame based on the condition & remove "UNKNOWN" rows/Unnamed columns
+    df_filtered = (pd.read_csv(f'{DATASET}')
           .query(f'{attr} == "{val}"')
           .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
           .drop(columns=[f'{attr}'])  # Remove the filter column since it now contains only one value
           .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
           .reset_index(drop=True))
+
+    # df_filtered = (pd.read_csv(f'{DATASET}')
+    #       .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
+    #       .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
+    #       .reset_index(drop=True))
 
     print(f"Treatment {i+1}: Filtered on condition: {attr} == {val}")
     print(f"Treatment {i+1}: Found {len(df_filtered)} rows matching condition out of {len(df_g)} total rows")
@@ -48,20 +58,14 @@ for i, treatment_data in enumerate(treatments_data):
     keys = list(treatment.keys())
     vals = list(treatment.values())
 
-    # Identify rows that match all treatment conditions
-    mask = (df_filtered[keys] == vals).all(axis=1)
-
-    # For each treatment column, override its values with binary (1 or 0)
-    for key in keys:
-        # Set values to 1 for rows that match the treatment, 0 for others
-        df_filtered[key] = 0
-        df_filtered.loc[mask, key] = 1
+    # Create a "TempTreatment" column assigning 1 if treatment conditions are met, 0 otherwise.
+    df_filtered["TempTreatment"] = (df_filtered[keys] == vals).all(axis=1).astype(int)
 
     # Save the result to a CSV file with the same naming convention as before
-    output_file_path = f'../stackoverflow/so_countries_encoded_treatment_{i+1}.csv'
+    output_file_path = f'../stackoverflow/so_countries_treatment_{i+1}.csv'
     df_filtered.to_csv(output_file_path, index=False)
 
     print(f"Treatment {i+1} applied and saved to {output_file_path}")
     print(f"Treatment conditions: {treatment}")
-    print(f"Number of rows matching the treatment: {mask.sum()} out of {len(df_filtered)}")
+    print(f"Number of rows matching the treatment: {df_filtered['TempTreatment'].sum()} out of {len(df_filtered)}")
     print("-" * 50)

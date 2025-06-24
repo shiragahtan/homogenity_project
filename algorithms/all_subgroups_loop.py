@@ -274,6 +274,15 @@ def main():
     tgtO = "ConvertedSalary"  # Target outcome column in the dataset
     treatment_file = "Shira_Treatments.json"
 
+    # # Uncomment the following lines to use a specific treatment for debugging
+    # treatment = {"FormalEducation": "Bachelor’s degree (BA, BS, B.Eng., etc.)"}
+    # import ipdb; ipdb.set_trace()  # Debugging breakpoint
+    # df = (pd.read_csv("../yarden_files/yarden_so_decoded.csv")
+    #       .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
+    #       .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
+    #       .reset_index(drop=True))
+    # utility_yarden, _ = CATE(df, DAG_str, treatment, attrOrdinal, tgtO)
+
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 

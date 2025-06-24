@@ -4,10 +4,13 @@ import os
 
 # List of treatment files to process
 treatment_files = [
-    'so_countries_encoded_treatment_1.csv',
-    'so_countries_encoded_treatment_2.csv',
-    'so_countries_encoded_treatment_3.csv'
+    'so_countries_treatment_1.csv',
+    'so_countries_treatment_2.csv',
+    'so_countries_treatment_3.csv'
 ]
+# treatment_files = [
+#     'yarden_reverted_so_updated.csv',
+# ]
 
 # Process each treatment file
 for treatment_file in treatment_files:

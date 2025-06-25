@@ -2,6 +2,7 @@
   "DELTAS": [20000, 15000, 10000, 5000],
   "ALGORITHM_NAMES": ["NaiveDFS", "Apriori", "FP", "FP_Multi"],
   "MODES": ["HomogeneityCheck", "AllSubgroups"],
-  "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000]
+  "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000],
+  "TREATMENT_COL": "TempTreatment"
 }
 

@@ -1,21 +1,21 @@
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import multiprocessing as mp
+from ATE_update import ATEUpdateLinear
 from sklearn.preprocessing import OneHotEncoder
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from typing import Dict, List, Tuple, Any, Callable, Optional
-
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 # ── configuration ───────────────────────────────────────────────────────────
 CHUNK_SIZE_BASE = 32       # baseline batch size for Pool.imap_unordered
-SUPPORT_SWITCH = 0.07      # ≥ 7 % support → Apriori, else FP‑Growth
+SUPPORT_SWITCH = 0.07      # support → Apriori, else FP‑Growth
 MIN_TASKS_PER_CORE = 4     # if fewer, run serial instead of Pool
 
 # ── shared globals (populated by _init_worker) ──────────────────────────────
 _DF_GLOBAL: Optional[pd.DataFrame] = None
-_DAG_STR = None
-_TREATMENT = None
-_ATTR_ORD = None
-_TARGET_COL = None
+
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -26,10 +26,16 @@ def _choose_algorithm(min_sup: float):
 
 # ── frequent‑pattern mining (sparse + Apriori / FP‑Growth) ──────────────────
 
-def mine_subgroups(df: pd.DataFrame, delta: int) -> List[Tuple[Dict[str, Any], int]]:
-    """Return [(filter‑dict, size), …] for every subgroup with |S| ≥ delta."""
+def mine_subgroups(df: pd.DataFrame, delta: int, exclude_cols: List[str] = None) -> List[Tuple[Dict[str, Any], int]]:
+    """Return [(filter‑dict, size), …] for every subgroup with |S|≥delta."""
+    if exclude_cols is None:
+        exclude_cols = []
+    
+    # Filter out columns that should not be used for subgroup mining
+    mining_df = df.drop(columns=exclude_cols, errors='ignore')
+    
     enc = OneHotEncoder(handle_unknown="ignore", sparse_output=True, dtype=bool)
-    X = enc.fit_transform(df)
+    X = enc.fit_transform(mining_df)
     names = enc.get_feature_names_out()               # e.g. "Country_Germany"
 
     n_rows = len(df)
@@ -55,85 +61,89 @@ def mine_subgroups(df: pd.DataFrame, delta: int) -> List[Tuple[Dict[str, Any], i
     return results
 
 
-# ── vectorised AND‑filter (support already ≥ Δ) ─────────────────────────────
+# ── vectorised AND‑filter (support already ≥ Δ) ─────────────────────────────
 
-def _apply_filter(filt: Dict[str, Any]) -> pd.DataFrame:
+def _get_subgroup_mask(filt: Dict[str, Any]) -> pd.Series:
+    """Returns a boolean mask for the given filter."""
     if not filt:
-        return _DF_GLOBAL
+        return pd.Series(True, index=_DF_GLOBAL.index)
     mask = pd.Series(True, index=_DF_GLOBAL.index)
     for a, v in filt.items():
-        mask &= _DF_GLOBAL[a] == v
-    return _DF_GLOBAL[mask]
+        if pd.isna(v):
+            mask &= _DF_GLOBAL[a].isna()
+        else:
+            mask &= _DF_GLOBAL[a] == v
+    return mask
 
 
 # ── CATE helper – runs inside each worker ───────────────────────────────────
 
-def _compute_cate(cate_func: Callable, filt: Dict[str, Any]):
-    sub_df = _apply_filter(filt)
-    return cate_func(sub_df, _DAG_STR, _TREATMENT, _ATTR_ORD, _TARGET_COL)
+def _compute_cate(treatment: Dict[Any, Any], treatment_col: str, tgtO: str, df: pd.DataFrame, filt: Dict[str, Any]):
+    subgroup_mask = _get_subgroup_mask(filt)
+    sub_df = df[subgroup_mask]
+    
+    if sub_df.empty:
+        return np.nan
+        
+    # Create features columns excluding treatment, target, and filter columns
+    features_cols = [col for col in df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+    return ate_update_obj.get_original_ate()
 
 
 def _eval_cate_worker(args):
-    cate_func, (filt, sz) = args
-    cate, p = _compute_cate(cate_func, filt)
+    treatment, treatment_col, tgtO, df, (filt, sz) = args
+    cate = _compute_cate(treatment, treatment_col, tgtO, df, filt)
     return {
         "AttributeValues": str(filt),
         "Size":            sz,
         "Utility":         cate,
-        "PValue":          p,
     }
 
 
 # ── worker initialiser (executed once in every child process) ───────────────
 
-def _init_worker(df, dag_str, treatment, attr_ord, tgt_col):
-    global _DF_GLOBAL, _DAG_STR, _TREATMENT, _ATTR_ORD, _TARGET_COL
+def _init_worker(df):
+    global _DF_GLOBAL
     _DF_GLOBAL  = df            # copy‑on‑write: inexpensive after fork
-    _DAG_STR    = dag_str
-    _TREATMENT  = treatment
-    _ATTR_ORD   = attr_ord
-    _TARGET_COL = tgt_col
 
 
-# ── main public entry‑point --------------------------------------------------
+# ── main public entry-point --------------------------------------------------
 
 def calc_utility_for_subgroups(
-    mode: int,                       # 0 = homogeneity check, else collect all
+    mode: int,                       # 0 = homogeneity check, else collect all
     df: pd.DataFrame,
-    treatment: Dict[str, Any],
-    dag_str: str,
-    attr_ordinal,
-    target_col: str,
-    cate_func: Callable,
+    treatment: Dict[Any, Any],
+    treatment_col: str,
+    tgtO: str,
     delta: int,
-    epsilon: int,
+    epsilon: float,
+    utility_all: float,
     n_jobs: Optional[int] = None,
 ):
-    """Subgroup utility with self‑tuning miner & parallel CATE.
+    """Subgroup utility with self-tuning miner & parallel CATE.
 
     Returns
     -------
-    mode 0 → bool
-    mode ≠0 → (list[dict], int)
+    mode0 → bool
+    mode≠0 → (list[dict], int)
     """
-
-    # overall CATE -----------------------------------------------------------
-    util_all, _ = cate_func(df, dag_str, treatment, attr_ordinal, target_col)
-
     # mine once --------------------------------------------------------------
-    subgroups = mine_subgroups(df, delta)   # [(filt, size), …]
+    # Exclude treatment columns and target outcome from mining
+    exclude_cols = [*treatment.keys(), treatment_col, tgtO]
+    subgroups = mine_subgroups(df, delta, exclude_cols=exclude_cols)   # [(filt, size), …]
     n_sub = len(subgroups)
 
     # ─────────────────────────── mode 0: homogeneity check ──────────────────
     if mode == 0:
-        # we run serially for the fast early‑exit path
-        _init_worker(df, dag_str, treatment, attr_ordinal, target_col)
+        # we run serially for the fast early-exit path
+        _init_worker(df)
         for filt, _ in subgroups:
-            cate, _ = _compute_cate(cate_func, filt)
-            if cate and abs(util_all - cate) > epsilon:
+            cate = _compute_cate(treatment, treatment_col, tgtO, df, filt)
+            if abs(utility_all - cate) > epsilon:
                 print(
-                    f"\n\033[91msubgroup's cate is: {cate} while utility_all is {util_all} "
-                    f"(Δ={abs(util_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
+                    f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
+                    f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
                 )
                 return False
         print("\033[92mHomogenous\033[0m")
@@ -145,23 +155,27 @@ def calc_utility_for_subgroups(
     use_pool = n_sub >= MIN_TASKS_PER_CORE * cores
 
     records: List[Dict[str, Any]] = []
-    args = [(cate_func, sg) for sg in subgroups]
+    args = [(treatment, treatment_col, tgtO, df, sg) for sg in subgroups]
 
     if use_pool:
         chunk = max(1, min(CHUNK_SIZE_BASE, n_sub // (cores * 2)))
         with mp.Pool(
             processes=cores,
             initializer=_init_worker,
-            initargs=(df, dag_str, treatment, attr_ordinal, target_col),
+            initargs=(df,),
         ) as pool:
             for rec in pool.imap_unordered(_eval_cate_worker, args, chunksize=chunk):
                 records.append(rec)
     else:
-        _init_worker(df, dag_str, treatment, attr_ordinal, target_col)
+        _init_worker(df)
         for arg in args:
             records.append(_eval_cate_worker(arg))
 
     for r in records:
-        r["UtilityDiff"] = r["Utility"] - util_all
+        if r["Utility"] is not None and not np.isnan(r["Utility"]):
+            r["UtilityDiff"] = r["Utility"] - utility_all
+        else:
+            r["UtilityDiff"] = np.nan
+
 
     return records, n_sub

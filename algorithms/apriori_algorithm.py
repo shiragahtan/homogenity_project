@@ -2,31 +2,42 @@
 Core subgroup analysis algorithms using Apriori.
 This module contains functions for finding subgroups and calculating their utility.
 """
+import sys
 import pandas as pd
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+from ATE_update import ATEUpdateLinear
 from typing import Dict, List, Tuple, Any, Callable, Optional
-from mlxtend.frequent_patterns import apriori
-
 
 def mine_subgroups(
     algorithm: Callable,
     df: pd.DataFrame,
     delta: int,
+    exclude_cols: List[str] = None
 ) -> List[Tuple[Dict[str, object], int]]:
     """
     Return [(filter‑dict, size), …] for every subgroup size ≥ delta.
 
     Args:
+        algorithm: Apriori algorithm function to use
         df: Input DataFrame
         delta: Minimum group size threshold
+        exclude_cols: List of columns to exclude from mining (e.g., treatment columns)
 
     Returns:
         List of tuples containing (filter_dict, size) for each subgroup
     """
+    if exclude_cols is None:
+        exclude_cols = []
+    
+    # Filter out columns that should not be used for subgroup mining
+    mining_df = df.drop(columns=exclude_cols, errors='ignore')
+    
     # one‑hot encode attribute=value pairs
     onehot_parts = []
     lookup: Dict[str, Tuple[str, object]] = {}    # dummy‑col ➜ (attr, value)
-    for col in df.columns:
-        d = pd.get_dummies(df[col].fillna('⧫NA⧫'), prefix=col, dtype=bool)
+    for col in mining_df.columns:
+        d = pd.get_dummies(mining_df[col].fillna('⧫NA⧫'), prefix=col, dtype=bool)
         onehot_parts.append(d)
         lookup.update({c: (col, c.split('_', 1)[1]) for c in d.columns})
     onehot = pd.concat(onehot_parts, axis=1)
@@ -52,7 +63,7 @@ def mine_subgroups(
 
 def filter_by_attribute(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """
-    Vectorised AND‑filter without early‑exit (support already ≥ delta).
+    Vectorised AND-filter without early-exit (support already ≥ delta).
 
     Args:
         df: Input DataFrame
@@ -65,7 +76,7 @@ def filter_by_attribute(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
         return df
     mask = pd.Series(True, index=df.index)
     for a, v in filters.items():
-        mask &= df[a] == v
+        mask &= df[a] == int(v)
     return df[mask]
 
 
@@ -73,43 +84,48 @@ def calc_utility_for_subgroups(
     mode: int,
     algorithm: Callable,
     df: pd.DataFrame,
-    treatment: Dict[str, object],
-    dag_str: str,
-    attr_ordinal: Optional[List[str]],
-    target_col: str,
-    cate_func: Callable,
+    treatment: Dict[Any, Any],
+    treatment_col: str,
+    tgtO: str,
     delta: int,
-    epsilon: int
+    epsilon: int,
+    utility_all: float
 ):
     """
     Calculate utility for each subgroup in the DataFrame using Apriori algorithm.
 
     Args:
+        mode: Mode of operation (0 for homogeneity check, other for all subgroups)
+        algorithm: Apriori algorithm function to use
         df: Input DataFrame
         treatment: Dictionary mapping treatment variables to their values
-        dag_str: DAG string representation in DOT format
-        attr_ordinal: List of ordinal attributes (if any)
         target_col: Target outcome column
-        cate_func: Function to calculate CATE values
+        cate_func: Function to calculate CATE values (expects boolean mask)
         delta: Minimum group size threshold
+        epsilon: Threshold for homogeneity check
+        utility_all: Overall utility value for comparison
 
     Returns:
         Tuple containing:
-        - List of dictionaries with subgroup data
-        - Number of subgroups found
+        - List of dictionaries with subgroup data (if mode != 0)
+        - Number of subgroups (if mode != 0)
+        - Boolean indicating homogeneity (if mode == 0)
     """
-    # Calculate CATE for the entire dataset
-    utility_all, _ = cate_func(df, dag_str, treatment, attr_ordinal, target_col)
-
     # Find all subgroups meeting the minimum size requirement
+    # Exclude treatment columns and target outcome from mining
+    exclude_cols = [*treatment.keys(), treatment_col, tgtO]
     subgroup_records = []
-    for filt, sz in mine_subgroups(algorithm, df, delta):
+    for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
         sub_df = filter_by_attribute(df, filt)
-
-        # Calculate CATE for this subgroup
-        cate, p = cate_func(sub_df, dag_str, treatment, attr_ordinal, target_col)
-        if cate != 0 and mode == 0 and abs(utility_all - cate) > epsilon:
+        if sub_df.empty:
+            continue
+            
+        features_cols = [col for col in df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
+        ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+        cate = ate_update_obj.get_original_ate()
+            
+        if mode == 0 and abs(utility_all - cate) > epsilon:
             print(
                 f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
                 f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
@@ -123,7 +139,6 @@ def calc_utility_for_subgroups(
                 "Size": sz,
                 "Utility": cate,
                 "UtilityDiff": cate - utility_all,
-                "PValue": p,
             })
 
     if mode != 0:

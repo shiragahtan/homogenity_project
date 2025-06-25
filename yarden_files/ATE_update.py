@@ -8,6 +8,8 @@ class ATEUpdateLinear:
     def __init__(self, X, T, Y, find_confounders=False):
         """
         Initialize with dataset and identify confounders using DoWhy.
+        The design matrix is created once and preserves the original index
+        to allow for efficient slicing for subgroup analysis.
         
         Parameters:
         ----------
@@ -18,27 +20,28 @@ class ATEUpdateLinear:
         Y : pandas.Series or numpy.ndarray
             Outcome variable
         """
-        # Convert inputs to appropriate formats
-        self.X = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-        self.T = T.copy() if isinstance(T, pd.Series) else pd.Series(T)
-        self.Y = Y.copy() if isinstance(Y, pd.Series) else pd.Series(Y)
+        # Ensure inputs are DataFrames/Series with a consistent index
+        self.X = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X,
+                                                                           columns=[f"X{i}" for i in range(X.shape[1])])
+        self.T = T.copy() if isinstance(T, pd.Series) else pd.Series(T, index=self.X.index)
+        self.Y = Y.copy() if isinstance(Y, pd.Series) else pd.Series(Y, index=self.X.index)
+
+        # Create the intercept Series, preserving the original index
+        intercept = pd.Series(1, index=self.X.index, name='intercept')
         
         if find_confounders:
-            # Try to identify confounders using DoWhy
             self.confounders = self._identify_confounders()
-            self.confounders = self.confounders if isinstance(self.confounders, list) else self.confounders.get('backdoor')
-            # Create design matrix with treatment and confounders
+            self.confounders = self.confounders if isinstance(self.confounders, list) else self.confounders.get(
+                'backdoor')
             X_confounders = self.X[self.confounders] if self.confounders else self.X
-            self.design_matrix = pd.concat([self.T.reset_index(drop=True), 
-                                        X_confounders.reset_index(drop=True)], axis=1)
-            column_names = ['treatment'] + (self.confounders if self.confounders else self.X.columns.tolist())
+            # Create design matrix, ensuring index alignment
+            self.design_matrix = pd.concat([intercept, self.T, X_confounders], axis=1)
+            column_names = ['intercept', 'treatment'] + (
+                self.confounders if self.confounders else self.X.columns.tolist())
             self.design_matrix.columns = column_names
         else:
             # Use all features as confounders
-            intercept = pd.Series(1, index=range(len(self.T)), name='intercept')
-            self.design_matrix = pd.concat([intercept, self.T.reset_index(drop=True), self.X.reset_index(drop=True)], axis=1)
-            # self.design_matrix = pd.concat([self.T.reset_index(drop=True), self.X.reset_index(drop=True)], axis=1)
-            # self.design_matrix.columns = ['treatment'] + self.X.columns.tolist()
+            self.design_matrix = pd.concat([intercept, self.T, self.X], axis=1)
             self.design_matrix.columns = ['intercept', 'treatment'] + self.X.columns.tolist()
 
         # Convert to numpy for faster computation
@@ -53,10 +56,9 @@ class ATEUpdateLinear:
         self.original_model = BaseLinearRegression(self.X_matrix, self.Y_matrix)
         
         # Store original ATE (treatment effect)
-        self.original_ate = float(self.original_model.beta[1])
+        self.original_ate = float(self.original_model.beta[1].item())
 
-
-    def calculate_direct_ate(self, X, T, Y, find_confounders=False):
+    def calculate_direct_ate(self, X, T, Y, find_confounders=False, exclude_cols=None):
         """
         Calculate ATE for given dataset without modifying object state.
         
@@ -70,6 +72,9 @@ class ATEUpdateLinear:
             Outcome variable
         find_confounders : bool
             Whether to identify confounders using DoWhy
+        exclude_cols : list, optional
+            List of column names to exclude from constant feature detection.
+            Default is ['intercept', 'treatment'].
             
         Returns:
         --------
@@ -100,11 +105,35 @@ class ATEUpdateLinear:
         X_matrix = design_matrix.values
         Y_matrix = Y_local.values.reshape(-1, 1)
         
-        # Compute linear regression
-        model = BaseLinearRegression(X_matrix, Y_matrix)
+        # Remove constant columns (features with zero variance) to avoid singular matrix
+        if exclude_cols is None:
+            exclude_cols = ['intercept', 'treatment']  # Default columns to keep
+            
+        constant_cols = []
+        for col in design_matrix.columns:
+            if col not in exclude_cols:  # Only check columns not in exclude list
+                if design_matrix[col].nunique() <= 1:
+                    constant_cols.append(col)
         
-        # Return ATE (treatment effect)
-        return float(model.beta[1])
+        if constant_cols:
+            # print(f"Removing constant columns: {constant_cols}")
+            design_matrix = design_matrix.drop(columns=constant_cols)
+            X_matrix = design_matrix.values
+        
+        # Check if we have enough observations after removing constant features
+        if X_matrix.shape[0] < X_matrix.shape[1]:
+            # print("Warning: Dataset is too small to fit the model after removing constant features.")
+            return np.nan
+        
+        # Compute linear regression
+        try:
+            model = BaseLinearRegression(X_matrix, Y_matrix)
+            # Return ATE (treatment effect)
+            return float(model.beta[1].item())
+        except np.linalg.LinAlgError:
+            # Handle singular matrix error (e.g., perfect multicollinearity)
+            # print("Warning: Singular matrix encountered. Dataset may have constant features.")
+            return np.nan
     
     def _identify_confounders(self):
         """
@@ -200,7 +229,7 @@ class ATEUpdateLinear:
         beta_updated = XTX_inv_updated @ (self.X_matrix.T @ self.Y_matrix - X_remove.T @ Y_remove)
         
         # Update the ATE
-        new_ate = float(beta_updated[1])
+        new_ate = float(beta_updated[1].item())
 
         if update:
             self.original_model.XTX_inv = XTX_inv_updated

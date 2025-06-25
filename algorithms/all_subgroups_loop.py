@@ -1,15 +1,21 @@
 import sys
-from pathlib import Path
-# Add project root to sys.path for module resolution
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
 import json
-from time import perf_counter
 import datetime
 import pandas as pd
+from pathlib import Path
 import multiprocessing as mp
+from time import perf_counter
 from functools import partial
 from contextlib import contextmanager
+# Add project root to sys.path for module resolution
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+
+from ATE_update import ATEUpdateLinear
+from mlxtend.frequent_patterns import fpgrowth, apriori
+from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
+from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
+from optimized_fp import calc_utility_for_subgroups as optimized_fp_calc_utility_for_subgroups
 
 # Load config
 with open('../configs/config.json', 'r') as f:
@@ -19,12 +25,7 @@ DELTAS = config['DELTAS']
 ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 MODES = config['MODES']
 EPSILONS = config['EPSILONS']
-
-from nativ_files.utility_functions import CATE
-from mlxtend.frequent_patterns import fpgrowth, apriori
-from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
-from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
-from optimized_fp import calc_utility_for_subgroups as optimized_fp_calc_utility_for_subgroups
+TREATMENT_COL = config['TREATMENT_COL']
 
 
 """ Timing helper """
@@ -64,6 +65,21 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
     return output_file
 
 
+def _append_df_to_excel(excel_path: Path, new_row: dict):
+    """
+    Append a new row to an Excel file. Creates the file if it doesn't exist.
+    """
+    if not excel_path.exists():
+        # Create new Excel file with headers
+        df = pd.DataFrame([new_row])
+        df.to_excel(excel_path, index=False)
+    else:
+        # Append to existing file
+        existing_df = pd.read_excel(excel_path)
+        updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
+        updated_df.to_excel(excel_path, index=False)
+
+
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
     """
     Append algorithm timing results to an Excel file.
@@ -84,17 +100,7 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
         "run_time_minutes": runtime_seconds / 60
     }
 
-    # Check if file exists
-    if not excel_path.exists():
-        # Create new Excel file with headers
-        df = pd.DataFrame([new_row])
-        df.to_excel(excel_path, index=False)
-    else:
-        # Append to existing file
-        existing_df = pd.read_excel(excel_path)
-        updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
-        updated_df.to_excel(excel_path, index=False)
-
+    _append_df_to_excel(excel_path, new_row)
     print(f"✅ Timing results appended to {excel_path}")
 
 
@@ -119,182 +125,121 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "run_time_minutes": runtime_seconds / 60
     }
 
-    # Check if file exists
-    if not excel_path.exists():
-        # Create new Excel file with headers
-        df = pd.DataFrame([new_row])
-        df.to_excel(excel_path, index=False)
-    else:
-        # Append to existing file
-        existing_df = pd.read_excel(excel_path)
-        updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
-        updated_df.to_excel(excel_path, index=False)
-
+    _append_df_to_excel(excel_path, new_row)
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-# description:
-# Loads a dataset and a list of treatment/condition pairs.
-# For each pair, filters the data and finds all subgroups of a minimum size (DELTA) based on attribute combinations.
-# Calculates the Conditional Average Treatment Effect (CATE) for each subgroup.
-# Saves the results and summary statistics for each experiment to Excel files.
-
-def run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO):
+def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i):
     """
     Run experiments for each treatment and save results to an Excel file.
     """
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
     epsilons = EPSILONS
     if chosen_mode != 0:
-        epsilons = [epsilons[0]]
-    for i, good_treatment in enumerate(good_treatments):
-        condition = good_treatment["condition"]
-        attr, val = list(condition.items())[0]
-        treatment = good_treatment["treatment"]
-        # Filter the DataFrame based on the condition
-        df = (pd.read_csv(DATA_PATH)
-              .query(f'{attr} == "{val}"')
-              .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
-              .drop(columns=[f'{attr}'])  # Remove the filter column since it now contains only one value
-              .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
-              .reset_index(drop=True))
+        epsilons = [epsilons[0]]  # You don't actually use epsilon in AllSubgroups mode, just chose random value.
 
-        if len(df) < delta:
-            continue  # Skip if the filtered DataFrame is too small
-        # Calculate utility for subgroups
-        print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
-        for epsilon in epsilons:
+    # Calculate utility for subgroups
+    print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
+    features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
+    utility_all = ate_update_obj.get_original_ate()
+    
+    for epsilon in epsilons:
+        if chosen_mode == 0:
             print(f"Running with epsilon: {epsilon}")
-            common = dict(
-                df=df,
-                treatment=treatment,
-                dag_str=DAG_str,
-                attr_ordinal=attrOrdinal,
-                target_col=tgtO,
-                cate_func=CATE,
-                delta=delta,
-                epsilon=epsilon,
-                mode=chosen_mode
-            )
 
-            def _naive_kw():
-                attr_vals = {
-                    col: sorted(v for v in df[col].dropna().unique()
-                                if str(v).upper() != "UNKNOWN")
-                    for col in df.columns if col not in attr
-                }
-                return naive_calc_utility_for_subgroups(
-                    attr_vals=attr_vals,
-                    df=df,
+        # Common parameters for all algorithms
+        common = dict(
+            df=df,
+            treatment=treatment,
+            tgtO=tgtO,
+            treatment_col=TREATMENT_COL,
+            delta=delta,
+            epsilon=epsilon,
+            mode=chosen_mode,
+            utility_all=utility_all
+        )
+
+        # Parameters for each algorithm
+        _naive_kw = dict(common, attr_vals=attr_vals)
+        _apriori_kw = dict(common, algorithm=apriori)
+        _fpgrowth_kw = dict(common, algorithm=fpgrowth)
+        _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
+
+        algo_dispatch = {
+            0: lambda: naive_calc_utility_for_subgroups(**_naive_kw),
+            1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
+            2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
+            3: lambda: optimized_fp_calc_utility_for_subgroups(**_opt_fp_kw),
+        }
+
+        try:
+            with timer() as elapsed:
+                res = algo_dispatch[chosen_algorithm]()
+            elapsed_time = elapsed()
+
+            if chosen_mode == 0:  # Homogeneity check
+                append_homogeneity_results(
+                    algorithm_name=ALGORITHM_NAMES[chosen_algorithm],
                     treatment=treatment,
-                    DAG_str=DAG_str,  # note: uppercase D
-                    attrOrdinal=attrOrdinal,
-                    tgtO=tgtO,
-                    CATE_func=CATE,
+                    condition=condition,
                     delta=delta,
                     epsilon=epsilon,
-                    mode=chosen_mode # Added mode argument here
+                    homogeneity_status=res,
+                    runtime_seconds=elapsed_time
                 )
+            else:  # Only append timing results for AllSubgroups mode
+                subgroup_data, num_subgroups = res
+                save_results_to_excel(ALGORITHM_NAMES[chosen_algorithm], subgroup_data, num_subgroups, condition,
+                                      treatment, delta, index=i)
 
-            _apriori_kw = dict(common, algorithm=apriori) # mode is now inherited from common
-            _fpgrowth_kw = dict(common, algorithm=fpgrowth) # mode is now inherited from common
-            _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())  # extra kw for FP-multi, mode inherited
+                append_timing_results(ALGORITHM_NAMES[chosen_algorithm], condition, treatment, num_subgroups, delta,
+                                      elapsed_time)
 
-            algo_dispatch = {
-                0: lambda: _naive_kw(),
-                1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
-                2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
-                3: lambda: optimized_fp_calc_utility_for_subgroups(**_opt_fp_kw),
-            }
+        except KeyError:
+            raise ValueError(f"Unknown algorithm id: {chosen_algorithm}")
 
-            try:
-                with timer() as elapsed:
-                    res = algo_dispatch[chosen_algorithm]()
-                elapsed_time = elapsed()
-
-                if chosen_mode == 0:  # Homogeneity check
-                    append_homogeneity_results(
-                        algorithm_name=ALGORITHM_NAMES[chosen_algorithm],
-                        treatment=treatment,
-                        condition=condition,
-                        delta=delta,
-                        epsilon=epsilon,
-                        homogeneity_status=res,
-                        runtime_seconds=elapsed_time
-                    )
-                else:  # Only append timing results for AllSubgroups mode
-                    subgroup_data, num_subgroups = res
-                    save_results_to_excel(ALGORITHM_NAMES[chosen_algorithm], subgroup_data, num_subgroups, condition,
-                                          treatment, delta, index=i)
-
-                    append_timing_results(ALGORITHM_NAMES[chosen_algorithm], condition, treatment, num_subgroups, delta,
-                                          elapsed_time)
-
-            except KeyError:
-                raise ValueError(f"Unknown algorithm id: {chosen_algorithm}")
-
-            print(f"⏱  Total execution time: {elapsed_time:.2f} seconds ({elapsed_time / 60:.2f} minutes)")
+        print(f"⏱  Total execution time: {elapsed_time:.2f} seconds ({elapsed_time / 60:.2f} minutes)")
 
 
 def main():
     # Output the results
-    DATA_PATH = sys.argv[1]
-    DAG_str = """digraph {
-        Continent -> UndergradMajor;
-        Continent -> FormalEducation;
-        Continent -> Country;
-        Continent -> RaceEthnicity;
-        Continent -> ConvertedSalary;
-        HoursComputer -> ConvertedSalary;
-        UndergradMajor -> DevType;
-        FormalEducation -> UndergradMajor;
-        FormalEducation -> DevType;
-        Age -> FormalEducation;
-        Age -> Dependents;
-        Age -> DevType;
-        Age -> ConvertedSalary;
-        Gender -> UndergradMajor;
-        Gender -> FormalEducation;
-        Gender -> DevType;
-        Gender -> ConvertedSalary;
-        Dependents -> HoursComputer;
-        Country -> FormalEducation;
-        Country -> RaceEthnicity;
-        Country -> ConvertedSalary;
-        DevType -> HoursComputer;
-        DevType -> ConvertedSalary;
-        RaceEthnicity -> ConvertedSalary;
-        HDI -> GINI;
-        GINI -> ConvertedSalary;
-        GINI -> GDP;
-        GDP -> ConvertedSalary;
-    }
-    """
-    attrOrdinal = None  # No ordinal attributes in this example
+    # DATA_PATH = "../yarden_files/yarden_so_decoded.csv"  # Path to the dataset
     tgtO = "ConvertedSalary"  # Target outcome column in the dataset
     treatment_file = "Shira_Treatments.json"
-
-    # # Uncomment the following lines to use a specific treatment for debugging
-    # treatment = {"FormalEducation": "Bachelor’s degree (BA, BS, B.Eng., etc.)"}
-    # import ipdb; ipdb.set_trace()  # Debugging breakpoint
-    # df = (pd.read_csv("../yarden_files/yarden_so_decoded.csv")
-    #       .loc[:, lambda d: ~d.columns.str.startswith("Unnamed")]
-    #       .loc[lambda d: ~d.isin(["UNKNOWN"]).any(axis=1)]  # Remove rows with "UNKNOWN" in any column
-    #       .reset_index(drop=True))
-    # utility_yarden, _ = CATE(df, DAG_str, treatment, attrOrdinal, tgtO)
+    treated_rules_datasets = [
+        '../stackoverflow/so_countries_treatment_1_encoded.csv',
+        '../stackoverflow/so_countries_treatment_2_encoded.csv',
+        '../stackoverflow/so_countries_treatment_3_encoded.csv'
+    ]
 
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    # chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    chosen_mode = 1
     # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
-    # chosen_algorithm = 3  # For example, 1 for Apriori algorithm
-    # delta = 20000  # Initial delta value
-    # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
-    for delta in DELTAS:
-        for chosen_algorithm in range(3,-1, -1): # Loop through all algorithms from end to start
-            print(f"Running for delta: {delta}")
-            run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, DAG_str, attrOrdinal, tgtO)
+    chosen_algorithm = 2  # For example, 1 for Apriori algorithm
+    delta = 20000  # Initial delta value
+    # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
+    for i, dataset in enumerate(treated_rules_datasets):
+        df = pd.read_csv(dataset)
+        condition = good_treatments[i]["condition"]
+        attr, _ = list(condition.items())[0]
+        treatment = good_treatments[i]["treatment"]
+        attr_vals = {
+            col: sorted(v for v in df[col].dropna().unique()
+                        if str(v).upper() != "UNKNOWN")
+            for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
+        }
+        # for delta in DELTAS:
+        if len(df) < delta:
+            print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
+            continue  # Skip if the filtered DataFrame is too small
+
+        # for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
+        print(f"Running for delta: {delta}")
+        run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i)
 
 
 if __name__ == "__main__":

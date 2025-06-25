@@ -2,10 +2,13 @@
 Core subgroup utility calculation algorithm.
 This module contains functions for finding subgroups and calculating their utility.
 """
+import sys
 import pandas as pd
+from pathlib import Path
 import multiprocessing as mp
 from typing import Dict, List, Tuple, Callable, Any
-
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+from ATE_update import ATEUpdateLinear
 
 EPSILON = 5000
 
@@ -30,7 +33,7 @@ def _dfs_serial(df: pd.DataFrame,
                 start_idx: int
                 ) -> List[Tuple[Dict[str, object], int]]:
     """
-    Depth‑first expansion of one branch — NO multiprocessing inside here.
+    Depth-first expansion of one branch — NO multiprocessing inside here.
     Returns a flat list of (filters, size); caller takes care of levels.
     """
     out: List[Tuple[Dict[str, object], int]] = []
@@ -108,13 +111,12 @@ def calc_utility_for_subgroups(
         mode: int,
         attr_vals: Dict[str, List],
         df: pd.DataFrame,
-        treatment: Dict[str, Any],
-        DAG_str: str,
-        attrOrdinal: Any,
+        treatment: Dict[Any, Any],
         tgtO: str,
-        CATE_func: Callable,
+        treatment_col: str,
         delta: int,
-        epsilon: int
+        epsilon: int,
+        utility_all: float
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     Calculate utility for each subgroup in the DataFrame.
@@ -122,11 +124,9 @@ def calc_utility_for_subgroups(
     Args:
         attr_vals: Dictionary mapping attribute names to lists of possible values
         df: Input DataFrame
-        treatment: Dictionary mapping treatment variables to their values
-        DAG_str: DAG string representation in DOT format
-        attrOrdinal: Ordinal attributes (if any)
-        tgtO: Target outcome column
-        CATE_func: Function to calculate CATE values
+        dag_str: DAG string representation in DOT format
+: Ordinal attributes (if any)
+        cate_func: Function to calculate CATE values
         delta: Minimum group size threshold
 
     Returns:
@@ -134,12 +134,8 @@ def calc_utility_for_subgroups(
         - List of dictionaries with subgroup data
         - Number of subgroups
     """
-    # Calculate CATE for the entire dataset
-    utility_all, _ = CATE_func(df, DAG_str, treatment, attrOrdinal, tgtO)
-
     # Initialize a list to store subgroup data
     subgroup_data = []
-
     kept = generate_pruned_levels_mp(df, attr_vals, delta, n_jobs=mp.cpu_count())
     num_subgroups = 0
     for lvl, groups in enumerate(kept):
@@ -147,9 +143,13 @@ def calc_utility_for_subgroups(
             continue
         for filt, sz in groups:
             filtered_df = filter_by_attribute(df, filt, delta)
+            
             if not filtered_df.empty:
-                cate_value, p_value = CATE_func(filtered_df, DAG_str, treatment, attrOrdinal, tgtO)
-                if cate_value != 0 and mode == 0 and abs(utility_all - cate_value) > epsilon:
+                features_cols = [col for col in df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
+                ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+                cate_value = ate_update_obj.get_original_ate()
+
+                if mode == 0 and abs(utility_all - cate_value) > epsilon:
                     print(
                         f"\n\033[91msubgroup's cate is: {cate_value} while utility_all is {utility_all} "
                         f"(Δ={abs(utility_all - cate_value)}>{epsilon}) → NOT homogeneous\033[0m\n"
@@ -166,7 +166,6 @@ def calc_utility_for_subgroups(
                         "Size": sz,
                         "Utility": cate_value,
                         "UtilityDiff": utility_diff,
-                        "PValue": p_value
                     })
 
     # Return the data needed for saving to Excel

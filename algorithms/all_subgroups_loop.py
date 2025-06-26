@@ -216,11 +216,11 @@ def main():
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    # chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
-    chosen_mode = 1
+    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    # chosen_mode = 1
     # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
-    chosen_algorithm = 2  # For example, 1 for Apriori algorithm
-    delta = 20000  # Initial delta value
+    # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
+    # delta = 20000  # Initial delta value
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
     for i, dataset in enumerate(treated_rules_datasets):
         df = pd.read_csv(dataset)
@@ -232,14 +232,14 @@ def main():
                         if str(v).upper() != "UNKNOWN")
             for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
         }
-        # for delta in DELTAS:
-        if len(df) < delta:
-            print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
-            continue  # Skip if the filtered DataFrame is too small
+        for delta in DELTAS:
+            if len(df) < delta:
+                print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
+                continue  # Skip if the filtered DataFrame is too small
 
-        # for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
-        print(f"Running for delta: {delta}")
-        run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i)
+            for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
+                print(f"Running for delta: {delta}")
+                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i)
 
 
 if __name__ == "__main__":

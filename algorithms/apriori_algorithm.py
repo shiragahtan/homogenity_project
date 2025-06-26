@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import ATEUpdateLinear
 from typing import Dict, List, Tuple, Any, Callable, Optional
+from numpy.linalg import LinAlgError
 
 def mine_subgroups(
     algorithm: Callable,
@@ -114,6 +115,7 @@ def calc_utility_for_subgroups(
     # Find all subgroups meeting the minimum size requirement
     # Exclude treatment columns and target outcome from mining
     exclude_cols = [*treatment.keys(), treatment_col, tgtO]
+    
     subgroup_records = []
     for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
@@ -121,9 +123,22 @@ def calc_utility_for_subgroups(
         if sub_df.empty or sub_df[treatment_col].nunique() < 2:
             continue
             
-        features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
-        ate_update_obj = ATEUpdateLinear(sub_df[features_cols], sub_df[treatment_col], sub_df[tgtO])
-        cate = ate_update_obj.get_original_ate()
+        # Create features columns excluding treatment, target, and filter columns
+        features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
+        # Drop every column that is constant in this slice
+        features_cols = [c for c in features_cols if sub_df[c].nunique() > 1]
+        if not features_cols:  # nothing varies → skip slice
+            continue
+        
+        try:
+            ate_update_obj = ATEUpdateLinear(
+                sub_df[features_cols],
+                sub_df[treatment_col],
+                sub_df[tgtO]
+            )
+            cate = ate_update_obj.get_original_ate()
+        except LinAlgError:  # XᵀX still singular
+            continue
             
         if mode == 0 and abs(utility_all - cate) > epsilon:
             print(

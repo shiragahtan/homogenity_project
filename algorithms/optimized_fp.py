@@ -7,14 +7,21 @@ from ATE_update import ATEUpdateLinear
 from sklearn.preprocessing import OneHotEncoder
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from typing import Dict, List, Tuple, Any, Callable, Optional
+from numpy.linalg import LinAlgError
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+
 # ── configuration ───────────────────────────────────────────────────────────
 CHUNK_SIZE_BASE = 32       # baseline batch size for Pool.imap_unordered
 SUPPORT_SWITCH = 0.07      # support → Apriori, else FP‑Growth
 MIN_TASKS_PER_CORE = 4     # if fewer, run serial instead of Pool
+MIN_SUBGROUPS_FOR_PARALLEL = 50  # minimum subgroups to use multiprocessing
 
 # ── shared globals (populated by _init_worker) ──────────────────────────────
 _DF_GLOBAL: Optional[pd.DataFrame] = None
+_FEATURES_COLS: Optional[List[str]] = None
+_TREATMENT: Optional[Dict[Any, Any]] = None
+_TREATMENT_COL: Optional[str] = None
+_TGT_O: Optional[str] = None
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -24,10 +31,10 @@ def _choose_algorithm(min_sup: float):
     return apriori if min_sup >= SUPPORT_SWITCH else fpgrowth
 
 
-# ── frequent‑pattern mining (sparse + Apriori / FP‑Growth) ──────────────────
+# ── optimized frequent‑pattern mining ──────────────────────────────────────
 
-def mine_subgroups(df: pd.DataFrame, delta: int, exclude_cols: List[str] = None) -> List[Tuple[Dict[str, Any], int]]:
-    """Return [(filter‑dict, size), …] for every subgroup with |S|≥delta."""
+def mine_subgroups_optimized(df: pd.DataFrame, delta: int, exclude_cols: List[str] = None) -> List[Tuple[Dict[str, Any], int]]:
+    """Optimized version using OneHotEncoder and sparse matrices."""
     if exclude_cols is None:
         exclude_cols = []
     
@@ -36,35 +43,55 @@ def mine_subgroups(df: pd.DataFrame, delta: int, exclude_cols: List[str] = None)
     
     enc = OneHotEncoder(handle_unknown="ignore", sparse_output=True, dtype=bool)
     X = enc.fit_transform(mining_df)
-    names = enc.get_feature_names_out()               # e.g. "Country_Germany"
+    names = enc.get_feature_names_out()
 
     n_rows = len(df)
     min_sup = delta / n_rows
-    onehot_df = pd.DataFrame.sparse.from_spmatrix(X, columns=names)
+    
+    # Create sparse DataFrame efficiently
+    dense_df = pd.DataFrame(X.toarray(), columns=names, dtype=bool)
+    onehot_df = dense_df.astype(pd.SparseDtype(bool, fill_value=False))
 
     freq = _choose_algorithm(min_sup)(
         onehot_df, min_support=min_sup, use_colnames=True
     )
+
+    # Create lookup dictionary for attribute names
+    lookup: Dict[str, Tuple[str, object]] = {}
+    for col in mining_df.columns:
+        unique_vals = mining_df[col].fillna('⧫NA⧫').unique()
+        for val in unique_vals:
+            col_name = f"{col}_{val}"
+            if col_name in names:
+                lookup[col_name] = (col, val)
+
+    # Discard itemsets that mention the same attribute twice (matching apriori_algorithm)
+    def valid(itemset):
+        attrs = [lookup[col][0] for col in itemset if col in lookup]
+        return len(attrs) == len(set(attrs))
+    
+    freq = freq[freq['itemsets'].apply(valid)]
 
     results: List[Tuple[Dict[str, Any], int]] = []
     for items, sup in zip(freq["itemsets"], freq["support"]):
         filt: Dict[str, Any] = {}
         ok = True
         for col in items:
-            attr, val = col.split("_", 1)
-            if attr in filt:                           # duplicate attr → skip
-                ok = False
-                break
-            filt[attr] = np.nan if val == "⧫NA⧫" else val
+            if col in lookup:
+                attr, val = lookup[col]
+                if attr in filt:                           # duplicate attr → skip
+                    ok = False
+                    break
+                filt[attr] = np.nan if val == "⧫NA⧫" else val
         if ok:
             results.append((filt, int(round(sup * n_rows))))
     return results
 
 
-# ── vectorised AND‑filter (support already ≥ Δ) ─────────────────────────────
+# ── vectorised AND‑filter (matching apriori_algorithm) ──────────────────────
 
 def _get_subgroup_mask(filt: Dict[str, Any]) -> pd.Series:
-    """Returns a boolean mask for the given filter."""
+    """Returns a boolean mask for the given filter (matching apriori_algorithm)."""
     if not filt:
         return pd.Series(True, index=_DF_GLOBAL.index)
     mask = pd.Series(True, index=_DF_GLOBAL.index)
@@ -72,46 +99,64 @@ def _get_subgroup_mask(filt: Dict[str, Any]) -> pd.Series:
         if pd.isna(v):
             mask &= _DF_GLOBAL[a].isna()
         else:
-            mask &= _DF_GLOBAL[a] == v
+            # Convert value to int to match apriori_algorithm behavior
+            mask &= _DF_GLOBAL[a] == int(v)
     return mask
 
 
 # ── CATE helper – runs inside each worker ───────────────────────────────────
 
-def _compute_cate(treatment: Dict[Any, Any], treatment_col: str, tgtO: str, df: pd.DataFrame, filt: Dict[str, Any]):
+def _compute_cate_optimized(filt: Dict[str, Any]):
+    """Optimized CATE computation using pre-computed features."""
     subgroup_mask = _get_subgroup_mask(filt)
-    sub_df = df[subgroup_mask]
+    sub_df = _DF_GLOBAL[subgroup_mask]
     
     if sub_df.empty:
         return np.nan
 
-    if sub_df[treatment_col].nunique() < 2:  # if treatment has only one unique value, return nan
+    if sub_df[_TREATMENT_COL].nunique() < 2:
         return np.nan
         
-    # Create features columns excluding treatment, target, and filter columns
-    features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
-    ate_update_obj = ATEUpdateLinear(sub_df[features_cols], sub_df[treatment_col], sub_df[tgtO])
-    return ate_update_obj.get_original_ate()
+    # Use pre-computed features columns
+    features_cols = [c for c in _FEATURES_COLS if c not in filt.keys()]
+    # Drop every column that is constant in this slice
+    features_cols = [c for c in features_cols if sub_df[c].nunique() > 1]
+    if not features_cols:  # nothing varies → skip slice
+        return np.nan
+    
+    try:
+        ate_update_obj = ATEUpdateLinear(
+            sub_df[features_cols],
+            sub_df[_TREATMENT_COL],
+            sub_df[_TGT_O]
+        )
+        return ate_update_obj.get_original_ate()
+    except LinAlgError:  # XᵀX still singular
+        return np.nan
 
 
 def _eval_cate_worker(args):
-    treatment, treatment_col, tgtO, df, (filt, sz) = args
-    cate = _compute_cate(treatment, treatment_col, tgtO, df, filt)
+    (filt, sz) = args
+    cate = _compute_cate_optimized(filt)
     return {
         "AttributeValues": str(filt),
-        "Size":            sz,
-        "Utility":         cate,
+        "Size": sz,
+        "Utility": cate,
     }
 
 
-# ── worker initialiser (executed once in every child process) ───────────────
+# ── worker initialiser ──────────────────────────────────────────────────────
 
-def _init_worker(df):
-    global _DF_GLOBAL
-    _DF_GLOBAL  = df            # copy‑on‑write: inexpensive after fork
+def _init_worker(df, features_cols, treatment, treatment_col, tgtO):
+    global _DF_GLOBAL, _FEATURES_COLS, _TREATMENT, _TREATMENT_COL, _TGT_O
+    _DF_GLOBAL = df
+    _FEATURES_COLS = features_cols
+    _TREATMENT = treatment
+    _TREATMENT_COL = treatment_col
+    _TGT_O = tgtO
 
 
-# ── main public entry-point --------------------------------------------------
+# ── main public entry‑point --------------------------------------------------
 
 def calc_utility_for_subgroups(
     mode: int,                       # 0 = homogeneity check, else collect all
@@ -124,25 +169,28 @@ def calc_utility_for_subgroups(
     utility_all: float,
     n_jobs: Optional[int] = None,
 ):
-    """Subgroup utility with self-tuning miner & parallel CATE.
-
-    Returns
-    -------
-    mode0 → bool
-    mode≠0 → (list[dict], int)
+    """Optimized subgroup utility with multiprocessing and sparse matrices.
+    
+    Falls back to apriori_algorithm logic if overhead is too high.
     """
-    # mine once --------------------------------------------------------------
     # Exclude treatment columns and target outcome from mining
     exclude_cols = [*treatment.keys(), treatment_col, tgtO]
-    subgroups = mine_subgroups(df, delta, exclude_cols=exclude_cols)   # [(filt, size), …]
+    
+    # Pre-compute features columns once
+    features_cols = [col for col in df.columns if col not in [*treatment.keys(), treatment_col, tgtO]]
+    
+    # Mine subgroups using optimized approach
+    subgroups = mine_subgroups_optimized(df, delta, exclude_cols=exclude_cols)
     n_sub = len(subgroups)
 
     # ─────────────────────────── mode 0: homogeneity check ──────────────────
     if mode == 0:
-        # we run serially for the fast early-exit path
-        _init_worker(df)
+        # Run serially for fast early-exit (matching apriori_algorithm)
+        _init_worker(df, features_cols, treatment, treatment_col, tgtO)
         for filt, _ in subgroups:
-            cate = _compute_cate(treatment, treatment_col, tgtO, df, filt)
+            cate = _compute_cate_optimized(filt)
+            if pd.isna(cate):
+                continue
             if abs(utility_all - cate) > epsilon:
                 print(
                     f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
@@ -154,31 +202,36 @@ def calc_utility_for_subgroups(
 
     # ─────────────────────── mode ≠0: collect all subgroups ─────────────────
 
+    # Decide whether to use multiprocessing based on overhead
     cores = n_jobs or mp.cpu_count()
-    use_pool = n_sub >= MIN_TASKS_PER_CORE * cores
+    use_pool = n_sub >= MIN_SUBGROUPS_FOR_PARALLEL and n_sub >= MIN_TASKS_PER_CORE * cores
 
     records: List[Dict[str, Any]] = []
-    args = [(treatment, treatment_col, tgtO, df, sg) for sg in subgroups]
+    args = [(filt, sz) for filt, sz in subgroups]
 
     if use_pool:
+        # Use multiprocessing for large datasets
         chunk = max(1, min(CHUNK_SIZE_BASE, n_sub // (cores * 2)))
         with mp.Pool(
             processes=cores,
             initializer=_init_worker,
-            initargs=(df,),
+            initargs=(df, features_cols, treatment, treatment_col, tgtO),
         ) as pool:
             for rec in pool.imap_unordered(_eval_cate_worker, args, chunksize=chunk):
                 records.append(rec)
     else:
-        _init_worker(df)
+        # Fall back to serial processing (matching apriori_algorithm)
+        _init_worker(df, features_cols, treatment, treatment_col, tgtO)
         for arg in args:
             records.append(_eval_cate_worker(arg))
 
+    # Filter out records with NaN utility values (matching apriori_algorithm)
+    filtered_records = []
     for r in records:
         if r["Utility"] is not None and not np.isnan(r["Utility"]):
             r["UtilityDiff"] = r["Utility"] - utility_all
+            filtered_records.append(r)
         else:
             r["UtilityDiff"] = np.nan
 
-
-    return records, n_sub
+    return filtered_records, len(filtered_records)

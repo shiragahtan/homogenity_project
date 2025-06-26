@@ -9,6 +9,7 @@ import multiprocessing as mp
 from typing import Dict, List, Tuple, Callable, Any
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import ATEUpdateLinear
+from numpy.linalg import LinAlgError
 
 EPSILON = 5000
 
@@ -148,8 +149,20 @@ def calc_utility_for_subgroups(
             
             if not filtered_df.empty:
                 features_cols = [col for col in filtered_df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
-                ate_update_obj = ATEUpdateLinear(filtered_df[features_cols], filtered_df[treatment_col], filtered_df[tgtO])
-                cate_value = ate_update_obj.get_original_ate()
+                # drop every column that is constant in this slice
+                features_cols = [c for c in features_cols if filtered_df[c].nunique() > 1]
+                if not features_cols:                      # nothing varies → skip slice
+                    continue
+                
+                try:
+                    ate_update_obj = ATEUpdateLinear(
+                        filtered_df[features_cols],
+                        filtered_df[treatment_col],
+                        filtered_df[tgtO]
+                    )
+                    cate_value = ate_update_obj.get_original_ate()
+                except LinAlgError:                        # XᵀX still singular
+                    continue   
 
                 if mode == 0 and abs(utility_all - cate_value) > epsilon:
                     print(

@@ -54,15 +54,19 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
     chosen_treatment_df = pd.DataFrame([{"Condition": condition,
                                          "Treatment": treatment}])
 
-    # Save the DataFrame to an Excel file
-    output_file = f"{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
+    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
+    results_dir = Path("../algotithms_results")
+    results_dir.mkdir(exist_ok=True)
+
+    # Save the DataFrame to an Excel file in the algotithms_results directory
+    output_file = results_dir / f"{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
     with pd.ExcelWriter(output_file) as writer:
         chosen_treatment_df.to_excel(writer, sheet_name="ChosenTreatment", index=False)
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
         subgroup_df.to_excel(writer, sheet_name="Subgroups", index=False)
 
     print(f"✔  {len(subgroup_data):,} subgroups saved to {output_file}")
-    return output_file
+    return str(output_file)
 
 
 def _append_df_to_excel(excel_path: Path, new_row: dict):
@@ -85,7 +89,11 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
     Append algorithm timing results to an Excel file.
     Creates the file if it doesn't exist.
     """
-    excel_path = Path("algorithm_time.xlsx")
+    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
+    results_dir = Path("../graphs")
+    results_dir.mkdir(exist_ok=True)
+    
+    excel_path = results_dir / "algorithms_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Data to append
@@ -109,7 +117,11 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     Append homogeneity check results to an Excel file.
     Creates the file if it doesn't exist.
     """
-    excel_path = Path("homogeneity_results.xlsx")
+    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
+    results_dir = Path("../algorithms_results")
+    results_dir.mkdir(exist_ok=True)
+    
+    excel_path = results_dir / "homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Data to append
@@ -129,7 +141,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i):
+def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0):
     """
     Run experiments for each treatment and save results to an Excel file.
     """
@@ -138,11 +150,14 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
     if chosen_mode != 0:
         epsilons = [epsilons[0]]  # You don't actually use epsilon in AllSubgroups mode, just chose random value.
 
-    # Calculate utility for subgroups
+    # Calculate utility for subgroups (measure time separately)
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
-    features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
-    utility_all = ate_update_obj.get_original_ate()
+    
+    with timer() as utility_timer:
+        features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
+        ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
+        utility_all = ate_update_obj.get_original_ate()
+    utility_time = utility_timer()
     
     for epsilon in epsilons:
         if chosen_mode == 0:
@@ -176,7 +191,10 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         try:
             with timer() as elapsed:
                 res = algo_dispatch[chosen_algorithm]()
-            elapsed_time = elapsed()
+            algorithm_time = elapsed()
+            
+            # Add all timing components
+            total_time = algorithm_time + utility_time + attr_vals_time
 
             if chosen_mode == 0:  # Homogeneity check
                 append_homogeneity_results(
@@ -186,7 +204,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
                     delta=delta,
                     epsilon=epsilon,
                     homogeneity_status=res,
-                    runtime_seconds=elapsed_time
+                    runtime_seconds=total_time
                 )
             else:  # Only append timing results for AllSubgroups mode
                 subgroup_data, num_subgroups = res
@@ -194,12 +212,16 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
                                       treatment, delta, index=i)
 
                 append_timing_results(ALGORITHM_NAMES[chosen_algorithm], condition, treatment, num_subgroups, delta,
-                                      elapsed_time)
+                                      total_time)
 
         except KeyError:
             raise ValueError(f"Unknown algorithm id: {chosen_algorithm}")
 
-        print(f"⏱  Total execution time: {elapsed_time:.2f} seconds ({elapsed_time / 60:.2f} minutes)")
+        print(f"⏱  Total execution time: {total_time:.2f} seconds ({total_time / 60:.2f} minutes)")
+        if attr_vals_time > 0:
+            print(f"   - Attribute values calculation: {attr_vals_time:.2f} seconds")
+        print(f"   - Utility calculation: {utility_time:.2f} seconds")
+        print(f"   - Algorithm execution: {algorithm_time:.2f} seconds")
 
 
 def main():
@@ -216,8 +238,8 @@ def main():
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
-    # chosen_mode = 1
+    #chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    chosen_mode = 1
     # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
@@ -227,11 +249,16 @@ def main():
         condition = good_treatments[i]["condition"]
         attr, _ = list(condition.items())[0]
         treatment = good_treatments[i]["treatment"]
-        attr_vals = {
-            col: sorted(v for v in df[col].dropna().unique()
-                        if str(v).upper() != "UNKNOWN")
-            for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
-        }
+        
+        # Measure attr_vals calculation time
+        with timer() as attr_timer:
+            attr_vals = {
+                col: sorted(v for v in df[col].dropna().unique()
+                            if str(v).upper() != "UNKNOWN")
+                for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
+            }
+        attr_vals_time = attr_timer()
+        
         for delta in DELTAS:
             if len(df) < delta:
                 print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
@@ -239,7 +266,9 @@ def main():
 
             for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
                 print(f"Running for delta: {delta}")
-                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i)
+                # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+                attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
 
 
 if __name__ == "__main__":

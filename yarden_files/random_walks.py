@@ -74,6 +74,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     global_used_combinations = set()
     global_key_value_score = dict()
 
+    import ipdb; ipdb.set_trace()
     features_cols = [col for col in df.columns if col not in [treatment, outcome]]
     ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment], df[outcome])
     start_ate_time = time.time()  # Start timing ATE calculation

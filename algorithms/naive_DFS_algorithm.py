@@ -143,10 +143,12 @@ def calc_utility_for_subgroups(
             continue
         for filt, sz in groups:
             filtered_df = filter_by_attribute(df, filt, delta)
+            if filtered_df.empty or filtered_df[treatment_col].nunique() < 2:
+                continue
             
             if not filtered_df.empty:
-                features_cols = [col for col in df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
-                ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+                features_cols = [col for col in filtered_df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
+                ate_update_obj = ATEUpdateLinear(filtered_df[features_cols], filtered_df[treatment_col], filtered_df[tgtO])
                 cate_value = ate_update_obj.get_original_ate()
 
                 if mode == 0 and abs(utility_all - cate_value) > epsilon:

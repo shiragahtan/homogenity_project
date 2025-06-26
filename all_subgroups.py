@@ -136,7 +136,6 @@ def calc_utility_for_subgroups(attr_vals, df, condition, treatment, DAG_str, att
                 "Size": sz,
                 "Utility": cate_value,
                 "UtilityDiff": utility_diff,
-                "PValue": p_value
             })
 
     # Convert the list of subgroup data to a DataFrame

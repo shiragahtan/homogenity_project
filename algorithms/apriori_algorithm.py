@@ -118,11 +118,11 @@ def calc_utility_for_subgroups(
     for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
         sub_df = filter_by_attribute(df, filt)
-        if sub_df.empty:
+        if sub_df.empty or sub_df[treatment_col].nunique() < 2:
             continue
             
-        features_cols = [col for col in df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
-        ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+        features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
+        ate_update_obj = ATEUpdateLinear(sub_df[features_cols], sub_df[treatment_col], sub_df[tgtO])
         cate = ate_update_obj.get_original_ate()
             
         if mode == 0 and abs(utility_all - cate) > epsilon:

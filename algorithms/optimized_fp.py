@@ -84,10 +84,13 @@ def _compute_cate(treatment: Dict[Any, Any], treatment_col: str, tgtO: str, df: 
     
     if sub_df.empty:
         return np.nan
+
+    if sub_df[treatment_col].nunique() < 2:  # if treatment has only one unique value, return nan
+        return np.nan
         
     # Create features columns excluding treatment, target, and filter columns
-    features_cols = [col for col in df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_col], df[tgtO])
+    features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
+    ate_update_obj = ATEUpdateLinear(sub_df[features_cols], sub_df[treatment_col], sub_df[tgtO])
     return ate_update_obj.get_original_ate()
 
 

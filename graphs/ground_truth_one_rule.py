@@ -13,7 +13,7 @@ epsilons = config['EPSILONS']
 algorithms = config['ALGORITHM_NAMES']
 
 # Load data from algorithms directory
-df_updated = pd.read_excel("../algorithms/homogeneity_results.xlsx")
+df_updated = pd.read_excel("homogeneity_results.xlsx")
 
 # Load all treatments from Shira_Treatments.json
 treatments_data = []

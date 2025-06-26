@@ -11,7 +11,7 @@ deltas = config['DELTAS']
 epsilons = config['EPSILONS']
 algorithms = config['ALGORITHM_NAMES']
 
-df_updated = pd.read_excel("../algorithms/homogeneity_results.xlsx")
+df_updated = pd.read_excel("homogeneity_results.xlsx")
 
 # Update rule definitions with actual treatment-condition pairs
 rules_explicit = []

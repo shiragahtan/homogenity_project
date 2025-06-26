@@ -34,6 +34,7 @@ TREATMENT_COL = config['TREATMENT_COL']
 warnings.filterwarnings("ignore")
 
 def choose_random_key(weights_optimization_method, random_choice, global_key_value_score):
+    # Choose random key(node) to walk in the tree for the random walk
     if weights_optimization_method==0:
         return random.choice(list(random_choice.keys()))
     
@@ -90,7 +91,7 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
         return random.choices(keys, weights=normalized_weights, k=1)[0]
 
 
-def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
+def k_random_walks(df_ate, k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
                    delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     """
     Perform k random walks with two modes:
@@ -105,19 +106,11 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
         Threshold for switching between unlearning and direct CATE (as fraction of dataset size)
     """
     total_ate_calculations = 0
-    total_ate_time = 0
     global_used_combinations = set()
     global_key_value_score = dict()
-    max_size_of_group = 100000
+    max_size_of_group = 100000  # max size of the group to be removed
 
-    features_cols = [col for col in df.columns if col not in [treatment, outcome]]
-    start_ate_time = time.time()  # Start timing ATE calculation
-    df_ate = ate_update_obj.get_original_ate()
-    print(f"shira ate all : df_ate: {df_ate}")
-    end_ate_time = time.time()  # End timing ATE calculation
     total_ate_calculations += 1
-    total_ate_time += (end_ate_time - start_ate_time)
-
     print(f"df ATE: {df_ate}")
     df_shape = df.shape[0]
 
@@ -125,7 +118,8 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     print(f"dsired ATE: {desired_ate}")
     print(f"dsired diff: {desired_diff}")
 
-    available_itemsets = len(max_size_itemsets)
+
+    available_itemsets = len(max_size_itemsets) # subgroups to calculate ATE for
     sample_size = min(k, available_itemsets)
     print(f"Available itemsets: {available_itemsets}, Requested k: {k}, Using sample size: {sample_size}")
     
@@ -133,6 +127,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
     diff_values = []
 
+    # Random Walk path
     for walk_idx, random_choice in enumerate(random_choices):
         print(f"\nwalk idx: {walk_idx}")
         
@@ -157,6 +152,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
         dfs_to_remove_data = []
         df_to_remove = None
+        # subgroups to remove in reverse order
         for key, value in reversed(key_value):
             if df_to_remove is None:
                 df_to_remove = df[df[key] == value]
@@ -209,8 +205,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 # Calculate the fraction of data to be removed
                 removal_fraction = len(unique_indices) / df_shape
                 
-                start_ate_time = time.time()
-                
+                # CATE Calculations
                 if mode == 'direct':
                     # Always use direct CATE calculation
                     print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
@@ -229,8 +224,6 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         subgroup_df = df.iloc[unique_indices]
                         # ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
                         ate = utility_all
-                
-                end_ate_time = time.time()
                 
                 # Skip if CATE is 0 (invalid result)
                 if ate == 0:
@@ -291,13 +284,13 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
 
 def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
          delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
-    start_time = time.time()
+    # Apriori, group mining part
     df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
 
     # Store original types for ALL columns
     original_types = df.dtypes.to_dict()
-    
+
     # Only convert the attributes_for_apriori columns to strings for Apriori
     # Keep treatment and outcome columns as numeric
     df_for_apriori = df.copy()
@@ -308,12 +301,9 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     df_filtered = df_for_apriori[attributes_for_apriori]
     df_encoded = pd.get_dummies(df_filtered, prefix_sep='::')
 
-    start_time_apriori = time.time()
     frequent_itemsets = apriori(df_encoded, min_support=3/df_shape, use_colnames=True)
-    elapsed_minutes_apriori = (time.time() - start_time_apriori) / 60
-    print(f"Apriori time: {elapsed_minutes_apriori:.2f} minutes")
     frequent_itemsets = frequent_itemsets.query('itemsets.str.len() > 0')
-    
+
     itemset_mappings = {col: col.split('::', 1) for col in df_encoded.columns}
     formatted_itemsets = []
     for itemset in frequent_itemsets['itemsets']:
@@ -332,15 +322,10 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     df = df.astype(original_types)
     ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
                         delta, ate_update_obj, mode, unlearning_threshold)
-    elapsed_time = time.time() - start_time
-    print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
     return ret
 
 
-
-
-def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
-    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
+def check_homogenity_with_random_walks(csv_name, desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     outcome = "ConvertedSalary"
     k=1000
@@ -353,69 +338,14 @@ def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update
 
 if __name__ == "__main__":
     # Extract rules and treatments from the json rules file
-    tgtO = "ConvertedSalary"
+    # For both modes, run this
     unlearning_threshold = 0.1
-    treatment_file = "../algorithms/Shira_Treatments.json"
-    treated_rules_datasets = [
-        '../stackoverflow/so_countries_treatment_1_encoded.csv',
-        '../stackoverflow/so_countries_treatment_2_encoded.csv',
-        '../stackoverflow/so_countries_treatment_3_encoded.csv'
-    ]
+    results = []
+    # Test positive and negative directions -> returns 1 if not homogenic
+    positive_result = check_homogenity_with_random_walks(
+        utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
+    negative_result = check_homogenity_with_random_walks(
+        utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)    
+    is_homogeneous = not(positive_result or negative_result)
 
-    with open(treatment_file, "r") as f:
-        good_treatments = [json.loads(line) for line in f]
-    
-    for i, dataset in enumerate(treated_rules_datasets):
-        df = pd.read_csv(dataset)
-        condition = good_treatments[i]["condition"]
-        attr, _ = list(condition.items())[0]  # Condition key (attr/label name)
-        treatment = good_treatments[i]["treatment"]
- 
-        # Calculate utility_all
-        features_cols = [col for col in df.columns if col not in [*treatment.keys(), TREATMENT_COL, tgtO]]
-        ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
-        utility_all = ate_update_obj.get_original_ate()    
-        print(f"Initial utility_all: {utility_all}")
-    
-        # Run for each mode
-        for mode in MODES:
-            print(f"\n{'='*50}")
-            print(f"RUNNING MODE: {mode.upper()}")
-            print(f"{'='*50}")
-            
-            results = []
-            # Run for each delta and epsilon combination
-            for delta in DELTAS:
-                for epsilon in EPSILONS:
-                    print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
-                    
-                    start_time = time.time()
-                    
-                    # Test positive and negative directions
-                    positive_result = check_homogenity_with_random_walks(
-                        utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                    negative_result = check_homogenity_with_random_walks(
-                        utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                    
-                    total_runtime = time.time() - start_time
-                    is_homogeneous = not (positive_result or negative_result)
-                    
-                    results.append({
-                        'Mode': mode,
-                        'Delta': delta,
-                        'Epsilon': epsilon,
-                        'Homogeneous': is_homogeneous,
-                        'Runtime': total_runtime
-                    })
-                    
-                    status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
-                    print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
-            
-            # Save results and create heatmap for this mode
-            results_df = pd.DataFrame(results)
-            filename = f"homogeneity_results_{mode}.csv"
-            results_df.to_csv(filename, index=False)
-            print(f"\nResults saved to: {filename}")
-        
-        # create_heatmap(results_df, mode)
 

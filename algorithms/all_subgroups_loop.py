@@ -118,7 +118,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     Creates the file if it doesn't exist.
     """
     # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
-    results_dir = Path("../algorithms_results")
+    results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
     
     excel_path = results_dir / "homogeneity_results.xlsx"
@@ -238,8 +238,8 @@ def main():
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    #chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
-    chosen_mode = 1
+    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    #chosen_mode = 1
     # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value

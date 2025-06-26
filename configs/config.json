@@ -3,6 +3,7 @@
   "ALGORITHM_NAMES": ["BruteForce", "Apriori", "FPGrowth", "MultiProcessing"],
   "MODES": ["HomogeneityCheck", "AllSubgroups"],
   "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000],
-  "TREATMENT_COL": "TempTreatment"
+  "TREATMENT_COL": "TempTreatment",
+  "YARDEN_OPTIMIZATION_MODES": ["direct", "hybrid"]
 }
 

@@ -55,7 +55,7 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
                                          "Treatment": treatment}])
 
     # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
-    results_dir = Path("../algotithms_results")
+    results_dir = Path("../algorithms_results")
     results_dir.mkdir(exist_ok=True)
 
     # Save the DataFrame to an Excel file in the algotithms_results directory
@@ -93,7 +93,7 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
     
-    excel_path = results_dir / "algorithms_results.xlsx"
+    excel_path = results_dir / "algorithms_time.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Data to append

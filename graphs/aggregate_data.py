@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Define the input and output file names
-input_file = 'algorithm_time.xlsx'  
+input_file = 'algorithms_time.xlsx'  
 output_file = 'average_times_per_algorithm.xlsx'
 
 try:

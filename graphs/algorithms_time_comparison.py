@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-excel_path = os.path.join(script_dir, "algorithm_time.xlsx")
+excel_path = os.path.join(script_dir, "algorithms_time.xlsx")
 df = pd.read_excel(excel_path)
 
 # Pivot the table to create a format suitable for LaTeX table generation

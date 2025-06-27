@@ -19,17 +19,41 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear
+from numpy.linalg import LinAlgError
+
+def calculate_ate_safe(df, treatment_col, outcome_col):
+    """
+    Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
+    """
+    if df.empty or df[treatment_col].nunique() < 2:
+        return 0.0
+    
+    # Get feature columns excluding treatment and outcome
+    features_cols = [col for col in df.columns if col not in [treatment_col, outcome_col]]
+    
+    # Drop every column that is constant in this slice
+    features_cols = [c for c in features_cols if df[c].nunique() > 1]
+    if not features_cols:  # nothing varies → skip slice
+        return 0.0
+    
+    try:
+        ate_update_obj = ATEUpdateLinear(
+            df[features_cols],
+            df[treatment_col],
+            df[outcome_col]
+        )
+        cate_value = ate_update_obj.get_original_ate()
+        return cate_value
+    except LinAlgError:  # XᵀX still singular
+        return 0.0, ATEUpdateLogistic
 
 # Configuration
-
-with open('../configs/config.json', 'r') as f:
-    config = json.load(f)
-
-DELTAS = config['DELTAS']
-MODES = config['YARDEN_OPTIMIZATION_MODES']
-EPSILONS = config['EPSILONS']
-TREATMENT_COL = config['TREATMENT_COL']
-
+CONFIG = {
+    "DELTAS": [20000, 15000, 10000, 5000],
+    # "MODES": ["hybrid", "direct"],
+    "MODES": ["direct"],
+    "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000]
+}
 
 warnings.filterwarnings("ignore")
 
@@ -215,7 +239,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                     # Always use direct CATE calculation
                     print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                     subgroup_df = df.iloc[unique_indices]
-                    ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
+                    ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                     # ate = utility_all
                     
                 elif mode == 'hybrid':
@@ -227,8 +251,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                         # Use direct CATE calculation for large removals
                         print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                         subgroup_df = df.iloc[unique_indices]
-                        # ate = ate_update_obj.calculate_direct_ate(subgroup_df[features_cols], subgroup_df[treatment_key], subgroup_df[outcome])
-                        ate = utility_all
+                        ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                 
                 end_ate_time = time.time()
                 
@@ -352,36 +375,19 @@ def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update
 
 
 if __name__ == "__main__":
-    # Extract rules and treatments from the json rules file
-    tgtO = "ConvertedSalary"
     unlearning_threshold = 0.1
-    treatment_file = "../algorithms/Shira_Treatments.json"
-    treated_rules_datasets = [
-        '../stackoverflow/so_countries_treatment_1_encoded.csv',
-        '../stackoverflow/so_countries_treatment_2_encoded.csv',
-        '../stackoverflow/so_countries_treatment_3_encoded.csv'
-    ]
-
-    with open(treatment_file, "r") as f:
-        good_treatments = [json.loads(line) for line in f]
     
     # Setup treatment information
-    treatment_key = "FormalEducation"    
-    # Load and calculate initial utility
-    csv_name = "../stackoverflow/so_countries_encoded_treatment_1_encoded.csv"
-    # csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
+    treatment_key = "Exercise"    
+    csv_name = '../stackoverflow/so_countries_treatment_1_encoded.csv'
     df = pd.read_csv(csv_name)
     outcome = "ConvertedSalary"
         
     # Create ATE update object
     features_cols = [col for col in df.columns if col not in [treatment_key, outcome]]
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
-    
-    utility_all = ate_update_obj.get_original_ate()
+    utility_all = calculate_ate_safe(df, treatment_key, outcome)
 
-    utility_all_2 = ate_update_obj.calculate_direct_ate(df[features_cols], df[treatment_key], df[outcome])
-    # import ipdb; ipdb.set_trace()
-    print("utility_all_2: ", utility_all_2, "utility_all: ", utility_all)
+    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
     
     print(f"Initial utility_all: {utility_all}")
     

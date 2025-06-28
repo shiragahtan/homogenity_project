@@ -45,7 +45,7 @@ def calculate_ate_safe(df, treatment_col, outcome_col):
         cate_value = ate_update_obj.get_original_ate()
         return cate_value
     except LinAlgError:  # XᵀX still singular
-        return 0.0, ATEUpdateLogistic
+        return 0.0
 
 # Configuration
 CONFIG = {
@@ -378,8 +378,8 @@ if __name__ == "__main__":
     unlearning_threshold = 0.1
     
     # Setup treatment information
-    treatment_key = "Exercise"    
-    csv_name = '../stackoverflow/so_countries_treatment_1_encoded.csv'
+    treatment_key = "DevType"    
+    csv_name = '../stackoverflow/so_countries_treatment_3_encoded.csv'
     df = pd.read_csv(csv_name)
     outcome = "ConvertedSalary"
         

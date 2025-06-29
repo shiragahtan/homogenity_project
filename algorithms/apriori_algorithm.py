@@ -3,12 +3,19 @@ Core subgroup analysis algorithms using Apriori.
 This module contains functions for finding subgroups and calculating their utility.
 """
 import sys
+import json
 import pandas as pd
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
-from ATE_update import ATEUpdateLinear
+from ATE_update import calculate_ate_safe
 from typing import Dict, List, Tuple, Any, Callable, Optional
 from numpy.linalg import LinAlgError
+
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+BINARY_TREATMENT = config['TREATMENT_COL']
+
 
 def mine_subgroups(
     algorithm: Callable,
@@ -46,7 +53,6 @@ def mine_subgroups(
     # Apriori algorithm for frequent itemsets
     min_sup = delta / len(df)
     freq = algorithm(onehot, min_support=min_sup, use_colnames=True)
-    import ipdb; ipdb.set_trace()
 
     # discard item‑sets that mention the same attribute twice
     def valid(itemset):
@@ -86,7 +92,6 @@ def calc_utility_for_subgroups(
     mode: int,
     algorithm: Callable,
     df: pd.DataFrame,
-    treatment: Dict[Any, Any],
     treatment_col: str,
     tgtO: str,
     delta: int,
@@ -115,29 +120,17 @@ def calc_utility_for_subgroups(
     """
     # Find all subgroups meeting the minimum size requirement
     # Exclude treatment columns and target outcome from mining
-    exclude_cols = [*treatment.keys(), treatment_col, tgtO]
+    exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
     
     subgroup_records = []
     for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
         sub_df = filter_by_attribute(df, filt)
-        if sub_df.empty or sub_df[treatment_col].nunique() < 2:
+        if sub_df.empty:
             continue
             
-        # Create features columns excluding treatment, target, and filter columns
-        features_cols = [col for col in sub_df.columns if col not in [*treatment.keys(), treatment_col, *filt.keys(), tgtO]]
-        # Drop every column that is constant in this slice
-        features_cols = [c for c in features_cols if sub_df[c].nunique() > 1]
-        if not features_cols:  # nothing varies → skip slice
-            continue
-        
         try:
-            ate_update_obj = ATEUpdateLinear(
-                sub_df[features_cols],
-                sub_df[treatment_col],
-                sub_df[tgtO]
-            )
-            cate = ate_update_obj.get_original_ate()
+            cate = calculate_ate_safe(sub_df, treatment_col, tgtO)
         except LinAlgError:  # XᵀX still singular
             continue
             

@@ -26,11 +26,10 @@ with open('../configs/config.json', 'r') as f:
 
 TREATMENT_COL = config['TREATMENT_COL']
 
-def calculate_ate_safe(df, treatment_col, outcome_col):
+def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
     """
     Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
     """
-    import ipdb; ipdb.set_trace()
     try:
         if df.empty or df[treatment_col].nunique() < 2:
             return 0.0
@@ -44,15 +43,15 @@ def calculate_ate_safe(df, treatment_col, outcome_col):
             return 0.0
         
         try:
-            ate_update_obj = ATEUpdateLinear(
+            ate_obj = ATEUpdateLinear(
                 df[features_cols],
                 df[TREATMENT_COL],
                 df[outcome_col]
             )
-            cate_value = ate_update_obj.get_original_ate()
-            return cate_value
+            cate_value = ate_obj.get_original_ate()
+            return cate_value if not ret_obj else ate_obj
         except LinAlgError:  # XᵀX still singular
-            return 0.0
+            return 0.0 if not ret_obj else None
     except Exception as e:
         import ipdb; ipdb.set_trace()
 
@@ -123,7 +122,7 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
         return random.choices(keys, weights=normalized_weights, k=1)[0]
 
 
-def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
+def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
                    delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     """
     Perform k random walks with two modes:
@@ -143,31 +142,28 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
     global_key_value_score = dict()
     max_size_of_group = 100000
 
-    features_cols = [col for col in df.columns if col not in [treatment, outcome]]
     start_ate_time = time.time()  # Start timing ATE calculation
-    df_ate = ate_update_obj.get_original_ate()
-    print(f"shira ate all : df_ate: {df_ate}")
     end_ate_time = time.time()  # End timing ATE calculation
     total_ate_calculations += 1
     total_ate_time += (end_ate_time - start_ate_time)
 
-    print(f"df ATE: {df_ate}")
+    #print(f"df ATE: {df_ate}")
     df_shape = df.shape[0]
 
     desired_diff = round(desired_ate-df_ate, 3)
-    print(f"dsired ATE: {desired_ate}")
-    print(f"dsired diff: {desired_diff}")
+    #print(f"desired ATE: {desired_ate}")
+    #print(f"desired diff: {desired_diff}")
 
     available_itemsets = len(max_size_itemsets)
     sample_size = min(k, available_itemsets)
-    print(f"Available itemsets: {available_itemsets}, Requested k: {k}, Using sample size: {sample_size}")
+    #print(f"Available itemsets: {available_itemsets}, Requested k: {k}, Using sample size: {sample_size}")
     
     random_choices = max_size_itemsets.sample(sample_size)['formatted_itemsets'].values
 
     diff_values = []
 
     for walk_idx, random_choice in enumerate(random_choices):
-        print(f"\nwalk idx: {walk_idx}")
+        #print(f"\nwalk idx: {walk_idx}")
         
         combo_to_remove = []
         key_value = []
@@ -196,7 +192,9 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
             else:
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
             if (df_to_remove.shape[0] > delta and df_to_remove.shape[0] < max_size_of_group):
-                dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0]))
+                # Store both indices and the subgroup data (key-value pairs)
+                subgroup_data = {k: v for k, v in reversed(key_value[:len(key_value)-len(dfs_to_remove_data)])}
+                dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0], subgroup_data))
             else:
                 break
         
@@ -204,38 +202,41 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
         dfs_to_remove_data_shira_keren = []
         all_indices = set(df.index)
         
-        for original_indices, original_size in dfs_to_remove_data:
+        for original_indices, original_size, subgroup_data in dfs_to_remove_data:
             # Get complement of each progressive filter
             filtered_indices = set(original_indices)
             complement_indices = list(all_indices - filtered_indices)
             complement_size = len(complement_indices)
-            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size))
+            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size, subgroup_data))
 
         # Reverse the order of the list
         dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
 
-        print(f"Debug: Original progressive filtering had {len(dfs_to_remove_data)} steps")
-        print(f"Debug: Complement progressive filtering has {len(dfs_to_remove_data_shira_keren)} steps")
-        for i, ((orig_indices, orig_size), (comp_indices, comp_size)) in enumerate(zip(dfs_to_remove_data, dfs_to_remove_data_shira_keren)):
-            print(f"  Step {i}: Original {orig_size} rows -> Complement {comp_size} rows")
-        print(f"Debug: Total dataset size: {df.shape[0]} rows")
+        #print(f"Debug: Original progressive filtering had {len(dfs_to_remove_data)} steps")
+        #print(f"Debug: Complement progressive filtering has {len(dfs_to_remove_data_shira_keren)} steps")
+        #for i, ((orig_indices, orig_size), (comp_indices, comp_size)) in enumerate(zip(dfs_to_remove_data, dfs_to_remove_data_shira_keren)):
+        #    print(f"  Step {i}: Original {orig_size} rows -> Complement {comp_size} rows")
+        #print(f"Debug: Total dataset size: {df.shape[0]} rows")
 
         tuples_removed_num = set()
         calc_idx = 0
 
         already_removed_indices = []
-        for i, (df_to_remove_index, df_to_remove_shape) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
+        for i, (df_to_remove_index, df_to_remove_shape, subgroup_data) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
 
             if df_to_remove_shape / df_shape < size_threshold:
-                print(f"the size of the dataset is too big. too close to the original dataset. Breaking")
+                #print(f"the size of the dataset is too big. too close to the original dataset. Breaking")
                 break
 
             if i > 0:
-                print(f"key & value to remove now from combo: {key_value[i-1]}")
+                #print(f"key & value to remove now from combo: {key_value[i-1]}")
+                pass
             if df_to_remove_shape in tuples_removed_num:
-                print(f"Combo to remove: {combo_to_remove[i][0]}, ATE already computed, tuples_removed: {df_to_remove_shape}")
+                #print(f"Combo to remove: {subgroup_data}, ATE already computed, tuples_removed: {df_to_remove_shape}")
+                pass
             elif combo_to_remove[i][1] == True:
-                print(f"Combo to remove: {combo_to_remove[i][0]} already exist in other random walk")
+                #print(f"Combo to remove: {subgroup_data} already exist in other random walk")
+                pass
             else:
                 unique_indices = [i for i in df_to_remove_index if i not in already_removed_indices]
                 
@@ -246,7 +247,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 
                 if mode == 'direct':
                     # Always use direct CATE calculation
-                    print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                    #print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                     subgroup_df = df.iloc[unique_indices]
                     ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                     # ate = utility_all
@@ -254,11 +255,11 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 elif mode == 'hybrid':
                     if removal_fraction <= unlearning_threshold:
                         # Use unlearning for small removals
-                        print(f"Using unlearning for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                        #print(f"Using unlearning for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)") 
                         ate = ate_update_obj.calculate_updated_ATE(unique_indices)
                     else:
                         # Use direct CATE calculation for large removals
-                        print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
+                        #print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                         subgroup_df = df.iloc[unique_indices]
                         ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                 
@@ -266,7 +267,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 
                 # Skip if CATE is 0 (invalid result)
                 if ate == 0:
-                    print(f"Skipping result: CATE is 0 (invalid calculation)")
+                    #print(f"Skipping result: CATE is 0 (invalid calculation)")
                     continue
                 
                 already_removed_indices += unique_indices
@@ -276,7 +277,7 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 diff = round(ate-df_ate, 3)
                 diff_values.append(diff)
                 impact = round((diff / df_to_remove_shape), 3)*10
-                print(f"Combo to remove: {combo_to_remove[i][0]}, ATE: {ate}, tuples_removed: {df_to_remove_shape}, diff: {diff}, impact: {impact}")
+                #print(f"Combo to remove: {subgroup_data}, ATE: {ate}, tuples_removed: {df_to_remove_shape}, diff: {diff}, impact: {impact}")
                 
                 if i > 0:
                     if (desired_diff > 0 and ate > prev_ate) or (desired_diff < 0 and ate < prev_ate):
@@ -286,45 +287,46 @@ def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weigh
                 prev_ate = ate
 
                 if (desired_diff > 0 and ate >= desired_ate) or (desired_diff < 0 and ate <= desired_ate):
-
-                    print(f"Desired ATE condition met. Exiting after {walk_idx + 1} random walks.")
+                    print(f"current ate: {ate}")
+                    print(f"Subgroup that achieved desired ATE: {subgroup_data}")
+                    #print(f"Desired ATE condition met. Exiting after {walk_idx + 1} random walks.")
                     avg_ate_time = total_ate_time / total_ate_calculations if total_ate_calculations > 0 else 0
-                    print(f"Total ATE calculations: {total_ate_calculations}")
-                    print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
-                    print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
+                    #print(f"Total ATE calculations: {total_ate_calculations}")
+                    #print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
+                    #print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
                     return True
 
                 calc_idx += 1
 
             tuples_removed_num.add(df_to_remove_shape)
 
-    print(f"Desired ATE condition wasn't met.")
-    avg_ate_time = total_ate_time / total_ate_calculations if total_ate_calculations > 0 else 0
-    print(f"Total ATE calculations: {total_ate_calculations}")
-    print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
-    print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
+    #print(f"Desired ATE condition wasn't met.")
+    #avg_ate_time = total_ate_time / total_ate_calculations if total_ate_calculations > 0 else 0
+    #print(f"Total ATE calculations: {total_ate_calculations}")
+    #print(f"Total time for ATE calculations: {(total_ate_time/60):.2f} minutes")
+    #print(f"Average time per ATE calculation: {avg_ate_time:.4f} seconds")
 
-    if len(diff_values) > 0:
-        average_diff = np.mean(diff_values)
-        variance_diff = np.var(diff_values)
-        max_diff = np.max(diff_values)
-        min_diff = np.min(diff_values)
-        t_statistic, p_value = stats.ttest_1samp(diff_values, 0)
+    # if len(diff_values) > 0:
+    #     average_diff = np.mean(diff_values)
+    #     variance_diff = np.var(diff_values)
+    #     max_diff = np.max(diff_values)
+    #     min_diff = np.min(diff_values)
+    #     t_statistic, p_value = stats.ttest_1samp(diff_values, 0)
 
-        print(f"Average Diff: {average_diff}")
-        print(f"Variance of Diff: {variance_diff}")
-        print(f"T-test Statistic: {t_statistic}, P-value: {p_value}")
-        print(f"Max Diff: {max_diff}")
-        print(f"Min Diff: {min_diff}")
-    else:
-        print("No diff values calculated.")
+    #     print(f"Average Diff: {average_diff}")
+    #     print(f"Variance of Diff: {variance_diff}")
+    #     print(f"T-test Statistic: {t_statistic}, P-value: {p_value}")
+    #     print(f"Max Diff: {max_diff}")
+    #     print(f"Min Diff: {min_diff}")
+    # else:
+    #     print("No diff values calculated.")
+    #     pass
     
     return False
 
-def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
+def main(df, utility_all, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, weights_optimization_method, 
          delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     start_time = time.time()
-    df = pd.read_csv(csv_name)
     df_shape = df.shape[0]
 
     # Store original types for ALL columns
@@ -341,9 +343,9 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     df_encoded = pd.get_dummies(df_filtered, prefix_sep='::')
 
     start_time_apriori = time.time()
-    frequent_itemsets = apriori(df_encoded, min_support=3/df_shape, use_colnames=True)
+    frequent_itemsets = apriori(df_encoded, min_support=delta / len(df), use_colnames=True)
     elapsed_minutes_apriori = (time.time() - start_time_apriori) / 60
-    print(f"Apriori time: {elapsed_minutes_apriori:.2f} minutes")
+    #print(f"Apriori time: {elapsed_minutes_apriori:.2f} minutes")
     frequent_itemsets = frequent_itemsets.query('itemsets.str.len() > 0')
     
     itemset_mappings = {col: col.split('::', 1) for col in df_encoded.columns}
@@ -358,92 +360,102 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     max_size_itemsets = frequent_itemsets[frequent_itemsets['itemset_size'] == max_size]
 
     # Display results
-    print("Frequent Itemsets with Feature:Value Format:")
-    print(frequent_itemsets[['formatted_itemsets', 'itemset_size']])
+    #print("Frequent Itemsets with Feature:Value Format:")
+    #print(frequent_itemsets[['formatted_itemsets', 'itemset_size']])
 
     df = df.astype(original_types)
-    ret = k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
+    ret = k_random_walks(k, utility_all, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method, 
                         delta, ate_update_obj, mode, unlearning_threshold)
     elapsed_time = time.time() - start_time
-    print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
+    #print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
     return ret
 
 
 
 
-def check_homogenity_with_random_walks(csv_name, desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
-    csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
-    attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
+def check_homogenity_with_random_walks(rule_num, df, utility_all, desired_ate, treatment, outcome, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
+    attributes_for_apriori = config["ATTRIBUTES_FOR_APPRIORI"][rule_num - 1] #TODO: are these accurate?
+    #attributes_for_apriori = [attr for attr in df.columns if attr not in [treatment, TREATMENT_COL, outcome]] #TODO: are these accurate?
     outcome = "ConvertedSalary"
     k=1000
     size_threshold=0.2 # we want to look only at sub datasets that are less than 80% in their size from the original dataset
     weights_optimization_method = 1 # 0- no optimization, 1- sorting, 2- real weights
     
-    return main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, 
+    return main(df, utility_all, attributes_for_apriori, treatment, outcome, desired_ate, k, size_threshold, 
                weights_optimization_method, delta, ate_update_obj, mode, unlearning_threshold)
 
 
 if __name__ == "__main__":
     unlearning_threshold = 0.1
     # Setup treatment information
-    rule_num = 1
-    treatment_file = "Shira_Treatments.json"
+    treatment_file = "../algorithms/Shira_Treatments.json"
+    treated_rules_datasets = [
+        '../stackoverflow/so_countries_treatment_1_encoded.csv',
+        '../stackoverflow/so_countries_treatment_2_encoded.csv',
+        '../stackoverflow/so_countries_treatment_3_encoded.csv'
+    ]
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    treatment_key = "DevType"    
-    csv_name = '../stackoverflow/so_countries_treatment_3_encoded.csv'
-    df = pd.read_csv(csv_name)
-    outcome = "ConvertedSalary"
-        
-    # Create ATE update object
-    features_cols = [col for col in df.columns if col not in [treatment_key, outcome]]
-    utility_all = calculate_ate_safe(df, treatment_key, outcome)
+    for rule_num, dataset in enumerate(treated_rules_datasets, start=1):
+        csv_name = treated_rules_datasets[rule_num - 1]
+        df = pd.read_csv(csv_name)
+        treatment = good_treatments[rule_num - 1]["treatment"]
+        treatment_key = list(treatment.keys())[0]
+        condition = good_treatments[rule_num - 1]["condition"]
+        outcome = "ConvertedSalary"
+        print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
 
-    ate_update_obj = ATEUpdateLinear(df[features_cols], df[treatment_key], df[outcome])
-    
-    print(f"Initial utility_all: {utility_all}")
-    
-    # Run for each mode
-    for mode in CONFIG["MODES"]:
-        print(f"\n{'='*50}")
-        print(f"RUNNING MODE: {mode.upper()}")
-        print(f"{'='*50}")
+        # Create ATE update object
+        ate_update_obj = calculate_ate_safe(df, treatment_key, outcome, ret_obj=True)
+        utility_all = ate_update_obj.get_original_ate()
         
-        results = []
+        print(f"Initial utility_all: {utility_all}")
         
-        # Run for each delta and epsilon combination
-        for delta in CONFIG["DELTAS"]:
-            for epsilon in CONFIG["EPSILONS"]:
-                print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
-                
-                start_time = time.time()
-                
-                # Test positive and negative directions
-                positive_result = check_homogenity_with_random_walks(
-                    csv_name, utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                negative_result = check_homogenity_with_random_walks(
-                    csv_name, utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
-                
-                total_runtime = time.time() - start_time
-                is_homogeneous = not (positive_result or negative_result)
-                
-                results.append({
-                    'Mode': mode,
-                    'Delta': delta,
-                    'Epsilon': epsilon,
-                    'Homogeneous': is_homogeneous,
-                    'Runtime': total_runtime
-                })
-                
-                status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
-                print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
-        
-        # Save results and create heatmap for this mode
-        results_df = pd.DataFrame(results)
-        filename = f"homogeneity_results_{mode}.csv"
-        results_df.to_csv(filename, index=False)
-        print(f"\nResults saved to: {filename}")
+        # Run for each mode
+        for mode in CONFIG["MODES"]:
+            print(f"\n{'='*50}")
+            print(f"RUNNING MODE: {mode.upper()}")
+            print(f"{'='*50}")
+            
+            results = []
+            
+            # Run for each delta and epsilon combination
+            for delta in CONFIG["DELTAS"]:
+                for epsilon in CONFIG["EPSILONS"]:
+                    print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
+                    
+                    start_time = time.time()
+                    
+                    # Test positive and negative directions
+                    positive_result = check_homogenity_with_random_walks(
+                        rule_num, df, utility_all, utility_all + epsilon, treatment_key, outcome, delta, ate_update_obj, mode, unlearning_threshold)
+                    negative_result = check_homogenity_with_random_walks(
+                        rule_num, df, utility_all, utility_all - epsilon, treatment_key, outcome, delta, ate_update_obj, mode, unlearning_threshold)
+                    
+                    total_runtime = time.time() - start_time
+                    is_homogeneous = not (positive_result or negative_result)
+                    
+                    results.append({
+                        'Mode': mode,
+                        'Delta': delta,
+                        'Epsilon': epsilon,
+                        'Homogeneous': is_homogeneous,
+                        'Runtime': total_runtime
+                    })
+                    
+                    status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
+                    print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
+            
+            # Save results and create heatmap for this mode
+            results_df = pd.DataFrame(results)
+            filename = f"homogeneity_results_{mode}_rule_{rule_num}.csv"
+            
+            # Check if file exists to determine whether to write header
+            file_exists = os.path.exists(filename)
+            results_df.to_csv(filename, mode='a', header=not file_exists, index=False)
+            
+            print(f"\nResults appended to: {filename}")
         
         # create_heatmap(results_df, mode)
 

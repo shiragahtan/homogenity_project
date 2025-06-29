@@ -154,6 +154,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     
     with timer() as utility_timer:
+        import ipdb; ipdb.set_trace()
         features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
         ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
         utility_all = ate_update_obj.get_original_ate()

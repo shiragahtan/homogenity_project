@@ -53,7 +53,7 @@ def plot_subgroups_graph(file_path, data_path, delta, rule):
         utility_diff = 0
 
     # Step 6: Plot labels and legend, including condition, treatment, and utility diff in the title
-    plt.title(f"Subgroups: Utility vs Size\nCondition: {condition}\nTreatment: {treatment}\nUtility Diff (max-min): {utility_diff:.2f}")
+    plt.title(f"Subgroups: Utility vs Size\nCondition: {condition}\nTreatment: {treatment}\nMax |Utility_subgroup - Utility_all|: {utility_diff:.2f}")
     plt.xlabel('Utility')
     plt.ylabel('Size')
     plt.grid(True, linestyle='--', alpha=0.7)
@@ -75,6 +75,6 @@ if __name__ == "__main__":
 
     for rule in range(len(good_treatments)):
         for delta in DELTAS:
-            results_path = f'../algorithms_results/Yardens_results/Apriori_subgroups_results_delta_{delta}_{rule}.xlsx'
+            results_path = f'../algorithms_results/Apriori_subgroups_results_delta_{delta}_{rule}.xlsx'
             data_path = treated_rules_datasets[rule]
             plot_subgroups_graph(results_path, data_path, delta, rule)

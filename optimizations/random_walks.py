@@ -21,31 +21,40 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear
 from numpy.linalg import LinAlgError
 
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+TREATMENT_COL = config['TREATMENT_COL']
+
 def calculate_ate_safe(df, treatment_col, outcome_col):
     """
     Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
     """
-    if df.empty or df[treatment_col].nunique() < 2:
-        return 0.0
-    
-    # Get feature columns excluding treatment and outcome
-    features_cols = [col for col in df.columns if col not in [treatment_col, outcome_col]]
-    
-    # Drop every column that is constant in this slice
-    features_cols = [c for c in features_cols if df[c].nunique() > 1]
-    if not features_cols:  # nothing varies → skip slice
-        return 0.0
-    
+    import ipdb; ipdb.set_trace()
     try:
-        ate_update_obj = ATEUpdateLinear(
-            df[features_cols],
-            df[treatment_col],
-            df[outcome_col]
-        )
-        cate_value = ate_update_obj.get_original_ate()
-        return cate_value
-    except LinAlgError:  # XᵀX still singular
-        return 0.0
+        if df.empty or df[treatment_col].nunique() < 2:
+            return 0.0
+        
+        # Get feature columns excluding treatment and outcome
+        features_cols = [col for col in df.columns if col not in [treatment_col, TREATMENT_COL, outcome_col]]
+        
+        # Drop every column that is constant in this slice
+        features_cols = [c for c in features_cols if df[c].nunique() > 1]
+        if not features_cols:  # nothing varies → skip slice
+            return 0.0
+        
+        try:
+            ate_update_obj = ATEUpdateLinear(
+                df[features_cols],
+                df[TREATMENT_COL],
+                df[outcome_col]
+            )
+            cate_value = ate_update_obj.get_original_ate()
+            return cate_value
+        except LinAlgError:  # XᵀX still singular
+            return 0.0
+    except Exception as e:
+        import ipdb; ipdb.set_trace()
 
 # Configuration
 CONFIG = {
@@ -362,7 +371,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
 
 
 
-def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
+def check_homogenity_with_random_walks(csv_name, desired_ate, treatment, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
     csv_name = "../yarden_files/stackoverflow_data_encoded.csv"
     attributes_for_apriori = ["Continent", "Gender", "RaceEthnicity"]
     outcome = "ConvertedSalary"
@@ -376,8 +385,12 @@ def check_homogenity_with_random_walks(desired_ate, treatment, delta, ate_update
 
 if __name__ == "__main__":
     unlearning_threshold = 0.1
-    
     # Setup treatment information
+    rule_num = 1
+    treatment_file = "Shira_Treatments.json"
+    with open(treatment_file, "r") as f:
+        good_treatments = [json.loads(line) for line in f]
+
     treatment_key = "DevType"    
     csv_name = '../stackoverflow/so_countries_treatment_3_encoded.csv'
     df = pd.read_csv(csv_name)
@@ -408,9 +421,9 @@ if __name__ == "__main__":
                 
                 # Test positive and negative directions
                 positive_result = check_homogenity_with_random_walks(
-                    utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
+                    csv_name, utility_all + epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
                 negative_result = check_homogenity_with_random_walks(
-                    utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
+                    csv_name, utility_all - epsilon, treatment_key, delta, ate_update_obj, mode, unlearning_threshold)
                 
                 total_runtime = time.time() - start_time
                 is_homogeneous = not (positive_result or negative_result)

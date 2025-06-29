@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 # Add the yarden_files directory to the Python path to import ATE_update
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'yarden_files'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
-from ATE_update import ATEUpdateLinear
+from ATE_update import calculate_ate_safe
 from numpy.linalg import LinAlgError
 
 def filter_by_attribute(df: pd.DataFrame, filters: dict, delta: int) -> pd.DataFrame:
@@ -37,42 +37,10 @@ with open('../configs/config.json', 'r') as f:
 
 TREATMENT_COL = config['TREATMENT_COL']
 
-def calculate_ate_safe(df, treatment_col, outcome_col, subgroup=None, ret_obj=False):
-    """
-    Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
-    """
-    try:
-        if df.empty or df[treatment_col].nunique() < 2:
-            return 0.0
-        
-        # Get feature columns excluding treatment and outcome
-        features_cols = [col for col in df.columns if col not in [treatment_col, TREATMENT_COL, outcome_col]]
-        
-        # Drop every column that is constant in this slice
-        features_cols = [c for c in features_cols if df[c].nunique() > 1]
-        if not features_cols:  # nothing varies → skip slice
-            return 0.0
-        
-        try:
-            ate_obj = ATEUpdateLinear(
-                df[features_cols],
-                df[TREATMENT_COL],
-                df[outcome_col]
-            )
-            cate_value = ate_obj.get_original_ate()
-            return cate_value if not ret_obj else ate_obj
-        except LinAlgError:  # XᵀX still singular
-            return 0.0 if not ret_obj else None
-    except Exception as e:
-        import ipdb; ipdb.set_trace()
-
 # Configuration
-CONFIG = {
-    "DELTAS": [20000, 15000, 10000, 5000],
-    # "MODES": ["hybrid", "direct"],
-    "MODES": ["direct"],
-    "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000]
-}
+DELTAS = config["DELTAS"]
+MODES = config["MODES"][:1]
+EPSILONS = config["EPSILONS"]
 
 warnings.filterwarnings("ignore")
 
@@ -258,7 +226,7 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
                     # Always use direct CATE calculation
                     #print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
                     subgroup_df = filter_by_attribute(df, subgroup_data, delta)
-                    ate = calculate_ate_safe(subgroup_df, treatment, outcome, subgroup_data)
+                    ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                     # ate = utility_all
                     
                 elif mode == 'hybrid':
@@ -420,7 +388,7 @@ if __name__ == "__main__":
         print(f"Initial utility_all: {utility_all}")
         
         # Run for each mode
-        for mode in CONFIG["MODES"]:
+        for mode in MODES:
             print(f"\n{'='*50}")
             print(f"RUNNING MODE: {mode.upper()}")
             print(f"{'='*50}")
@@ -428,8 +396,8 @@ if __name__ == "__main__":
             results = []
             
             # Run for each delta and epsilon combination
-            for delta in CONFIG["DELTAS"]:
-                for epsilon in CONFIG["EPSILONS"]:
+            for delta in DELTAS:
+                for epsilon in EPSILONS:
                     if delta == 10000 and epsilon == 60000:
                         import ipdb; ipdb.set_trace()
                     print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")

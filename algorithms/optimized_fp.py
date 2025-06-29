@@ -1,14 +1,21 @@
+import json
 import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import multiprocessing as mp
-from ATE_update import ATEUpdateLinear
+from ATE_update import calculate_ate_safe
 from sklearn.preprocessing import OneHotEncoder
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from typing import Dict, List, Tuple, Any, Callable, Optional
 from numpy.linalg import LinAlgError
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+
+# Load config
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+BINARY_TREATMENT = config['TREATMENT_COL']
 
 # ── configuration ───────────────────────────────────────────────────────────
 CHUNK_SIZE_BASE = 32       # baseline batch size for Pool.imap_unordered
@@ -18,11 +25,8 @@ MIN_SUBGROUPS_FOR_PARALLEL = 50  # minimum subgroups to use multiprocessing
 
 # ── shared globals (populated by _init_worker) ──────────────────────────────
 _DF_GLOBAL: Optional[pd.DataFrame] = None
-_FEATURES_COLS: Optional[List[str]] = None
-_TREATMENT: Optional[Dict[Any, Any]] = None
-_TREATMENT_COL: Optional[str] = None
+_TREATMENT_COL_GLOBAL: Optional[str] = None
 _TGT_O: Optional[str] = None
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -107,30 +111,16 @@ def _get_subgroup_mask(filt: Dict[str, Any]) -> pd.Series:
 # ── CATE helper – runs inside each worker ───────────────────────────────────
 
 def _compute_cate_optimized(filt: Dict[str, Any]):
-    """Optimized CATE computation using pre-computed features."""
+    """Optimized CATE computation using calculate_ate_safe."""
     subgroup_mask = _get_subgroup_mask(filt)
     sub_df = _DF_GLOBAL[subgroup_mask]
     
     if sub_df.empty:
         return np.nan
 
-    if sub_df[_TREATMENT_COL].nunique() < 2:
-        return np.nan
-        
-    # Use pre-computed features columns
-    features_cols = [c for c in _FEATURES_COLS if c not in filt.keys()]
-    # Drop every column that is constant in this slice
-    features_cols = [c for c in features_cols if sub_df[c].nunique() > 1]
-    if not features_cols:  # nothing varies → skip slice
-        return np.nan
-    
     try:
-        ate_update_obj = ATEUpdateLinear(
-            sub_df[features_cols],
-            sub_df[_TREATMENT_COL],
-            sub_df[_TGT_O]
-        )
-        return ate_update_obj.get_original_ate()
+        cate_value = calculate_ate_safe(sub_df, _TREATMENT_COL_GLOBAL, _TGT_O)
+        return cate_value
     except LinAlgError:  # XᵀX still singular
         return np.nan
 
@@ -147,12 +137,10 @@ def _eval_cate_worker(args):
 
 # ── worker initialiser ──────────────────────────────────────────────────────
 
-def _init_worker(df, features_cols, treatment, treatment_col, tgtO):
-    global _DF_GLOBAL, _FEATURES_COLS, _TREATMENT, _TREATMENT_COL, _TGT_O
+def _init_worker(df, treatment_col, tgtO):
+    global _DF_GLOBAL, _TREATMENT_COL_GLOBAL, _TGT_O
     _DF_GLOBAL = df
-    _FEATURES_COLS = features_cols
-    _TREATMENT = treatment
-    _TREATMENT_COL = treatment_col
+    _TREATMENT_COL_GLOBAL = treatment_col
     _TGT_O = tgtO
 
 
@@ -161,7 +149,6 @@ def _init_worker(df, features_cols, treatment, treatment_col, tgtO):
 def calc_utility_for_subgroups(
     mode: int,                       # 0 = homogeneity check, else collect all
     df: pd.DataFrame,
-    treatment: Dict[Any, Any],
     treatment_col: str,
     tgtO: str,
     delta: int,
@@ -174,11 +161,10 @@ def calc_utility_for_subgroups(
     Falls back to apriori_algorithm logic if overhead is too high.
     """
     # Exclude treatment columns and target outcome from mining
-    exclude_cols = [*treatment.keys(), treatment_col, tgtO]
+    exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
     
     # Pre-compute features columns once
-    features_cols = [col for col in df.columns if col not in [*treatment.keys(), treatment_col, tgtO]]
-    
+   
     # Mine subgroups using optimized approach
     subgroups = mine_subgroups_optimized(df, delta, exclude_cols=exclude_cols)
     n_sub = len(subgroups)
@@ -186,7 +172,7 @@ def calc_utility_for_subgroups(
     # ─────────────────────────── mode 0: homogeneity check ──────────────────
     if mode == 0:
         # Run serially for fast early-exit (matching apriori_algorithm)
-        _init_worker(df, features_cols, treatment, treatment_col, tgtO)
+        _init_worker(df, treatment_col, tgtO)
         for filt, _ in subgroups:
             cate = _compute_cate_optimized(filt)
             if pd.isna(cate):
@@ -215,13 +201,13 @@ def calc_utility_for_subgroups(
         with mp.Pool(
             processes=cores,
             initializer=_init_worker,
-            initargs=(df, features_cols, treatment, treatment_col, tgtO),
+            initargs=(df, treatment_col, tgtO),
         ) as pool:
             for rec in pool.imap_unordered(_eval_cate_worker, args, chunksize=chunk):
                 records.append(rec)
     else:
         # Fall back to serial processing (matching apriori_algorithm)
-        _init_worker(df, features_cols, treatment, treatment_col, tgtO)
+        _init_worker(df, treatment_col, tgtO)
         for arg in args:
             records.append(_eval_cate_worker(arg))
 

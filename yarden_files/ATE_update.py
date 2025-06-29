@@ -1,7 +1,43 @@
+import json
 import numpy as np
 import pandas as pd
 from linear_model_unlearning import CertifiableUnlearningLogisticRegression, BaseLinearRegression
 from sklearn.linear_model import LogisticRegression
+from numpy.linalg import LinAlgError
+
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+TREATMENT_COL = config['TREATMENT_COL']
+
+def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
+    """
+    Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
+    """
+    try:
+        if df.empty or df[treatment_col].nunique() < 2:
+            return 0.0
+        
+        # Get feature columns excluding treatment and outcome
+        features_cols = [col for col in df.columns if col not in [treatment_col, TREATMENT_COL, outcome_col]]
+        
+        # Drop every column that is constant in this slice
+        features_cols = [c for c in features_cols if df[c].nunique() > 1]
+        if not features_cols:  # nothing varies → skip slice
+            return 0.0
+        
+        try:
+            ate_obj = ATEUpdateLinear(
+                df[features_cols],
+                df[TREATMENT_COL],
+                df[outcome_col]
+            )
+            cate_value = ate_obj.get_original_ate()
+            return cate_value if not ret_obj else ate_obj
+        except LinAlgError:  # XᵀX still singular
+            return 0.0 if not ret_obj else None
+    except Exception as e:
+        import ipdb; ipdb.set_trace()
 
 
 class ATEUpdateLinear:
@@ -57,62 +93,6 @@ class ATEUpdateLinear:
         
         # Store original ATE (treatment effect)
         self.original_ate = float(self.original_model.beta[1].item())
-
-    def calculate_direct_ate(self, X, T, Y, find_confounders=False, exclude_cols=None):
-        """
-        Calculate ATE for given dataset without modifying object state.
-        
-        Parameters:
-        ----------
-        X : pandas.DataFrame or numpy.ndarray
-            Covariates/features
-        T : pandas.Series or numpy.ndarray
-            Treatment indicator (0 or 1)
-        Y : pandas.Series or numpy.ndarray
-            Outcome variable
-        find_confounders : bool
-            Whether to identify confounders using DoWhy
-        exclude_cols : list, optional
-            List of column names to exclude from constant feature detection.
-            Default is ['intercept', 'treatment'].
-            
-        Returns:
-        --------
-        float : The calculated ATE
-        """
-        # Convert inputs to appropriate formats
-        X_local = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-        T_local = T.copy() if isinstance(T, pd.Series) else pd.Series(T)
-        Y_local = Y.copy() if isinstance(Y, pd.Series) else pd.Series(Y)
-        
-        if find_confounders:
-            # Try to identify confounders using DoWhy
-            confounders = self._identify_confounders()
-            confounders = confounders if isinstance(confounders, list) else confounders.get('backdoor')
-            # Create design matrix with treatment and confounders
-            X_confounders = X_local[confounders] if confounders else X_local
-            design_matrix = pd.concat([T_local.reset_index(drop=True), 
-                                     X_confounders.reset_index(drop=True)], axis=1)
-            column_names = ['treatment'] + (confounders if confounders else X_local.columns.tolist())
-            design_matrix.columns = column_names
-        else:
-            # Use all features as confounders
-            intercept = pd.Series(1, index=range(len(T_local)), name='intercept')
-            design_matrix = pd.concat([intercept, T_local.reset_index(drop=True), X_local.reset_index(drop=True)], axis=1)
-            design_matrix.columns = ['intercept', 'treatment'] + X_local.columns.tolist()
-
-        # Convert to numpy for faster computation
-        X_matrix = design_matrix.values
-        Y_matrix = Y_local.values.reshape(-1, 1)
-        
-        # Compute linear regression
-        try:
-            model = BaseLinearRegression(X_matrix, Y_matrix)
-            # Return ATE (treatment effect)
-            return float(model.beta[1])
-        except np.linalg.LinAlgError:
-            print(f"Singular matrix - returning ATE=0 for subgroup size {len(Y_local)}")
-            return 0.0
     
     def _identify_confounders(self):
         """

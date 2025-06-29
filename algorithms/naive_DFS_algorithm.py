@@ -8,7 +8,7 @@ from pathlib import Path
 import multiprocessing as mp
 from typing import Dict, List, Tuple, Callable, Any
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
-from ATE_update import ATEUpdateLinear
+from ATE_update import calculate_ate_safe
 from numpy.linalg import LinAlgError
 
 EPSILON = 5000
@@ -112,9 +112,8 @@ def calc_utility_for_subgroups(
         mode: int,
         attr_vals: Dict[str, List],
         df: pd.DataFrame,
-        treatment: Dict[Any, Any],
-        tgtO: str,
         treatment_col: str,
+        tgtO: str,
         delta: int,
         epsilon: int,
         utility_all: float
@@ -143,26 +142,11 @@ def calc_utility_for_subgroups(
         if lvl == 0:
             continue
         for filt, sz in groups:
-            if filt == {"Gender": 1}:
-                import ipdb; ipdb.set_trace()
             filtered_df = filter_by_attribute(df, filt, delta)
-            if filtered_df.empty or filtered_df[treatment_col].nunique() < 2:
-                continue
             
             if not filtered_df.empty:
-                features_cols = [col for col in filtered_df.columns if col not in [*treatment.keys(),treatment_col,*filt.keys(), tgtO]]
-                # drop every column that is constant in this slice
-                features_cols = [c for c in features_cols if filtered_df[c].nunique() > 1]
-                if not features_cols:                      # nothing varies → skip slice
-                    continue
-                
                 try:
-                    ate_update_obj = ATEUpdateLinear(
-                        filtered_df[features_cols],
-                        filtered_df[treatment_col],
-                        filtered_df[tgtO]
-                    )
-                    cate_value = ate_update_obj.get_original_ate()
+                    cate_value = calculate_ate_safe(filtered_df, treatment_col, tgtO)
                 except LinAlgError:                        # XᵀX still singular
                     continue   
 

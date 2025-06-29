@@ -11,7 +11,7 @@ from contextlib import contextmanager
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 
-from ATE_update import ATEUpdateLinear
+from ATE_update import calculate_ate_safe
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
@@ -152,11 +152,9 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
 
     # Calculate utility for subgroups (measure time separately)
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
-    
+    treatment_col = list(treatment.keys())[0]
     with timer() as utility_timer:
-        features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
-        ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
-        utility_all = ate_update_obj.get_original_ate()
+        utility_all = calculate_ate_safe(df, treatment_col, tgtO)
     utility_time = utility_timer()
     
     for epsilon in epsilons:
@@ -166,9 +164,8 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         # Common parameters for all algorithms
         common = dict(
             df=df,
-            treatment=treatment,
+            treatment_col=treatment_col,
             tgtO=tgtO,
-            treatment_col=TREATMENT_COL,
             delta=delta,
             epsilon=epsilon,
             mode=chosen_mode,
@@ -264,12 +261,12 @@ def main():
             if len(df) < delta:
                 print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
                 continue  # Skip if the filtered DataFrame is too small
-            chosen_algorithm = 1
-            #for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
-            print(f"Running for delta: {delta}")
-            # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
-            attr_time = attr_vals_time if chosen_algorithm == 0 else 0
-            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+            
+            for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
+                print(f"Running for delta: {delta}")
+                # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+                attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Load the CSV file
-for rule_num in range(1, 4):
+for rule_num in range(1, 2):
+  rule_num = 1
   csv_path = f"../optimizations/homogeneity_results_direct_rule_{rule_num}.csv"
   df = pd.read_csv(csv_path)
   treatment_file = "../algorithms/Shira_Treatments.json"

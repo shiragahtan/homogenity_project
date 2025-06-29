@@ -21,12 +21,23 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'nativ_files'))
 from ATE_update import ATEUpdateLinear
 from numpy.linalg import LinAlgError
 
+def filter_by_attribute(df: pd.DataFrame, filters: dict, delta: int) -> pd.DataFrame:
+    """
+    Filters the DataFrame based on the given attribute-value pairs.
+    Stops filtering if the group size falls below delta.
+    """
+    for attribute, value in filters.items():
+        df = df[df[attribute] == value]
+        if len(df) < delta:  # Stop filtering if group size is below delta
+            return pd.DataFrame()  # Return an empty DataFrame
+    return df
+
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
 TREATMENT_COL = config['TREATMENT_COL']
 
-def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
+def calculate_ate_safe(df, treatment_col, outcome_col, subgroup=None, ret_obj=False):
     """
     Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
     """
@@ -153,7 +164,6 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
     desired_diff = round(desired_ate-df_ate, 3)
     #print(f"desired ATE: {desired_ate}")
     #print(f"desired diff: {desired_diff}")
-
     available_itemsets = len(max_size_itemsets)
     sample_size = min(k, available_itemsets)
     #print(f"Available itemsets: {available_itemsets}, Requested k: {k}, Using sample size: {sample_size}")
@@ -164,7 +174,6 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
 
     for walk_idx, random_choice in enumerate(random_choices):
         #print(f"\nwalk idx: {walk_idx}")
-        
         combo_to_remove = []
         key_value = []
         random_choice = {k:int(v) for k,v in random_choice.items()}
@@ -191,8 +200,7 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
                 df_to_remove = df[df[key] == value]
             else:
                 df_to_remove = df_to_remove[df_to_remove[key] == value]
-            if (df_to_remove.shape[0] > delta and df_to_remove.shape[0] < max_size_of_group):
-                # Store both indices and the subgroup data (key-value pairs)
+            if (df_to_remove.shape[0] >= delta and df_to_remove.shape[0] < max_size_of_group):
                 subgroup_data = {k: v for k, v in reversed(key_value[:len(key_value)-len(dfs_to_remove_data)])}
                 dfs_to_remove_data.append((list(df_to_remove.index), df_to_remove.shape[0], subgroup_data))
             else:
@@ -207,7 +215,7 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
             filtered_indices = set(original_indices)
             complement_indices = list(all_indices - filtered_indices)
             complement_size = len(complement_indices)
-            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size, subgroup_data))
+            dfs_to_remove_data_shira_keren.append((complement_indices, complement_size, filtered_indices, subgroup_data))
 
         # Reverse the order of the list
         dfs_to_remove_data_shira_keren = list(reversed(dfs_to_remove_data_shira_keren))
@@ -220,9 +228,10 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
 
         tuples_removed_num = set()
         calc_idx = 0
+        prev_ate = df_ate  # Initialize prev_ate with the original ATE
 
         already_removed_indices = []
-        for i, (df_to_remove_index, df_to_remove_shape, subgroup_data) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
+        for i, (df_to_remove_index, df_to_remove_shape, filtered_indices, subgroup_data) in enumerate(reversed(dfs_to_remove_data_shira_keren)):
 
             if df_to_remove_shape / df_shape < size_threshold:
                 #print(f"the size of the dataset is too big. too close to the original dataset. Breaking")
@@ -239,7 +248,7 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
                 pass
             else:
                 unique_indices = [i for i in df_to_remove_index if i not in already_removed_indices]
-                
+                filtered_indices = [i for i in filtered_indices]
                 # Calculate the fraction of data to be removed
                 removal_fraction = len(unique_indices) / df_shape
                 
@@ -248,8 +257,8 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
                 if mode == 'direct':
                     # Always use direct CATE calculation
                     #print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
-                    subgroup_df = df.iloc[unique_indices]
-                    ate = calculate_ate_safe(subgroup_df, treatment, outcome)
+                    subgroup_df = filter_by_attribute(df, subgroup_data, delta)
+                    ate = calculate_ate_safe(subgroup_df, treatment, outcome, subgroup_data)
                     # ate = utility_all
                     
                 elif mode == 'hybrid':
@@ -260,7 +269,7 @@ def k_random_walks(k, df_ate, treatment, outcome, df, desired_ate, size_threshol
                     else:
                         # Use direct CATE calculation for large removals
                         #print(f"Using direct CATE calculation for {len(unique_indices)} indices ({removal_fraction:.1%} of dataset)")
-                        subgroup_df = df.iloc[unique_indices]
+                        subgroup_df = df.iloc[filtered_indices]
                         ate = calculate_ate_safe(subgroup_df, treatment, outcome)
                 
                 end_ate_time = time.time()
@@ -355,9 +364,8 @@ def main(df, utility_all, attributes_for_apriori, treatment, outcome, desired_at
     frequent_itemsets['formatted_itemsets'] = formatted_itemsets
 
     global max_size_itemsets
-    frequent_itemsets['itemset_size'] = [len(itemset) for itemset in frequent_itemsets['formatted_itemsets']]
-    max_size = frequent_itemsets['itemset_size'].max()
-    max_size_itemsets = frequent_itemsets[frequent_itemsets['itemset_size'] == max_size]
+    # Use all frequent itemsets instead of only maximal ones
+    max_size_itemsets = frequent_itemsets
 
     # Display results
     #print("Frequent Itemsets with Feature:Value Format:")
@@ -371,11 +379,9 @@ def main(df, utility_all, attributes_for_apriori, treatment, outcome, desired_at
     return ret
 
 
-
-
 def check_homogenity_with_random_walks(rule_num, df, utility_all, desired_ate, treatment, outcome, delta, ate_update_obj, mode='hybrid', unlearning_threshold=0.1):
-    attributes_for_apriori = config["ATTRIBUTES_FOR_APPRIORI"][rule_num - 1] #TODO: are these accurate?
-    #attributes_for_apriori = [attr for attr in df.columns if attr not in [treatment, TREATMENT_COL, outcome]] #TODO: are these accurate?
+    #attributes_for_apriori = config["ATTRIBUTES_FOR_APPRIORI"][rule_num - 1] #TODO: are these accurate?
+    attributes_for_apriori = [attr for attr in df.columns if attr not in [treatment, TREATMENT_COL, outcome]] #TODO: are these accurate?
     outcome = "ConvertedSalary"
     k=1000
     size_threshold=0.2 # we want to look only at sub datasets that are less than 80% in their size from the original dataset
@@ -398,6 +404,7 @@ if __name__ == "__main__":
         good_treatments = [json.loads(line) for line in f]
 
     for rule_num, dataset in enumerate(treated_rules_datasets, start=1):
+    #rule_num = 3
         csv_name = treated_rules_datasets[rule_num - 1]
         df = pd.read_csv(csv_name)
         treatment = good_treatments[rule_num - 1]["treatment"]
@@ -423,15 +430,17 @@ if __name__ == "__main__":
             # Run for each delta and epsilon combination
             for delta in CONFIG["DELTAS"]:
                 for epsilon in CONFIG["EPSILONS"]:
+                    if delta == 10000 and epsilon == 60000:
+                        import ipdb; ipdb.set_trace()
                     print(f"\nTesting Delta: {delta}, Epsilon: {epsilon}")
-                    
                     start_time = time.time()
-                    
+                    negative_subgroups = []
                     # Test positive and negative directions
                     positive_result = check_homogenity_with_random_walks(
                         rule_num, df, utility_all, utility_all + epsilon, treatment_key, outcome, delta, ate_update_obj, mode, unlearning_threshold)
-                    negative_result = check_homogenity_with_random_walks(
-                        rule_num, df, utility_all, utility_all - epsilon, treatment_key, outcome, delta, ate_update_obj, mode, unlearning_threshold)
+                    if not positive_result:
+                        negative_result = check_homogenity_with_random_walks(
+                            rule_num, df, utility_all, utility_all - epsilon, treatment_key, outcome, delta, ate_update_obj, mode, unlearning_threshold)
                     
                     total_runtime = time.time() - start_time
                     is_homogeneous = not (positive_result or negative_result)
@@ -447,7 +456,7 @@ if __name__ == "__main__":
                     status = "Homogeneous" if is_homogeneous else "Not Homogeneous"
                     print(f"Result: {status} (Runtime: {total_runtime:.1f}s)")
             
-            # Save results and create heatmap for this mode
+            # Save results for this mode
             results_df = pd.DataFrame(results)
             filename = f"homogeneity_results_{mode}_rule_{rule_num}.csv"
             

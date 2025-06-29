@@ -154,7 +154,6 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     
     with timer() as utility_timer:
-        import ipdb; ipdb.set_trace()
         features_cols = [col for col in df.columns if col not in [*treatment.keys(),TREATMENT_COL, tgtO]]
         ate_update_obj = ATEUpdateLinear(df[features_cols], df[TREATMENT_COL], df[tgtO])
         utility_all = ate_update_obj.get_original_ate()
@@ -245,7 +244,8 @@ def main():
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
-    for i, dataset in enumerate(treated_rules_datasets):
+    for i in range(len(treated_rules_datasets)):
+        dataset = treated_rules_datasets[i]
         df = pd.read_csv(dataset)
         condition = good_treatments[i]["condition"]
         attr, _ = list(condition.items())[0]
@@ -264,12 +264,12 @@ def main():
             if len(df) < delta:
                 print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
                 continue  # Skip if the filtered DataFrame is too small
-
-            for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
-                print(f"Running for delta: {delta}")
-                # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
-                attr_time = attr_vals_time if chosen_algorithm == 0 else 0
-                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+            chosen_algorithm = 1
+            #for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
+            print(f"Running for delta: {delta}")
+            # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+            attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
 
 
 if __name__ == "__main__":

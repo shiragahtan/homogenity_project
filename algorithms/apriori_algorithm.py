@@ -46,6 +46,7 @@ def mine_subgroups(
     # Apriori algorithm for frequent itemsets
     min_sup = delta / len(df)
     freq = algorithm(onehot, min_support=min_sup, use_colnames=True)
+    import ipdb; ipdb.set_trace()
 
     # discard item‑sets that mention the same attribute twice
     def valid(itemset):

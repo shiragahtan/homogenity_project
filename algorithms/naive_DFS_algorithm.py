@@ -143,6 +143,8 @@ def calc_utility_for_subgroups(
         if lvl == 0:
             continue
         for filt, sz in groups:
+            if filt == {"Gender": 1}:
+                import ipdb; ipdb.set_trace()
             filtered_df = filter_by_attribute(df, filt, delta)
             if filtered_df.empty or filtered_df[treatment_col].nunique() < 2:
                 continue

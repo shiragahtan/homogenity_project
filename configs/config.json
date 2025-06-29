@@ -1,6 +1,6 @@
 {
   "DELTAS": [20000, 15000, 10000, 5000],
-  "ALGORITHM_NAMES": ["BruteForce", "Apriori", "FPGrowth", "MultiProcessing"],
+  "ALGORITHM_NAMES": ["BruteForce", "Apriori", "FPGrowth", "MultiProcessing", "RWUnlearning"],
   "MODES": ["HomogeneityCheck", "AllSubgroups"],
   "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000],
   "TREATMENT_COL": "TempTreatment",
@@ -9,6 +9,27 @@
     ["Continent","Gender", "Age", "FormalEducation", "UndergradMajor", "Country"],
     ["Continent", "Dependents", "Age", "FormalEducation", "UndergradMajor", "Country"],
     ["Continent", "Gender", "Age", "FormalEducation", "UndergradMajor", "Country"]
-]
+  ],
+  "ATTRIBUTE_WEIGHTS": {
+    "HDI": 1925,
+    "GDP": 1673,
+    "GINI": 1626,
+    "Continent": 1615,
+    "Student": 1591,
+    "SexualOrientation": 1535,
+    "Hobbies": 1479,
+    "Gender": 1339,
+    "RaceEthnicity": 1099,
+    "Country": 1056,
+    "UndergradMajor": 1020,
+    "Dependents": 971,
+    "FormalEducation": 833,
+    "DevType": 608,
+    "Age": 565,
+    "HoursComputer": 475,
+    "Exercise": 154,
+    "EducationParents": 49,
+    "YearsCoding": 18
+  }
 }
 

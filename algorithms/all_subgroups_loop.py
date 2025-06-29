@@ -7,6 +7,7 @@ import multiprocessing as mp
 from time import perf_counter
 from functools import partial
 from contextlib import contextmanager
+import os
 # Add project root to sys.path for module resolution
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
@@ -16,6 +17,7 @@ from mlxtend.frequent_patterns import fpgrowth, apriori
 from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
 from optimized_fp import calc_utility_for_subgroups as optimized_fp_calc_utility_for_subgroups
+from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
 
 # Load config
 with open('../configs/config.json', 'r') as f:
@@ -177,12 +179,14 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         _apriori_kw = dict(common, algorithm=apriori)
         _fpgrowth_kw = dict(common, algorithm=fpgrowth)
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
+        _rw_unlearning_kw = dict(common, algorithm=apriori)
 
         algo_dispatch = {
             0: lambda: naive_calc_utility_for_subgroups(**_naive_kw),
             1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
             2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
             3: lambda: optimized_fp_calc_utility_for_subgroups(**_opt_fp_kw),
+            4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw),
         }
 
         try:
@@ -221,6 +225,22 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         print(f"   - Algorithm execution: {algorithm_time:.2f} seconds")
 
 
+def clean_results_files():
+    """Delete algorithms_time.xlsx and homogeneity_results.xlsx in ../graphs unless -d is passed."""
+    skip_delete = '-d' in sys.argv
+    results_dir_graphs = Path("../graphs")
+    results_dir_graphs.mkdir(exist_ok=True)
+    time_xlsx = results_dir_graphs / "algorithms_time.xlsx"
+    homog_xlsx = results_dir_graphs / "homogeneity_results.xlsx"
+    if not skip_delete:
+        for f in [time_xlsx, homog_xlsx]:
+            if f.exists():
+                f.unlink()
+        print("🧹 Results files reset.")
+    else:
+        print("⚠️  Results files NOT reset (append mode, -d flag given)")
+
+
 def main():
     # Output the results
     # DATA_PATH = "../yarden_files/yarden_so_decoded.csv"  # Path to the dataset
@@ -231,6 +251,8 @@ def main():
         '../stackoverflow/so_countries_treatment_2_encoded.csv',
         '../stackoverflow/so_countries_treatment_3_encoded.csv'
     ]
+
+    clean_results_files()
 
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
@@ -262,11 +284,12 @@ def main():
                 print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
                 continue  # Skip if the filtered DataFrame is too small
             
-            for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
-                print(f"Running for delta: {delta}")
-                # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
-                attr_time = attr_vals_time if chosen_algorithm == 0 else 0
-                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+            #for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
+            chosen_algorithm = 4
+            print(f"Running for delta: {delta}")
+            # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+            attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
 
 
 if __name__ == "__main__":

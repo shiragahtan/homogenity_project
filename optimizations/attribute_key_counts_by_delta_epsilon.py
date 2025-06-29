@@ -10,13 +10,16 @@ with open('../configs/config.json', 'r') as f:
 EPSILONS = config['EPSILONS']
 
 # Directory containing the xlsx files
-DIRECTORY = '../algorithms_results'  # relative to this script
+DIRECTORY = '../algorithms_results/Yardens_results/'  # relative to this script
 
 # Regex to match the files and extract delta (ignore rule_num)
 file_pattern = re.compile(r'Apriori_subgroups_results_delta_(\d+)_\d+\.xlsx')
 
 # Prepare results: {delta: {epsilon: Counter}}
 results = defaultdict(lambda: defaultdict(Counter))
+
+# Summary counter for epsilon 5000 across all rules and deltas
+summary_counter = Counter()
 
 for filename in os.listdir(DIRECTORY):
     match = file_pattern.match(filename)
@@ -47,10 +50,14 @@ for filename in os.listdir(DIRECTORY):
                 continue
             for key in keys:
                 results[delta][epsilon][key] += 1
+                # Add to summary counter for epsilon 5000
+                if epsilon == 5000:
+                    summary_counter[key] += 1
 
 # Write results to Excel
 output_path = os.path.join(os.path.dirname(__file__), 'attribute_counts_by_delta_epsilon.xlsx')
 with pd.ExcelWriter(output_path) as writer:
+    # Write individual delta sheets
     for delta in sorted(results):
         # Build a DataFrame: rows=epsilon, columns=attribute keys, values=counts
         all_keys = set()
@@ -64,5 +71,12 @@ with pd.ExcelWriter(output_path) as writer:
         df_out = pd.DataFrame(data, columns=all_keys, index=sorted(results[delta]))
         df_out.index.name = 'Epsilon'
         df_out.to_excel(writer, sheet_name=f'delta_{delta}')
+    
+    # Write summary sheet for epsilon 5000
+    if summary_counter:
+        summary_df = pd.DataFrame(list(summary_counter.items()), columns=['Attribute', 'Count'])
+        summary_df = summary_df.sort_values('Count', ascending=False)
+        summary_df.to_excel(writer, sheet_name='Summary_Epsilon_5000', index=False)
+        print(f"Summary: Found {len(summary_counter)} unique attributes with counts ranging from {min(summary_counter.values())} to {max(summary_counter.values())}")
 
 print(f"Done! Results saved to {output_path}") 

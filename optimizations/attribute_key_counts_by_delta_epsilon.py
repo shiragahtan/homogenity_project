@@ -18,6 +18,9 @@ file_pattern = re.compile(r'Apriori_subgroups_results_delta_(\d+)_\d+\.xlsx')
 # Prepare results: {delta: {epsilon: Counter}}
 results = defaultdict(lambda: defaultdict(Counter))
 
+# Prepare breaking groups: {delta: {epsilon: list of breaking groups}}
+breaking_groups = defaultdict(lambda: defaultdict(list))
+
 # Summary counter for epsilon 5000 across all rules and deltas
 summary_counter = Counter()
 
@@ -42,12 +45,26 @@ for filename in os.listdir(DIRECTORY):
     df = df.reindex(df['UtilityDiff'].abs().sort_values(ascending=False).index)
     for epsilon in EPSILONS:
         filtered = df[df['UtilityDiff'].abs() >= epsilon]
-        for attrval in filtered['AttributeValues']:
+        for _, row in filtered.iterrows():
+            attrval = row['AttributeValues']
+            utility = row['Utility']
+            utility_diff = row['UtilityDiff']
+            size = row['Size']
+            
             # Parse the string dict (e.g., "{'Gender': '1', 'HDI': '1'}")
             try:
                 keys = list(eval(attrval).keys())
+                # Store the breaking group details
+                breaking_groups[delta][epsilon].append({
+                    'AttributeValues': attrval,
+                    'Size': size,
+                    'ATE': utility,
+                    'ATE_diff': utility_diff,
+                    'Attributes': keys
+                })
             except Exception:
                 continue
+            
             for key in keys:
                 results[delta][epsilon][key] += 1
                 # Add to summary counter for epsilon 5000
@@ -71,6 +88,27 @@ with pd.ExcelWriter(output_path) as writer:
         df_out = pd.DataFrame(data, columns=all_keys, index=sorted(results[delta]))
         df_out.index.name = 'Epsilon'
         df_out.to_excel(writer, sheet_name=f'delta_{delta}')
+    
+    # Write breaking groups sheets for each delta
+    for delta in sorted(breaking_groups):
+        all_breaking_groups = []
+        for epsilon in sorted(breaking_groups[delta]):
+            for group in breaking_groups[delta][epsilon]:
+                group_data = {
+                    'Epsilon': epsilon,
+                    'AttributeValues': group['AttributeValues'],
+                    'Size': group['Size'],
+                    'ATE': group['ATE'],
+                    'ATE_diff': group['ATE_diff'],
+                    'Attributes': ', '.join(group['Attributes'])
+                }
+                all_breaking_groups.append(group_data)
+        
+        if all_breaking_groups:
+            breaking_df = pd.DataFrame(all_breaking_groups)
+            breaking_df = breaking_df.sort_values(['Epsilon', 'ATE_diff'], ascending=[True, False])
+            breaking_df.to_excel(writer, sheet_name=f'breaking_groups_delta_{delta}', index=False)
+            print(f"Delta {delta}: Found {len(all_breaking_groups)} breaking groups across all epsilons")
     
     # Write summary sheet for epsilon 5000
     if summary_counter:

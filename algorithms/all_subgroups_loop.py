@@ -257,8 +257,8 @@ def main():
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
 
-    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
-    #chosen_mode = 1
+    #chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    chosen_mode = 0
     # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value

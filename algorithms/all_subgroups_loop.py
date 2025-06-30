@@ -143,7 +143,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0):
+def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0, run_number=None):
     """
     Run experiments for each treatment and save results to an Excel file.
     """
@@ -252,7 +252,7 @@ def main():
         '../stackoverflow/so_countries_treatment_3_encoded.csv'
     ]
 
-    clean_results_files()
+    #clean_results_files()
 
     with open(treatment_file, "r") as f:
         good_treatments = [json.loads(line) for line in f]
@@ -263,33 +263,65 @@ def main():
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
-    for i in range(len(treated_rules_datasets)):
-        dataset = treated_rules_datasets[i]
-        df = pd.read_csv(dataset)
-        condition = good_treatments[i]["condition"]
-        attr, _ = list(condition.items())[0]
-        treatment = good_treatments[i]["treatment"]
-        
-        # Measure attr_vals calculation time
-        with timer() as attr_timer:
-            attr_vals = {
-                col: sorted(v for v in df[col].dropna().unique()
-                            if str(v).upper() != "UNKNOWN")
-                for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
-            }
-        attr_vals_time = attr_timer()
-        
-        for delta in DELTAS:
-            if len(df) < delta:
-                print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
-                continue  # Skip if the filtered DataFrame is too small
+    
+    chosen_algorithm = 4
+    
+    # For algorithm 4 (random walks), run 10 times as the outermost loop
+    if chosen_algorithm == 4:
+        for run_num in range(1):
+            print(f"\n=== RUN {run_num + 1}/10 ===")
+            for i in range(len(treated_rules_datasets)):
+                dataset = treated_rules_datasets[i]
+                df = pd.read_csv(dataset)
+                condition = good_treatments[i]["condition"]
+                attr, _ = list(condition.items())[0]
+                treatment = good_treatments[i]["treatment"]
+                
+                # Measure attr_vals calculation time
+                with timer() as attr_timer:
+                    attr_vals = {
+                        col: sorted(v for v in df[col].dropna().unique()
+                                    if str(v).upper() != "UNKNOWN")
+                        for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
+                    }
+                attr_vals_time = attr_timer()
+                
+                for delta in DELTAS:
+                    if len(df) < delta:
+                        print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
+                        continue  # Skip if the filtered DataFrame is too small
+                    
+                    print(f"Running for delta: {delta}")
+                    # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+                    attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+                    run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time, run_num)
+    else:
+        # Original logic for other algorithms
+        for i in range(len(treated_rules_datasets)):
+            dataset = treated_rules_datasets[i]
+            df = pd.read_csv(dataset)
+            condition = good_treatments[i]["condition"]
+            attr, _ = list(condition.items())[0]
+            treatment = good_treatments[i]["treatment"]
             
-            #for chosen_algorithm in range(0, len(ALGORITHM_NAMES)): # Loop through all algorithms from end to start
-            chosen_algorithm = 4
-            print(f"Running for delta: {delta}")
-            # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
-            attr_time = attr_vals_time if chosen_algorithm == 0 else 0
-            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+            # Measure attr_vals calculation time
+            with timer() as attr_timer:
+                attr_vals = {
+                    col: sorted(v for v in df[col].dropna().unique()
+                                if str(v).upper() != "UNKNOWN")
+                    for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
+                }
+            attr_vals_time = attr_timer()
+            
+            for delta in DELTAS:
+                if len(df) < delta:
+                    print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
+                    continue  # Skip if the filtered DataFrame is too small
+                
+                print(f"Running for delta: {delta}")
+                # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
+                attr_time = attr_vals_time if chosen_algorithm == 0 else 0
+                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time, run_number=None)
 
 
 if __name__ == "__main__":

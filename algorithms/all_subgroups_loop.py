@@ -144,7 +144,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0, run_number=None, optimization_mode="direct"):
+def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0):
     """
     Run experiments for each treatment and save results to an Excel file.
     """
@@ -180,15 +180,17 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         _apriori_kw = dict(common, algorithm=apriori)
         _fpgrowth_kw = dict(common, algorithm=fpgrowth)
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
-        _rw_unlearning_kw = dict(common, algorithm=apriori, optimization_mode=optimization_mode)
+        _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8, optimization_mode=OPTIMIZATION_MODES[0])
+        _rw_unlearning_kw_hybrid = dict(common, algorithm=apriori, size_stop=1, optimization_mode=OPTIMIZATION_MODES[1])
 
         algo_dispatch = {
             0: lambda: naive_calc_utility_for_subgroups(**_naive_kw),
             1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
             2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
             3: lambda: optimized_fp_calc_utility_for_subgroups(**_opt_fp_kw),
-            4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw),
-        }
+            4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
+            5: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
+        }   
 
         try:
             with timer() as elapsed:
@@ -242,7 +244,7 @@ def clean_results_files():
         print("⚠️  Results files NOT reset (append mode, -d flag given)")
 
 
-def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO, num_runs=1, optimization_mode=None):
+def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO):
     """
     Process a single dataset with the given parameters.
     """
@@ -270,13 +272,15 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
         # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
         attr_time = attr_vals_time if chosen_algorithm == 0 else 0
         
-        if chosen_algorithm == 4:
-            # For algorithm 4 (random walks), run multiple times
+        if chosen_algorithm in [4, 5]:
+            # For algorithms 4,5 (random walks, RW + unlearning), run multiple times
+            num_runs = 5
             for run_num in range(num_runs):
-                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time, run_num, optimization_mode)
+                print(f"--- Run number: {run_num} ---")
+                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
         else:
             # For other algorithms, run once
-            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time, run_number=None)
+            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
 
 
 def main():
@@ -303,18 +307,10 @@ def main():
     # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
     
     #chosen_algorithm = 4
-    num_runs = 5
     # For algorithm 4 (random walks), run 10 times as the outermost loop
     for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
-        if chosen_algorithm == 4:
-            for optimization_mode in OPTIMIZATION_MODES:
-                print(f"\033[33mRunning with optimization mode: {optimization_mode}\033[0m")
-                for i in range(len(treated_rules_datasets)):
-                    process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO, num_runs, optimization_mode)
-        else:
-            # Original logic for other algorithms
-            for i in range(len(treated_rules_datasets)):
-                process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)
+        for i in range(len(treated_rules_datasets)):
+            process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)
 
 
 if __name__ == "__main__":

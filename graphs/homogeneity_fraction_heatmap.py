@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate per‑rule heat‑maps that show the **number** of homogeneous executions
-(colour‑coded 0–4 red → 5 white → 6–max green) and annotate each cell with
+(colour‑coded 0–6 red → 7–15 green) and annotate each cell with
 "homogeneous/total" and the average run‑time (seconds).
 
 The script reads *homogeneity_results.xlsx* and writes PNGs to the
@@ -20,13 +20,18 @@ from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 # ============================ CONFIGURATION ==================================
 RESULTS_FILE = Path("homogeneity_results.xlsx")     # input Excel
 OUTPUT_DIR   = Path("homogeneity_rule_heatmaps")    # output folder
-MIDPOINT     = 5                                     # white centre of palette
+
+# The point at which the diverging colour‑map switches from red → green.
+# All counts < THRESHOLD_HOMOGENEOUS are rendered with red hues, all counts
+# >= THRESHOLD_HOMOGENEOUS with green hues.  The total number of executions is
+# 15, so a value of 7 cleanly splits the scale 0‑6 vs 7‑15.
+THRESHOLD_HOMOGENEOUS = 7
 
 # ============================ DATA LOADING ===================================
 print(f"Reading results from {RESULTS_FILE.resolve()}")
 df = pd.read_excel(RESULTS_FILE)
 
-# Convert possible string booleans ("TRUE"/"FALSE") → bool ---------------------
+# Convert possible string booleans ("TRUE"/"FALSE") → bool --------------------
 if df["homogeneity_status"].dtype == object:
     df["homogeneity_status"] = (
         df["homogeneity_status"].astype(str)
@@ -46,7 +51,7 @@ cmap = LinearSegmentedColormap.from_list(
     "red_white_green",
     [
         (0.60, 0.00, 0.00),   # dark red   ~ #990000
-        (1.00, 1.00, 1.00),   # white
+        (1.00, 1.00, 1.00),   # white (placed at the threshold)
         (0.00, 0.45, 0.00),   # dark green ~ #007300
     ],
     N=256,
@@ -90,9 +95,10 @@ for rule_idx, rule in rules.iterrows():
             f"{int(row.num_hom)}/{int(row.total)}\n{runtimes.loc[row.delta, row.epsilon]:.1f}s"
         )
 
-    # Normalisation: centre palette at MIDPOINT ------------------------------
+    # Normalisation: centre palette at the threshold -------------------------
     vmax = heatmap_data.max().max()
-    norm = TwoSlopeNorm(vmin=0, vcenter=MIDPOINT, vmax=vmax)
+    # vmin is always 0, centre at threshold‑0.5 ensures 0‑6 red, 7‑15 green
+    norm = TwoSlopeNorm(vmin=0, vcenter=THRESHOLD_HOMOGENEOUS - 0.5, vmax=vmax)
 
     # ---------------------------- PLOT ---------------------------------------
     plt.figure(figsize=(12, 8))

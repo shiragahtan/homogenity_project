@@ -4,7 +4,7 @@
   "MODES": ["HomogeneityCheck", "AllSubgroups"],
   "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000],
   "TREATMENT_COL": "TempTreatment",
-  "YARDEN_OPTIMIZATION_MODES": ["direct", "hybrid"],
+  "OPTIMIZATION_MODES": ["direct", "hybrid"],
   "ATTRIBUTES_FOR_APPRIORI": [
     ["Continent","Gender", "Age", "FormalEducation", "UndergradMajor", "Country"],
     ["Continent", "Dependents", "Age", "FormalEducation", "UndergradMajor", "Country"],

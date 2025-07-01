@@ -1,21 +1,15 @@
 """
-Sub‑group homogeneity analysis — **k random walks version**
-==========================================================
-This module is a *feature‑complete* drop‑in for your original
-`randomww.py`.  It implements **exactly** the strategy you asked for:
-
 * **k independent random walks** in the lattice of attribute=value
-  filters, each walk starting at a highly‑specific subgroup (many
-  filters) that still meets *δ*.
-* Start nodes are sampled **proportionally to an importance score**
-  derived from per‑attribute breakage statistics (weights read from
+  filters, each walk starting at a leaf nodes.
+* Start nodes are sampled proportionally to an importance score
+  derived from per-attribute breakage statistics (weights read from
   `config.json`).
-* At every step we evaluate the subgroup’s CATE *before* deciding which
+* At every step we evaluate the subgroup's CATE *before* deciding which
   filter to remove.  The walk stops as soon as it reaches a subgroup
-  whose size is more than `size_stop · |D|` (default 80 %) or when all
+  whose size is more than 80% of oridginal df size or when all
   attributes have been removed.
-* The attribute chosen for removal is the **least‑weighted** one among
-  the current filters, with a small ε‑greedy randomness so the k walks
+* The attribute chosen for removal is the **least-weighted** one among
+  the current filters, with a small ε-greedy randomness so the k walks
   do not collapse onto the same path.
 * **Memoised CATE** computations and a `seen` set guarantee each subgroup
   is evaluated at most once across *all* walks.
@@ -24,7 +18,7 @@ If any subgroup deviates from the overall ATE by more than *ε* we return
 `False` immediately; otherwise, after `k_walks` paths have been
 exhausted, we return `True` ("presumed homogeneous").
 
-The exhaustive Apriori path for modes ≠ 0 is unchanged.
+The exhaustive Apriori path for modes ≠0 is unchanged.
 """
 from __future__ import annotations
 
@@ -40,9 +34,7 @@ import pandas as pd
 from mlxtend.frequent_patterns import apriori  # type: ignore
 from numpy.linalg import LinAlgError
 
-# ---------------------------------------------------------------------------
 #  Config + helpers
-# ---------------------------------------------------------------------------
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
 with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
     _CFG = json.load(fp)
@@ -63,10 +55,7 @@ else:
 sys.path.append(str(Path(__file__).resolve().parent.parent / "yarden_files"))
 from ATE_update import calculate_ate_safe  # noqa: E402  pylint: disable=wrong-import-position
 
-# ---------------------------------------------------------------------------
 #  Utility functions
-# ---------------------------------------------------------------------------
-
 def _onehot_lookup(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Tuple[str, str]]]:
     parts: List[pd.DataFrame] = []
     lookup: Dict[str, Tuple[str, str]] = {}
@@ -84,10 +73,7 @@ def _mask(df: pd.DataFrame, filt: Mapping[str, str | int | float]) -> pd.Series:
         m &= col.astype(str) == str(v) if not pd.api.types.is_numeric_dtype(col) else col == int(v)
     return m
 
-# ---------------------------------------------------------------------------
-#  k‑random‑walk homogeneity tester (mode 0)
-# ---------------------------------------------------------------------------
-
+#  k‑random‑walk homogeneity tester (mode 0)
 def _homog_random_walks(
     df: pd.DataFrame,
     *,
@@ -97,18 +83,21 @@ def _homog_random_walks(
     epsilon: float,
     k_walks: int = 1_000,
     size_stop: float = 0.80,
+    optimization_mode: str = "direct",
+    unlearning_threshold: float = 0.1,
+    ate_update_obj=None,
     rng: Optional[random.Random] = None,
 ) -> bool:
     """Return **False** on first violating subgroup else **True** after *k* walks."""
     rng = rng or random.Random()
 
-    # overall ATE ---------------------------------------------------------
+    # overall ATE
     try:
         ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
     except LinAlgError:
         return True  # ill‑conditioned global design ⇒ assume homogeneous
 
-    # mine frequent itemsets ≥ δ -----------------------------------------
+    # mine frequent itemsets ≥ δ
     excl = {treatment_col, BINARY_TREATMENT, outcome_col}
     mining_df = df.drop(columns=[c for c in excl if c in df], errors="ignore")
     onehot, lookup = _onehot_lookup(mining_df)
@@ -119,7 +108,7 @@ def _homog_random_walks(
     if freq.empty:
         return True
 
-    # score itemsets: bigger & heavier‑weighted first ---------------------
+    # score itemsets: bigger & heavier‑weighted first 
     def _item_score(itemset: frozenset[str]) -> float:
         attrs = {lookup[c][0] for c in itemset}
         weight = sum(ATTRIBUTE_WEIGHTS.get(a, 0.0) for a in attrs)
@@ -127,7 +116,7 @@ def _homog_random_walks(
 
     itemsets = sorted(freq["itemsets"], key=_item_score, reverse=True)
 
-    # sample *k* distinct start filters with roulette‑wheel on scores ------
+    # sample *k* distinct start filters with roulette‑wheel on scores 
     scores = np.array([_item_score(s) for s in itemsets], dtype=float)
     probs = scores / scores.sum()
     chosen_idx = rng.choices(range(len(itemsets)), weights=probs, k=min(k_walks, len(itemsets)))
@@ -136,11 +125,11 @@ def _homog_random_walks(
         f = {lookup[c][0]: lookup[c][1] for c in itemsets[idx]}
         start_filters.append(f)
 
-    # memoisation ---------------------------------------------------------
+    # memoisation
     cate_cache: Dict[frozenset, float] = {}
     visited: set[frozenset] = set()
 
-    def _eval(filt: Dict[str, str]) -> Optional[bool]:
+    def _eval(filt: Dict[str, str], current_ate_obj=None) -> Optional[bool]:
         key = frozenset(filt.items())
         if key in cate_cache:
             cate = cate_cache[key]
@@ -150,15 +139,36 @@ def _homog_random_walks(
             n = len(sub_df)
             if n < delta or n / len(df) > size_stop:
                 return None  # skip out‑of‑range subgroup
+            
             try:
-                cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+                if optimization_mode == "direct":
+                    # Always use direct CATE calculation
+                    cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+                elif optimization_mode == "hybrid":
+                    # Calculate removal fraction (complement size / total size)
+                    removal_fraction = (len(df) - n) / len(df)
+                    
+                    if removal_fraction <= unlearning_threshold:
+                        print("\033[33mhybrid mode\033[0m")
+                        # Use unlearning for small removals (large subgroups)
+                        # Get indices to remove (complement of subgroup)
+                        complement_indices = df[~m].index.tolist()
+                        cate = current_ate_obj.calculate_updated_ATE(complement_indices)
+                    else:
+                        # Use direct CATE calculation for large removals (small subgroups)
+                        cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+                else:
+                    # Default to direct mode
+                    cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
             except LinAlgError:
                 return None
             cate_cache[key] = cate
         return abs(cate - ate_all) > epsilon
 
-    # walk loop -----------------------------------------------------------
+    # walk loop
     for root in start_filters:
+        # Create a fresh ATE update object for each walk (like in random_walks.py)
+        fresh_ate_obj = calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=True)
         current = dict(root)
         while current:
             key = frozenset(current.items())
@@ -166,7 +176,7 @@ def _homog_random_walks(
                 break
             visited.add(key)
 
-            res = _eval(current)
+            res = _eval(current, fresh_ate_obj)
             if res:  # violation!
                 return False
 
@@ -181,10 +191,7 @@ def _homog_random_walks(
 
     return True
 
-# ---------------------------------------------------------------------------
-#  Exhaustive path (modes ≠ 0) — unchanged
-# ---------------------------------------------------------------------------
-
+#  Exhaustive path (modes ≠ 0) — unchanged
 def _mine_subgroups(
     algorithm: Callable[[pd.DataFrame, float], pd.DataFrame],
     df: pd.DataFrame,
@@ -201,10 +208,7 @@ def _mine_subgroups(
         out.append(({lookup[c][0]: lookup[c][1] for c in it}, int(round(sup * len(df)))))
     return out
 
-# ---------------------------------------------------------------------------
 #  Public API — signature unchanged (extra kwargs tolerated)
-# ---------------------------------------------------------------------------
-
 def calc_utility_for_subgroups(
     mode: int,
     algorithm: Callable[[pd.DataFrame, float], pd.DataFrame],
@@ -216,10 +220,12 @@ def calc_utility_for_subgroups(
     outcome_col: Optional[str] = None,
     tgtO: Optional[str] = None,
     k_walks: int = 1_000,
-    size_stop: float = 0.80,
+    size_stop: float = 0.8,
+    optimization_mode: str = "direct",
+    unlearning_threshold: float = 0.1,
     **kwargs: object,
 ):
-    """Drop‑in compatible with your driver script."""
+    """Drop-in compatible with your driver script."""
     outcome_col = outcome_col or tgtO
     if outcome_col is None:
         raise ValueError("Need outcome_col / tgtO")
@@ -233,9 +239,11 @@ def calc_utility_for_subgroups(
             epsilon=epsilon,
             k_walks=k_walks,
             size_stop=size_stop,
+            optimization_mode=optimization_mode,
+            unlearning_threshold=unlearning_threshold,
         )
 
-    # ---------- exhaustive path ----------
+    # exhaustive path 
     full_ate = calculate_ate_safe(df, treatment_col, outcome_col)
     exclude = [treatment_col, BINARY_TREATMENT, outcome_col]
     records: List[Dict[str, str | float | int]] = []

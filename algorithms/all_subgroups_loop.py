@@ -16,8 +16,9 @@ from ATE_update import calculate_ate_safe
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
-from optimized_fp import calc_utility_for_subgroups as optimized_fp_calc_utility_for_subgroups
+from algorithms.multiProcessing_algorithm import calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
+from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_calc_utility_for_subgroups
 
 # Load config
 with open('../configs/config.json', 'r') as f:
@@ -187,9 +188,11 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
             0: lambda: naive_calc_utility_for_subgroups(**_naive_kw),
             1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
             2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
-            3: lambda: optimized_fp_calc_utility_for_subgroups(**_opt_fp_kw),
+            3: lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
             4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
             5: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
+            6: lambda: rw_multiProcessing_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
+            7: lambda: rw_multiProcessing_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
         }   
 
         try:
@@ -272,7 +275,7 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
         # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
         attr_time = attr_vals_time if chosen_algorithm == 0 else 0
         
-        if chosen_algorithm in [4, 5]:
+        if chosen_algorithm >= 4:
             # For algorithms 4,5 (random walks, RW + unlearning), run multiple times
             num_runs = 5
             for run_num in range(num_runs):
@@ -308,8 +311,12 @@ def main():
     
     #chosen_algorithm = 4
     # For algorithm 4 (random walks), run 10 times as the outermost loop
+    algorithms_to_run = range(len(ALGORITHM_NAMES))
+    if chosen_mode == 1:
+        algorithms_to_run = list(algorithms_to_run)[:-3]
+
     # for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
-    for chosen_algorithm in [5]:
+    for chosen_algorithm in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):
             process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)
 

@@ -308,7 +308,8 @@ def main():
     
     #chosen_algorithm = 4
     # For algorithm 4 (random walks), run 10 times as the outermost loop
-    for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
+    # for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
+    for chosen_algorithm in [5]:
         for i in range(len(treated_rules_datasets)):
             process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)
 

@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 from mlxtend.frequent_patterns import apriori  # type: ignore
 from numpy.linalg import LinAlgError
+import copy
 
 #  Config + helpers
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
@@ -74,6 +75,80 @@ def _mask(df: pd.DataFrame, filt: Mapping[str, str | int | float]) -> pd.Series:
     return m
 
 #  k‑random‑walk homogeneity tester (mode 0)
+def _homog_random_walks_direct(
+    df: pd.DataFrame,
+    *,
+    treatment_col: str,
+    outcome_col: str,
+    delta: int,
+    epsilon: float,
+    k_walks: int = 1_000,
+    size_stop: float = 0.80,
+    rng: Optional[random.Random] = None,
+) -> bool:
+    """Faithful direct-mode random walk: no unlearning, no hybrid logic."""
+    rng = rng or random.Random()
+    # overall ATE
+    try:
+        ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
+    except LinAlgError:
+        return True
+    excl = {treatment_col, BINARY_TREATMENT, outcome_col}
+    mining_df = df.drop(columns=[c for c in excl if c in df], errors="ignore")
+    onehot, lookup = _onehot_lookup(mining_df)
+    min_sup = delta / len(df)
+    freq = apriori(onehot, min_support=min_sup, use_colnames=True)
+    freq = freq[freq["itemsets"].apply(lambda s: len({lookup[c][0] for c in s}) == len(s))]
+    if freq.empty:
+        return True
+    def _item_score(itemset: frozenset[str]) -> float:
+        attrs = {lookup[c][0] for c in itemset}
+        weight = sum(ATTRIBUTE_WEIGHTS.get(a, 0.0) for a in attrs)
+        return len(itemset) + weight
+    itemsets = sorted(freq["itemsets"], key=_item_score, reverse=True)
+    scores = np.array([_item_score(s) for s in itemsets], dtype=float)
+    probs = scores / scores.sum()
+    chosen_idx = rng.choices(range(len(itemsets)), weights=probs, k=min(k_walks, len(itemsets)))
+    start_filters = []
+    for idx in chosen_idx:
+        f = {lookup[c][0]: lookup[c][1] for c in itemsets[idx]}
+        start_filters.append(f)
+    cate_cache: Dict[frozenset, float] = {}
+    visited: set[frozenset] = set()
+    def _eval(filt: Dict[str, str]) -> Optional[bool]:
+        key = frozenset(filt.items())
+        if key in cate_cache:
+            cate = cate_cache[key]
+        else:
+            m = _mask(df, filt)
+            sub_df = df[m]
+            n = len(sub_df)
+            if n < delta or n / len(df) > size_stop:
+                return None
+            try:
+                cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+            except LinAlgError:
+                return None
+            cate_cache[key] = cate
+        return abs(cate - ate_all) > epsilon
+    for root in start_filters:
+        current = dict(root)
+        while current:
+            key = frozenset(current.items())
+            if key in visited:
+                break
+            visited.add(key)
+            res = _eval(current)
+            if res:
+                return False
+            weights_tuple = [(ATTRIBUTE_WEIGHTS.get(a, 0.0), a) for a in current]
+            weights_tuple.sort()
+            least_w_attr = weights_tuple[0][1]
+            if len(weights_tuple) > 1 and rng.random() < 0.15:
+                least_w_attr = weights_tuple[1][1]
+            del current[least_w_attr]
+    return True
+
 def _homog_random_walks(
     df: pd.DataFrame,
     *,
@@ -88,35 +163,36 @@ def _homog_random_walks(
     ate_update_obj=None,
     rng: Optional[random.Random] = None,
 ) -> bool:
-    """Return **False** on first violating subgroup else **True** after *k* walks."""
+    if optimization_mode == "direct":
+        return _homog_random_walks_direct(
+            df,
+            treatment_col=treatment_col,
+            outcome_col=outcome_col,
+            delta=delta,
+            epsilon=epsilon,
+            k_walks=k_walks,
+            size_stop=size_stop,
+            rng=rng,
+        )
+    # --- hybrid mode (existing logic) ---
     rng = rng or random.Random()
-
-    # overall ATE
     try:
         ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
     except LinAlgError:
-        return True  # ill‑conditioned global design ⇒ assume homogeneous
-
-    # mine frequent itemsets ≥ δ
+        return True
     excl = {treatment_col, BINARY_TREATMENT, outcome_col}
     mining_df = df.drop(columns=[c for c in excl if c in df], errors="ignore")
     onehot, lookup = _onehot_lookup(mining_df)
-
     min_sup = delta / len(df)
     freq = apriori(onehot, min_support=min_sup, use_colnames=True)
     freq = freq[freq["itemsets"].apply(lambda s: len({lookup[c][0] for c in s}) == len(s))]
     if freq.empty:
         return True
-
-    # score itemsets: bigger & heavier‑weighted first 
     def _item_score(itemset: frozenset[str]) -> float:
         attrs = {lookup[c][0] for c in itemset}
         weight = sum(ATTRIBUTE_WEIGHTS.get(a, 0.0) for a in attrs)
-        return len(itemset) + weight  # simple additive score
-
+        return len(itemset) + weight
     itemsets = sorted(freq["itemsets"], key=_item_score, reverse=True)
-
-    # sample *k* distinct start filters with roulette‑wheel on scores 
     scores = np.array([_item_score(s) for s in itemsets], dtype=float)
     probs = scores / scores.sum()
     chosen_idx = rng.choices(range(len(itemsets)), weights=probs, k=min(k_walks, len(itemsets)))
@@ -124,11 +200,8 @@ def _homog_random_walks(
     for idx in chosen_idx:
         f = {lookup[c][0]: lookup[c][1] for c in itemsets[idx]}
         start_filters.append(f)
-
-    # memoisation
     cate_cache: Dict[frozenset, float] = {}
     visited: set[frozenset] = set()
-
     def _eval(filt: Dict[str, str], current_ate_obj=None) -> Optional[bool]:
         key = frozenset(filt.items())
         if key in cate_cache:
@@ -138,57 +211,40 @@ def _homog_random_walks(
             sub_df = df[m]
             n = len(sub_df)
             if n < delta or n / len(df) > size_stop:
-                return None  # skip out‑of‑range subgroup
-            
+                return None
             try:
-                if optimization_mode == "direct":
-                    # Always use direct CATE calculation
-                    cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
-                elif optimization_mode == "hybrid":
-                    # Calculate removal fraction (complement size / total size)
-                    removal_fraction = (len(df) - n) / len(df)
-                    
-                    if removal_fraction <= unlearning_threshold:
-                        print("\033[33mhybrid mode\033[0m")
-                        # Use unlearning for small removals (large subgroups)
-                        # Get indices to remove (complement of subgroup)
-                        complement_indices = df[~m].index.tolist()
-                        cate = current_ate_obj.calculate_updated_ATE(complement_indices)
-                    else:
-                        # Use direct CATE calculation for large removals (small subgroups)
-                        cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+                removal_fraction = (len(df) - n) / len(df)
+                if removal_fraction <= unlearning_threshold:
+                    print("\033[35mhybrid\033[0m")
+                    cate = current_ate_obj.calculate_updated_ATE(df[~m].index.tolist())
                 else:
-                    # Default to direct mode
                     cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
             except LinAlgError:
                 return None
             cate_cache[key] = cate
         return abs(cate - ate_all) > epsilon
-
-    # walk loop
     for root in start_filters:
-        # Create a fresh ATE update object for each walk (like in random_walks.py)
-        fresh_ate_obj = calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=True)
+        if optimization_mode == "hybrid":
+            if 'master_ate_obj' not in locals():
+                master_ate_obj = calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=True)
+            fresh_ate_obj = copy.copy(master_ate_obj)
+        else:
+            fresh_ate_obj = None
         current = dict(root)
         while current:
             key = frozenset(current.items())
             if key in visited:
                 break
             visited.add(key)
-
             res = _eval(current, fresh_ate_obj)
-            if res:  # violation!
+            if res:
                 return False
-
-            # pick attribute to drop: lowest weight likely to keep homogeneity
             weights_tuple = [(ATTRIBUTE_WEIGHTS.get(a, 0.0), a) for a in current]
-            weights_tuple.sort()  # ascending weight
+            weights_tuple.sort()
             least_w_attr = weights_tuple[0][1]
-            # ε‑greedy: small chance to pick second‑least to diversify path
             if len(weights_tuple) > 1 and rng.random() < 0.15:
                 least_w_attr = weights_tuple[1][1]
             del current[least_w_attr]
-
     return True
 
 #  Exhaustive path (modes ≠ 0) — unchanged

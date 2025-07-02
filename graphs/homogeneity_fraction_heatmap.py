@@ -5,7 +5,7 @@ Generate per‑rule heat‑maps that show the **number** of homogeneous executio
 "homogeneous/total" and the average run‑time (seconds).
 
 The script reads *homogeneity_results.xlsx* and writes PNGs to the
-*homogeneity_rule_heatmaps* folder.
+*homogeneity_rule_heatmaps* folder, creating separate heatmaps for each algorithm.
 """
 
 # ============================== IMPORTS ======================================
@@ -42,9 +42,9 @@ if df["homogeneity_status"].dtype == object:
 # Ensure output directory exists ---------------------------------------------
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Distinct treatment/condition rules -----------------------------------------
-rules = df[["treatment", "condition"]].drop_duplicates().reset_index(drop=True)
-print(f"Found {len(rules)} unique treatment/condition rule(s)")
+# Distinct treatment/condition/algorithm rules -----------------------------------------
+rules = df[["treatment", "condition", "algorithm"]].drop_duplicates().reset_index(drop=True)
+print(f"Found {len(rules)} unique treatment/condition/algorithm rule(s)")
 
 # Diverging colour‑map: dark‑red → white → dark‑green -------------------------
 cmap = LinearSegmentedColormap.from_list(
@@ -61,10 +61,11 @@ cmap = LinearSegmentedColormap.from_list(
 for rule_idx, rule in rules.iterrows():
     treatment = rule["treatment"]
     condition = rule["condition"]
-    print(f"\nProcessing rule {rule_idx + 1}: {treatment!s} | {condition!s}")
+    algorithm = rule["algorithm"]
+    print(f"\nProcessing rule {rule_idx + 1}: {treatment!s} | {condition!s} | {algorithm!s}")
 
     # Sub‑set for the current rule -------------------------------------------
-    rule_df = df[(df["treatment"] == treatment) & (df["condition"] == condition)]
+    rule_df = df[(df["treatment"] == treatment) & (df["condition"] == condition) & (df["algorithm"] == algorithm)]
     if rule_df.empty:
         print("   → no data; skipping …")
         continue
@@ -77,7 +78,9 @@ for rule_idx, rule in rules.iterrows():
         .reset_index()
     )
 
-    heatmap_data = agg.pivot(index="delta", columns="epsilon", values="num_hom")
+    # Compute fraction homogeneous for coloring
+    agg["fraction_hom"] = agg["num_hom"] / agg["total"]
+    heatmap_data = agg.pivot(index="delta", columns="epsilon", values="fraction_hom")
 
     # Average run‑time for annotation ----------------------------------------
     runtimes = (
@@ -95,26 +98,28 @@ for rule_idx, rule in rules.iterrows():
             f"{int(row.num_hom)}/{int(row.total)}\n{runtimes.loc[row.delta, row.epsilon]:.1f}s"
         )
 
-    # Normalisation: centre palette at the threshold -------------------------
-    vmax = heatmap_data.max().max()
-    # vmin is always 0, centre at threshold‑0.5 ensures 0‑6 red, 7‑15 green
-    norm = TwoSlopeNorm(vmin=0, vcenter=THRESHOLD_HOMOGENEOUS - 0.5, vmax=vmax)
+    # Use a diverging colormap centered at 0.5 for the fraction
+    cmap_fraction = LinearSegmentedColormap.from_list(
+        "red_white_green", [(0.60, 0.00, 0.00), (1.0, 1.0, 1.0), (0.00, 0.45, 0.00)], N=256
+    )
+    norm = TwoSlopeNorm(vmin=0, vcenter=0.5, vmax=1)
+    cmap_to_use = cmap_fraction
 
     # ---------------------------- PLOT ---------------------------------------
     plt.figure(figsize=(12, 8))
     sns.heatmap(
         heatmap_data,
-        cmap=cmap,
+        cmap=cmap_to_use,
         norm=norm,
         annot=annot,
         fmt="",
         linewidths=0.5,
         linecolor="grey",
-        cbar_kws={"label": "Number Homogeneous"},
+        cbar_kws={"label": "Fraction Homogeneous"},
     )
 
     plt.title(
-        f"Rule Heatmap: Treatment={treatment}, Condition={condition}\n"
+        f"Rule Heatmap: Treatment={treatment}, Condition={condition}, Algorithm={algorithm}\n"
         "(Annotation: Homogeneous/Total and Runtime)"
     )
     plt.xlabel("Epsilon")
@@ -126,7 +131,8 @@ for rule_idx, rule in rules.iterrows():
     trans = str.maketrans({":": "_", " ": "_", "'": "", "{" : "", "}" : ""})
     safe_t = str(treatment).translate(trans)
     safe_c = str(condition).translate(trans)
-    filename = OUTPUT_DIR / f"heatmap_rule_{rule_idx + 1}_{safe_t}__{safe_c}.png"
+    safe_a = str(algorithm).translate(trans)
+    filename = OUTPUT_DIR / f"heatmap_rule_{rule_idx + 1}_{safe_a}_{safe_t}__{safe_c}.png"
 
     plt.savefig(filename, dpi=300)
     plt.close()

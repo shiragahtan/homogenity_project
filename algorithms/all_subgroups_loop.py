@@ -313,7 +313,7 @@ def main():
     # For algorithm 4 (random walks), run 10 times as the outermost loop
     algorithms_to_run = range(len(ALGORITHM_NAMES))
     if chosen_mode == 1:
-        algorithms_to_run = list(algorithms_to_run)[:-3]
+        algorithms_to_run = list(algorithms_to_run)[:-2]
 
     # for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
     for chosen_algorithm in reversed(algorithms_to_run):

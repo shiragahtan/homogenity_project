@@ -18,7 +18,7 @@ import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 # ============================ CONFIGURATION ==================================
-RESULTS_FILE = Path("homogeneity_results.xlsx")     # input Excel
+RESULTS_FILE = Path("homogeneity_results1.xlsx")     # input Excel
 OUTPUT_DIR   = Path("homogeneity_rule_heatmaps")    # output folder
 
 # The point at which the diverging colour‑map switches from red → green.

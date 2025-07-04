@@ -14,7 +14,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 
 from ATE_update import calculate_ate_safe
 from mlxtend.frequent_patterns import fpgrowth, apriori
-from naive_DFS_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
+from bruteForce_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
 from algorithms.multiProcessing_algorithm import calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
@@ -191,8 +191,6 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
             3: lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
             4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
             5: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
-            6: lambda: rw_multiProcessing_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
-            7: lambda: rw_multiProcessing_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
         }   
 
         try:
@@ -288,7 +286,6 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
 
 def main():
     # Output the results
-    # DATA_PATH = "../yarden_files/yarden_so_decoded.csv"  # Path to the dataset
     tgtO = "ConvertedSalary"  # Target outcome column in the dataset
     treatment_file = "Shira_Treatments.json"
     treated_rules_datasets = [
@@ -304,18 +301,14 @@ def main():
 
     chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
     #chosen_mode = 0
-    # chosen_algorithm = int(input(f"Choose your algorithm {list(enumerate(ALGORITHM_NAMES))}: \n"))
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value
-    # run_experiments(chosen_mode, chosen_algorithm, delta, good_treatments, DATA_PATH, tgtO)
     
-    #chosen_algorithm = 4
-    # For algorithm 4 (random walks), run 10 times as the outermost loop
     algorithms_to_run = range(len(ALGORITHM_NAMES))
+    # If iterating over ALL subgroups, dont run RW
     if chosen_mode == 1:
-        algorithms_to_run = list(algorithms_to_run)[:-2]
+        algorithms_to_run = list(algorithms_to_run)[:-1]
 
-    # for chosen_algorithm in reversed(range(len(ALGORITHM_NAMES))):
     for chosen_algorithm in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):
             process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)

@@ -18,12 +18,12 @@ with open("../configs/config.json") as f:
 
 DELTAS   = sorted(cfg["DELTAS"])
 EPSILONS = sorted(cfg["EPSILONS"])
-ALGOS    = cfg["ALGORITHM_NAMES"][:-2]
+ALGOS    = cfg["ALGORITHM_NAMES"][:-1]
 
 # -------------------------------------------------------------------------
 # 2) LOAD DATA
 # -------------------------------------------------------------------------
-df = pd.read_excel("homogeneity_results_no_gaps_bool.xlsx")
+df = pd.read_excel("homogeneity_results.xlsx")
 
 # ensure proper dtypes
 df["delta"]   = df["delta"].astype(int)

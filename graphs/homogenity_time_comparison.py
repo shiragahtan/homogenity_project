@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 # --- CONFIGURATION ---
-INPUT_FILE = 'homogeneity_results_no_gaps_bool.xlsx'
+INPUT_FILE = 'homogeneity_results1.xlsx'
 OUTPUT_DIR = 'plots'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

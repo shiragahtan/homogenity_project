@@ -29,7 +29,7 @@ ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 MODES = config['MODES']
 EPSILONS = config['EPSILONS']
 TREATMENT_COL = config['TREATMENT_COL']
-OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct', 'hybrid'])
+OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
 
 """ Timing helper """

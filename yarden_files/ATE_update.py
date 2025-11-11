@@ -16,7 +16,7 @@ def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
     """
     try:
         if df.empty or df[treatment_col].nunique() < 2:
-            return 0.0
+            return np.nan
         
         # Get feature columns excluding treatment and outcome
         features_cols = [col for col in df.columns if col not in [treatment_col, TREATMENT_COL, outcome_col]]
@@ -24,7 +24,7 @@ def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
         # Drop every column that is constant in this slice
         features_cols = [c for c in features_cols if df[c].nunique() > 1]
         if not features_cols:  # nothing varies → skip slice
-            return 0.0
+            return np.nan
         
         try:
             ate_obj = ATEUpdateLinear(
@@ -35,7 +35,7 @@ def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
             cate_value = ate_obj.get_original_ate()
             return cate_value if not ret_obj else ate_obj
         except LinAlgError:  # XᵀX still singular
-            return 0.0 if not ret_obj else None
+            return np.nan if not ret_obj else None
     except Exception as e:
         import ipdb; ipdb.set_trace()
 

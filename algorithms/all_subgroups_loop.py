@@ -148,6 +148,17 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
 def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0):
     """
     Run experiments for each treatment and save results to an Excel file.
+    Args:
+        chosen_mode: Mode of operation (0 for homogeneity check, other for all subgroups)
+        chosen_algorithm: Algorithm to use (0: Naive, 1: Apriori, 2: FPGrowth, 3: Optimized FP, 4: RW Unlearning Direct, 5: RW Unlearning Hybrid)
+        delta: Minimum group size threshold
+        df: Input DataFrame
+        tgtO: Target outcome column name
+        attr_vals: Dictionary of attribute values for subgroup generation
+        condition: Dictionary of conditions used to filter the original data
+        treatment: Dictionary of treatment interventions
+        i: Index of the current dataset/treatment being processed
+        attr_vals_time: Time taken to compute attribute values (only for naive algorithm)
     """
     print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
     epsilons = EPSILONS
@@ -156,9 +167,8 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
 
     # Calculate utility for subgroups (measure time separately)
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
-    treatment_col = list(treatment.keys())[0]
     with timer() as utility_timer:
-        utility_all = calculate_ate_safe(df, treatment_col, tgtO)
+        utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO)
     utility_time = utility_timer()
     
     for epsilon in epsilons:
@@ -168,7 +178,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         # Common parameters for all algorithms
         common = dict(
             df=df,
-            treatment_col=treatment_col,
+            treatment_col=TREATMENT_COL,
             tgtO=tgtO,
             delta=delta,
             epsilon=epsilon,
@@ -287,17 +297,39 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
 def main():
     # Output the results
     tgtO = "ConvertedSalary"  # Target outcome column in the dataset
-    treatment_file = "Shira_Treatments.json"
-    treated_rules_datasets = [
-        '../stackoverflow/so_countries_treatment_1_encoded.csv',
-        '../stackoverflow/so_countries_treatment_2_encoded.csv',
-        '../stackoverflow/so_countries_treatment_3_encoded.csv'
-    ]
+    TREATMENT_FILE = "Chosen10Treatments.json"  # Use the new file name
+    OUTPUT_DIR_NAME = 'processed_db'
+
+    print(f"Loading treatments from {TREATMENT_FILE}...")
+    try:
+        with open(TREATMENT_FILE, "r") as f:
+            good_treatments = [json.loads(line) for line in f]
+    except FileNotFoundError:
+        print(f"Error: Treatment file '{TREATMENT_FILE}' not found.")
+        return
+
+    num_expected_datasets = len(good_treatments)
+    print(f"Found {num_expected_datasets} treatments in the JSON file.")
+    base_data_dir = Path('../stackoverflow').resolve()
+    processed_db_dir = base_data_dir / OUTPUT_DIR_NAME
+
+    treated_rules_datasets = []
+    for i in range(1, num_expected_datasets + 1):
+        filename = f"so_countries_treatment_{i}_encoded.csv"
+        file_path = processed_db_dir / filename
+
+        if file_path.exists():
+            treated_rules_datasets.append(str(file_path))
+        else:
+            print(f"Warning: Dataset for index {i} not found at {file_path}. Skipping.")
+
+    if not treated_rules_datasets:
+        print("Error: No processed datasets found. Please run batch_process_treatments.py first.")
+        return
+
+    print(f"Identified {len(treated_rules_datasets)} existing datasets for experiments.")
 
     clean_results_files()
-
-    with open(treatment_file, "r") as f:
-        good_treatments = [json.loads(line) for line in f]
 
     chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
     #chosen_mode = 0
@@ -306,8 +338,8 @@ def main():
     
     algorithms_to_run = range(len(ALGORITHM_NAMES))
     # If iterating over ALL subgroups, dont run RW
-    if chosen_mode == 1:
-        algorithms_to_run = list(algorithms_to_run)[:-1]
+    if chosen_mode != 0:
+         algorithms_to_run = list(algorithms_to_run)[:-1]
 
     for chosen_algorithm in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):

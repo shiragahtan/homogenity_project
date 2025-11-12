@@ -343,7 +343,7 @@ def main():
     if chosen_mode != 0:
          algorithms_to_run = list(algorithms_to_run)[:-1]
 
-    algorithms_to_run = [1]
+    #algorithms_to_run = [1]
     for chosen_algorithm in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):
             process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)

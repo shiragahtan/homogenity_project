@@ -10,7 +10,7 @@ with open('../configs/config.json', 'r') as f:
 EPSILONS = config['EPSILONS']
 
 # Directory containing the xlsx files
-DIRECTORY = '../algorithms_results/Yardens_results/'  # relative to this script
+DIRECTORY = '../algorithms_results/attributes/Rule0'  # relative to this script
 
 # Regex to match the files and extract delta (ignore rule_num)
 file_pattern = re.compile(r'Apriori_subgroups_results_delta_(\d+)_\d+\.xlsx')

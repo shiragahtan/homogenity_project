@@ -24,10 +24,12 @@ from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_c
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
-DELTAS = config['DELTAS']
+# DELTAS = config['DELTAS']
+DELTAS = list(range(5000, 20001, 5000))
 ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 MODES = config['MODES']
-EPSILONS = config['EPSILONS']
+# EPSILONS = config['EPSILONS']
+EPSILONS = list(range(5000, 65001, 5000))
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
@@ -341,6 +343,7 @@ def main():
     if chosen_mode != 0:
          algorithms_to_run = list(algorithms_to_run)[:-1]
 
+    algorithms_to_run = [1]
     for chosen_algorithm in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):
             process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)

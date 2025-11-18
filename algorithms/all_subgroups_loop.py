@@ -241,15 +241,16 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         print(f"   - Algorithm execution: {algorithm_time:.2f} seconds")
 
 
-def clean_results_files():
+def clean_results_files(mode):
     """Delete algorithms_time.xlsx and homogeneity_results.xlsx in ../graphs unless -d is passed."""
     skip_delete = '-d' in sys.argv
     results_dir_graphs = Path("../graphs")
     results_dir_graphs.mkdir(exist_ok=True)
     time_xlsx = results_dir_graphs / "algorithms_time.xlsx"
     homog_xlsx = results_dir_graphs / "homogeneity_results.xlsx"
+    files_to_delete = [homog_xlsx] if mode == 0 else [time_xlsx]
     if not skip_delete:
-        for f in [time_xlsx, homog_xlsx]:
+        for f in files_to_delete:
             if f.exists():
                 f.unlink()
         print("🧹 Results files reset.")
@@ -331,9 +332,8 @@ def main():
 
     print(f"Identified {len(treated_rules_datasets)} existing datasets for experiments.")
 
-    clean_results_files()
-
     chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    clean_results_files(chosen_mode)
     #chosen_mode = 0
     # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
     # delta = 20000  # Initial delta value

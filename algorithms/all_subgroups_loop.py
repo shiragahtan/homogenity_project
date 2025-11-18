@@ -26,7 +26,8 @@ with open('../configs/config.json', 'r') as f:
 
 # DELTAS = config['DELTAS']
 DELTAS = list(range(5000, 20001, 5000))
-ALGORITHM_NAMES = config['ALGORITHM_NAMES']
+# ALGORITHM_NAMES = config['ALGORITHM_NAMES']
+ALGORITHM_NAMES = ["FPGrowth", "RW"]
 MODES = config['MODES']
 # EPSILONS = config['EPSILONS']
 EPSILONS = list(range(5000, 65001, 5000))

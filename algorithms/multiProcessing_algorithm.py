@@ -18,14 +18,6 @@ from sklearn.preprocessing import OneHotEncoder
 
 # --- Configuration --------------------------------------------------------------
 try:
-    # Attempt to use 'fork' start method on Unix for lower overhead, if safe.
-    # Must be done before ProcessPoolExecutor is used.
-    if sys.platform != 'win32' and mp.get_start_method(allow_none=True) != 'fork':
-        mp.set_start_method('fork', force=True)
-except Exception as e:
-    print(f"Warning: Could not set 'fork' start method: {e}")
-
-try:
     CONFIG_PATH = Path(__file__).resolve().parent.parent / 'configs' / 'config.json'
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
@@ -45,15 +37,15 @@ except ImportError:
     def calculate_ate_safe(*args, **kwargs) -> float:
         return 0.0
 
-# --- Enhanced Performance Tuning Constants (OPTIMIZED) ----------------------
+# --- Enhanced Performance Tuning Constants ----------------------------------
 OPTIMAL_CORES = min(mp.cpu_count(), os.cpu_count() or mp.cpu_count())
-CHUNK_SIZE_BASE = 64  # Good for throughput
+CHUNK_SIZE_BASE = 64  # Increased for better throughput
 SUPPORT_SWITCH = 0.07  # Support threshold to switch from FP-Growth to Apriori
-MIN_TASKS_PER_CORE = 16  # Increased for better load balancing in Mode 1
-MIN_SUBGROUPS_FOR_PARALLEL = 128  # Increased threshold to avoid overhead for small jobs
+MIN_TASKS_PER_CORE = 8  # Increased minimum tasks per core
+MIN_SUBGROUPS_FOR_PARALLEL = 32  # Reduced threshold for parallel processing
 BATCH_SIZE_MULTIPLIER = 4  # For dynamic batch sizing
 MAX_CHUNK_SIZE = 256  # Cap on chunk size
-EARLY_EXIT_BATCH_SIZE = 64  # Increased substantially to reduce IPC overhead in Mode 0
+EARLY_EXIT_BATCH_SIZE = 16  # Smaller batches for mode 0 early exit
 
 # --- Shared Memory Globals (Populated by _init_worker) -----------------------
 _DF_GLOBAL: Optional[pd.DataFrame] = None
@@ -101,9 +93,6 @@ def _compute_cate_for_subgroup(filt: Dict[str, Any]) -> float:
             else:
                 mask &= (col_data == val)
 
-    # NOTE: Repeated slicing is expensive, but necessary if calculate_ate_safe
-    # requires a DataFrame. If it can accept the mask, pass the mask instead
-    # to avoid a memory copy (best speed up, but requires changing ATE_update).
     sub_df = _DF_GLOBAL[mask]
     if sub_df.empty or len(sub_df) < 2:  # Need at least 2 rows for meaningful analysis
         return np.nan
@@ -257,10 +246,9 @@ def calc_utility_for_subgroups(
 
     # --- Mode 0: Enhanced Early-Exit Parallel Processing ---
     if mode == 0:
-        # Check if parallel execution is warranted based on increased threshold
+        # Use parallel processing even for mode 0 with early exit capability
         if n_sub >= MIN_SUBGROUPS_FOR_PARALLEL:
-            # Mode 0 uses a higher, fixed batch size to minimize overhead
-            batch_size = EARLY_EXIT_BATCH_SIZE
+            batch_size = max(EARLY_EXIT_BATCH_SIZE, n_sub // (cores * 4))
             batches = _create_batches(subgroups, batch_size)
 
             # Use ProcessPoolExecutor for better control and early exit
@@ -289,7 +277,7 @@ def calc_utility_for_subgroups(
 
                 return True  # All batches processed, no inhomogeneous subgroups found
         else:
-            # Fall back to serial for small jobs (n_sub < MIN_SUBGROUPS_FOR_PARALLEL)
+            # Fall back to serial for small jobs
             _init_worker(df, treatment_col, tgtO, utility_all, epsilon)
             for filt, _ in subgroups:
                 cate = _compute_cate_for_subgroup(filt)
@@ -299,7 +287,6 @@ def calc_utility_for_subgroups(
 
     # --- Mode 1: Optimized Batched Parallel Processing ---
     elif mode == 1:
-        # Check if parallel execution is warranted based on increased threshold and core load
         use_pool = n_sub >= MIN_SUBGROUPS_FOR_PARALLEL and n_sub >= MIN_TASKS_PER_CORE * cores
 
         records: List[Dict[str, Any]] = []

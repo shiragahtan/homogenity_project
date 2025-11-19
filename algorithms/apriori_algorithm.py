@@ -121,28 +121,24 @@ def calc_utility_for_subgroups(
     # Find all subgroups meeting the minimum size requirement
     # Exclude treatment columns and target outcome from mining
     exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
-    
+
     subgroup_records = []
+    # Iterate through subgroups
     for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
         sub_df = filter_by_attribute(df, filt)
         if sub_df.empty:
             continue
-            
+
         try:
             cate = calculate_ate_safe(sub_df, treatment_col, tgtO)
         except LinAlgError:  # XᵀX still singular
             continue
-            
-        if mode == 0 and abs(utility_all - cate) > epsilon:
-            print(
-                f"\n\033[91msubgroup's cate is: {cate} while utility_all is {utility_all} "
-                f"(Δ={abs(utility_all - cate)}>{epsilon}) → NOT homogeneous\033[0m\n"
-            )
-            return False
 
-        # Store subgroup information
-        if mode != 0:
+        if mode == 0 and abs(utility_all - cate) > epsilon:
+            # We found a violation. Stop immediately.
+            return False
+        else:
             subgroup_records.append({
                 "AttributeValues": str(filt),
                 "Size": sz,
@@ -150,8 +146,7 @@ def calc_utility_for_subgroups(
                 "UtilityDiff": cate - utility_all,
             })
 
-    if mode != 0:
-        return subgroup_records, len(subgroup_records)
+    if mode == 0:
+        return True
 
-    print("\033[92mHomogenous\033[0m")
-    return True
+    return subgroup_records, len(subgroup_records)

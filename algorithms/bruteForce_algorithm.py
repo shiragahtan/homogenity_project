@@ -117,22 +117,10 @@ def calc_utility_for_subgroups(
         delta: int,
         epsilon: int,
         utility_all: float
-) -> Tuple[List[Dict[str, Any]], int]:
+) -> Any:
     """
     Calculate utility for each subgroup in the DataFrame.
-
-    Args:
-        attr_vals: Dictionary mapping attribute names to lists of possible values
-        df: Input DataFrame
-        dag_str: DAG string representation in DOT format
-: Ordinal attributes (if any)
-        cate_func: Function to calculate CATE values
-        delta: Minimum group size threshold
-
-    Returns:
-        Tuple containing:
-        - List of dictionaries with subgroup data
-        - Number of subgroups
+    Returns Boolean for mode 0, or (data, count) for mode 1.
     """
     # Initialize a list to store subgroup data
     subgroup_data = []
@@ -143,25 +131,21 @@ def calc_utility_for_subgroups(
             continue
         for filt, sz in groups:
             filtered_df = filter_by_attribute(df, filt, delta)
-            
+
             if not filtered_df.empty:
                 try:
                     cate_value = calculate_ate_safe(filtered_df, treatment_col, tgtO)
-                except LinAlgError:                        # XᵀX still singular
-                    continue   
+                except LinAlgError:  # XᵀX still singular
+                    continue
 
                 if mode == 0 and abs(utility_all - cate_value) > epsilon:
-                    print(
-                        f"\n\033[91msubgroup's cate is: {cate_value} while utility_all is {utility_all} "
-                        f"(Δ={abs(utility_all - cate_value)}>{epsilon}) → NOT homogeneous\033[0m\n"
-                    )
+                    # Violation found - Silent return False
                     return False
 
-                utility_diff = cate_value - utility_all
+                else:
+                    utility_diff = cate_value - utility_all
+                    num_subgroups += 1
 
-                num_subgroups += 1
-                # Append subgroup data to the list
-                if mode != 0:
                     subgroup_data.append({
                         "AttributeValues": str(filt),
                         "Size": sz,
@@ -170,8 +154,7 @@ def calc_utility_for_subgroups(
                     })
 
     # Return the data needed for saving to Excel
-    if mode != 0:
-        return subgroup_data, num_subgroups
+    if mode == 0:
+        return True  # Silent return True (Homogeneous)
 
-    print("\033[92mHomogenous\033[0m")
-    return True
+    return subgroup_data, num_subgroups

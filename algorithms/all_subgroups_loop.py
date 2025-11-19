@@ -238,7 +238,13 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             # Add all timing components
             total_time = algorithm_time + utility_time + attr_vals_time
 
-            if chosen_mode == 0:  # Homogeneity check
+            if chosen_mode == 0: # Homogeneity check
+                # 'res' is now a Boolean (True = Homogeneous, False = Not Homogeneous)
+                if res:
+                    print(f"\033[92mResult: Homogeneous\033[0m")  # Green
+                else:
+                    print(f"\033[91mResult: NOT Homogeneous (Violation Found)\033[0m")  # Red
+
                 append_homogeneity_results(
                     # Use the algorithm name for logging
                     algorithm_name=algorithm_name,

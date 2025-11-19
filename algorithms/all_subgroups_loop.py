@@ -8,6 +8,7 @@ from time import perf_counter
 from functools import partial
 from contextlib import contextmanager
 import os
+
 # Add project root to sys.path for module resolution
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
@@ -16,7 +17,8 @@ from ATE_update import calculate_ate_safe
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from bruteForce_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
 from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
-from algorithms.multiProcessing_algorithm import calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
+from algorithms.multiProcessing_algorithm import \
+    calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
 from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_calc_utility_for_subgroups
 
@@ -26,18 +28,30 @@ with open('../configs/config.json', 'r') as f:
 
 # DELTAS = config['DELTAS']
 DELTAS = list(range(5000, 20001, 5000))
+
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-ALGORITHM_NAMES = ["FPGrowth", "RW"]
+ALGORITHM_NAMES = ["FPGrowth", "RW"]  # Your temporary list for iteration
+
+ALGORITHM_DISPATCH_MAP = {
+    "BruteForce": 0,  # Naive
+    "Apriori": 1,  # Apriori
+    "FPGrowth": 2,  # FPGrowth
+    "MultiProcessing": 3,  # Optimized FP
+    "RW_Direct": 4,  # RW Unlearning Direct
+    "RW_Hybrid": 5,  # RW Unlearning Hybrid
+}
+
 MODES = config['MODES']
 # EPSILONS = config['EPSILONS']
 EPSILONS = list(range(5000, 65001, 5000))
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
-
 """ Timing helper """
+
+
 @contextmanager
-def timer() -> callable:           # yields a function that returns elapsed seconds
+def timer() -> callable:  # yields a function that returns elapsed seconds
     t0 = perf_counter()
     yield lambda: perf_counter() - t0
 
@@ -119,7 +133,8 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
     print(f"✅ Timing results appended to {excel_path}")
 
 
-def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status, runtime_seconds):
+def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
+                               runtime_seconds):
     """
     Append homogeneity check results to an Excel file.
     Creates the file if it doesn't exist.
@@ -127,7 +142,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    
+
     excel_path = results_dir / "homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -148,12 +163,13 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
-def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time=0):
+def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
+                    attr_vals_time=0):
     """
     Run experiments for each treatment and save results to an Excel file.
     Args:
         chosen_mode: Mode of operation (0 for homogeneity check, other for all subgroups)
-        chosen_algorithm: Algorithm to use (0: Naive, 1: Apriori, 2: FPGrowth, 3: Optimized FP, 4: RW Unlearning Direct, 5: RW Unlearning Hybrid)
+        chosen_algorithm_name: Algorithm to use (e.g., "BruteForce", "Apriori", "FPGrowth", "MultiProcessing", "RW_Direct", "RW_Hybrid")
         delta: Minimum group size threshold
         df: Input DataFrame
         tgtO: Target outcome column name
@@ -163,7 +179,9 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         i: Index of the current dataset/treatment being processed
         attr_vals_time: Time taken to compute attribute values (only for naive algorithm)
     """
-    print(f"Using algorithm: {ALGORITHM_NAMES[chosen_algorithm]}")
+    # Use the name directly
+    algorithm_name = chosen_algorithm_name
+    print(f"Using algorithm: {algorithm_name}")
     epsilons = EPSILONS
     if chosen_mode != 0:
         epsilons = [epsilons[0]]  # You don't actually use epsilon in AllSubgroups mode, just chose random value.
@@ -173,7 +191,7 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
     with timer() as utility_timer:
         utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO)
     utility_time = utility_timer()
-    
+
     for epsilon in epsilons:
         if chosen_mode == 0:
             print(f"Running with epsilon: {epsilon}")
@@ -194,29 +212,36 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
         _apriori_kw = dict(common, algorithm=apriori)
         _fpgrowth_kw = dict(common, algorithm=fpgrowth)
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
-        _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8, optimization_mode=OPTIMIZATION_MODES[0])
+        _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8,
+                                        optimization_mode=OPTIMIZATION_MODES[0])
         _rw_unlearning_kw_hybrid = dict(common, algorithm=apriori, size_stop=1, optimization_mode=OPTIMIZATION_MODES[1])
 
         algo_dispatch = {
-            0: lambda: naive_calc_utility_for_subgroups(**_naive_kw),
-            1: lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
-            2: lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
-            3: lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
-            4: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
-            5: lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
-        }   
+            "BruteForce": lambda: naive_calc_utility_for_subgroups(**_naive_kw),
+            "Apriori": lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
+            "FPGrowth": lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
+            "MultiProcessing": lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
+            "RW_Direct": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
+            "RW_Hybrid": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
+        }
 
+        dispatch_key = algorithm_name
+        if algorithm_name == "Naive":  # Assuming "Naive" is the name for BruteForce
+            dispatch_key = "BruteForce"
+        elif algorithm_name == "RW":
+            dispatch_key = "RW_Direct"
         try:
             with timer() as elapsed:
-                res = algo_dispatch[chosen_algorithm]()
+                res = algo_dispatch[dispatch_key]()
             algorithm_time = elapsed()
-            
+
             # Add all timing components
             total_time = algorithm_time + utility_time + attr_vals_time
 
             if chosen_mode == 0:  # Homogeneity check
                 append_homogeneity_results(
-                    algorithm_name=ALGORITHM_NAMES[chosen_algorithm],
+                    # Use the algorithm name for logging
+                    algorithm_name=algorithm_name,
                     treatment=treatment,
                     condition=condition,
                     delta=delta,
@@ -226,14 +251,14 @@ def run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, c
                 )
             else:  # Only append timing results for AllSubgroups mode
                 subgroup_data, num_subgroups = res
-                save_results_to_excel(ALGORITHM_NAMES[chosen_algorithm], subgroup_data, num_subgroups, condition,
+                save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
                                       treatment, delta, index=i)
 
-                append_timing_results(ALGORITHM_NAMES[chosen_algorithm], condition, treatment, num_subgroups, delta,
+                append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta,
                                       total_time)
 
         except KeyError:
-            raise ValueError(f"Unknown algorithm id: {chosen_algorithm}")
+            raise ValueError(f"Unknown algorithm name: {algorithm_name} (using dispatch key: {dispatch_key})")
 
         print(f"⏱  Total execution time: {total_time:.2f} seconds ({total_time / 60:.2f} minutes)")
         if attr_vals_time > 0:
@@ -259,7 +284,7 @@ def clean_results_files(mode):
         print("⚠️  Results files NOT reset (append mode, -d flag given)")
 
 
-def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO):
+def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm_name, tgtO):
     """
     Process a single dataset with the given parameters.
     """
@@ -268,7 +293,7 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
     condition = good_treatments[i]["condition"]
     attr, _ = list(condition.items())[0]
     treatment = good_treatments[i]["treatment"]
-    
+
     # Measure attr_vals calculation time
     with timer() as attr_timer:
         attr_vals = {
@@ -277,25 +302,30 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
             for col in df.columns if col not in [attr, TREATMENT_COL, *treatment.keys(), tgtO]
         }
     attr_vals_time = attr_timer()
-    
+
     for delta in DELTAS:
         if len(df) < delta:
-            print(f"Skipping delta {delta} for treatment {i+1}: DataFrame too small ({len(df)} rows).")
+            print(f"Skipping delta {delta} for treatment {i + 1}: DataFrame too small ({len(df)} rows).")
             continue  # Skip if the filtered DataFrame is too small
-        
+
         print(f"Running for delta: {delta}")
-        # Pass attr_vals_time only for naive DFS (algorithm 0), otherwise pass 0
-        attr_time = attr_vals_time if chosen_algorithm == 0 else 0
-        
-        if chosen_algorithm >= 4:
-            # For algorithms 4,5 (random walks, RW + unlearning), run multiple times
+        # Pass attr_vals_time only for naive DFS (algorithm name "BruteForce"), otherwise pass 0
+        attr_time = attr_vals_time if chosen_algorithm_name == "BruteForce" else 0
+
+        # Check for RW algorithm by name
+        if chosen_algorithm_name == "RW":
+            # For algorithm "RW" (random walks), run multiple times
             num_runs = 5
             for run_num in range(num_runs):
                 print(f"--- Run number: {run_num} ---")
-                run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+                # Pass algorithm name
+                run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
+                                attr_time)
         else:
             # For other algorithms, run once
-            run_experiments(chosen_mode, chosen_algorithm, delta, df, tgtO, attr_vals, condition, treatment, i, attr_time)
+            # Pass algorithm name
+            run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
+                            attr_time)
 
 
 def main():
@@ -333,21 +363,15 @@ def main():
 
     print(f"Identified {len(treated_rules_datasets)} existing datasets for experiments.")
 
-    chosen_mode = int(input(f"Choose your algorithm {list(enumerate(MODES))}: \n"))
+    print(f"Available Algorithms: {ALGORITHM_NAMES}")
+    chosen_mode = int(input(f"Choose your experiment mode {list(enumerate(MODES))}: \n"))
     clean_results_files(chosen_mode)
-    #chosen_mode = 0
-    # chosen_algorithm = 2  # For example, 1 for Apriori algorithm
-    # delta = 20000  # Initial delta value
-    
-    algorithms_to_run = range(len(ALGORITHM_NAMES))
-    # If iterating over ALL subgroups, dont run RW
-    if chosen_mode != 0:
-         algorithms_to_run = list(algorithms_to_run)[:-1]
 
-    #algorithms_to_run = [1]
-    for chosen_algorithm in reversed(algorithms_to_run):
+    algorithms_to_run = ALGORITHM_NAMES
+
+    for chosen_algorithm_name in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):
-            process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm, tgtO)
+            process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm_name, tgtO)
 
 
 if __name__ == "__main__":

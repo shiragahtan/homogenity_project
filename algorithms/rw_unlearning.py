@@ -74,6 +74,39 @@ def _mask(df: pd.DataFrame, filt: Mapping[str, str | int | float]) -> pd.Series:
         m &= col.astype(str) == str(v) if not pd.api.types.is_numeric_dtype(col) else col == int(v)
     return m
 
+def _select_start_indices(
+    itemsets: List[frozenset],
+    scores: np.ndarray,
+    k_walks: int,
+    rng: random.Random
+) -> List[int]:
+    """
+    Centralized logic for selecting start nodes.
+    Implements:
+    1. Deterministic Fallback (Check all if search space is small).
+    2. Level-1 Guarantee (Always check single attributes).
+    3. Weighted Random Sampling (For the rest).
+    """
+    n_items = len(itemsets)
+
+    # Deterministic Fallback (High Delta / Small Search Space)
+    if n_items <= k_walks:
+        return list(range(n_items))
+
+    # Level-1 Guarantee (VIPs)
+    idx_level_1 = [i for i, s in enumerate(itemsets) if len(s) == 1]
+    remaining_budget = k_walks - len(idx_level_1)
+
+    # Weighted Sampling for the rest
+    if remaining_budget > 0:
+        probs = scores / scores.sum()
+        chosen_randomly = rng.choices(range(n_items), weights=probs, k=remaining_budget)
+        # Union ensures VIPs are included, Set removes duplicates from random selection
+        return list(set(idx_level_1) | set(chosen_randomly))
+
+    # Fallback if budget is super tight
+    return idx_level_1[:k_walks]
+
 #  k‑random‑walk homogeneity tester (mode 0)
 def _homog_random_walks_direct(
     df: pd.DataFrame,
@@ -107,8 +140,7 @@ def _homog_random_walks_direct(
         return len(itemset) + weight
     itemsets = sorted(freq["itemsets"], key=_item_score, reverse=True)
     scores = np.array([_item_score(s) for s in itemsets], dtype=float)
-    probs = scores / scores.sum()
-    chosen_idx = rng.choices(range(len(itemsets)), weights=probs, k=min(k_walks, len(itemsets)))
+    chosen_idx = _select_start_indices(itemsets, scores, k_walks, rng)
     start_filters = []
     for idx in chosen_idx:
         f = {lookup[c][0]: lookup[c][1] for c in itemsets[idx]}
@@ -194,8 +226,7 @@ def _homog_random_walks(
         return len(itemset) + weight
     itemsets = sorted(freq["itemsets"], key=_item_score, reverse=True)
     scores = np.array([_item_score(s) for s in itemsets], dtype=float)
-    probs = scores / scores.sum()
-    chosen_idx = rng.choices(range(len(itemsets)), weights=probs, k=min(k_walks, len(itemsets)))
+    chosen_idx = _select_start_indices(itemsets, scores, k_walks, rng)
     start_filters = []
     for idx in chosen_idx:
         f = {lookup[c][0]: lookup[c][1] for c in itemsets[idx]}
@@ -299,7 +330,7 @@ def calc_utility_for_subgroups(
             unlearning_threshold=unlearning_threshold,
         )
 
-    # exhaustive path 
+    # exhaustive path
     full_ate = calculate_ate_safe(df, treatment_col, outcome_col)
     exclude = [treatment_col, BINARY_TREATMENT, outcome_col]
     records: List[Dict[str, str | float | int]] = []

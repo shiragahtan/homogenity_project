@@ -27,7 +27,8 @@ with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
 # DELTAS = config['DELTAS']
-DELTAS = list(range(5000, 20001, 5000))
+#DELTAS = list(range(5000, 20001, 5000))
+DELTAS = [10000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 ALGORITHM_NAMES = ["Apriori", "RW"]  # Your temporary list for iteration
@@ -43,7 +44,9 @@ ALGORITHM_DISPATCH_MAP = {
 
 MODES = config['MODES']
 # EPSILONS = config['EPSILONS']
-EPSILONS = list(range(5000, 65001, 5000))
+#EPSILONS = list(range(5000, 65001, 5000))
+EPSILONS = [55000]
+NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
@@ -321,7 +324,8 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
         # Check for RW algorithm by name
         if chosen_algorithm_name == "RW":
             # For algorithm "RW" (random walks), run multiple times
-            num_runs = 5
+            num_runs = NUM_RW_RUNS
+            print(f"Running {num_runs} times")
             for run_num in range(num_runs):
                 print(f"--- Run number: {run_num} ---")
                 # Pass algorithm name

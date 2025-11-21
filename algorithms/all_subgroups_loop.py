@@ -28,7 +28,7 @@ with open('../configs/config.json', 'r') as f:
 
 # DELTAS = config['DELTAS']
 #DELTAS = list(range(5000, 20001, 5000))
-DELTAS = [10000]
+DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 ALGORITHM_NAMES = ["Apriori", "RW"]  # Your temporary list for iteration
@@ -45,7 +45,7 @@ ALGORITHM_DISPATCH_MAP = {
 MODES = config['MODES']
 # EPSILONS = config['EPSILONS']
 #EPSILONS = list(range(5000, 65001, 5000))
-EPSILONS = [55000]
+EPSILONS = [30000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
@@ -378,6 +378,11 @@ def main():
     clean_results_files(chosen_mode)
 
     algorithms_to_run = ALGORITHM_NAMES
+    if chosen_mode == 1:
+        try:
+            algorithms_to_run.remove("RW")
+        except ValueError:
+            pass
 
     for chosen_algorithm_name in reversed(algorithms_to_run):
         for i in range(len(treated_rules_datasets)):

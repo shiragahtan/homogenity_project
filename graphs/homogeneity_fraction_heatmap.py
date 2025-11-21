@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
-RESULTS_FILE = Path("homogeneity_results.xlsx")  # input Excel
+#RESULTS_FILE = Path("newer7_old_homogeneity_results.xlsx")  # input Excel
+RESULTS_FILE = Path("homogeneity_results.xlsx")
 # UPDATED PATH: The rule mapping file is located in the '../algorithms/' folder
 RULE_MAP_FILE = Path("../algorithms/Chosen10Treatments.json")
 OUTPUT_DIR = Path("homogeneity_rule_heatmaps")  # output folder

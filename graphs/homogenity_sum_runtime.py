@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 
-
 def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homogeneity_runtime_summary.xlsx"):
     # 1. Check if input file exists
     if not os.path.exists(input_file):
@@ -21,13 +20,18 @@ def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homog
             return
 
         # 2. Group by Algorithm, Delta, and Epsilon
-        # This automatically averages the 'run_time_seconds' over all
-        # different 'treatment' and 'condition' rows for that specific combination.
-        print("Calculating averages...")
-        summary_df = df.groupby(['algorithm', 'delta', 'epsilon'])['run_time_seconds'].mean().reset_index()
+        print("Calculating averages, variance, and standard deviation...")
+        
+        # We use .agg() to calculate mean, variance, and standard deviation
+        summary_df = df.groupby(['algorithm', 'delta', 'epsilon']).agg(
+            average_runtime_seconds=('run_time_seconds', 'mean'),
+            variance_runtime_seconds=('run_time_seconds', 'var'),
+            std_dev_runtime_seconds=('run_time_seconds', 'std')  # Added Standard Deviation
+        ).reset_index()
 
-        # Rename the column to be clear it's an average
-        summary_df.rename(columns={'run_time_seconds': 'average_runtime_seconds'}, inplace=True)
+        # Fill NaN values with 0 (happens if an algorithm only has 1 run, std dev is undefined)
+        summary_df['std_dev_runtime_seconds'] = summary_df['std_dev_runtime_seconds'].fillna(0)
+        summary_df['variance_runtime_seconds'] = summary_df['variance_runtime_seconds'].fillna(0)
 
         # 3. Write to Excel with separate sheets
         print(f"Writing results to {output_file}...")
@@ -40,9 +44,14 @@ def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homog
                 # Filter data for this specific algorithm
                 alg_data = summary_df[summary_df['algorithm'] == alg_name]
 
-                # Select only the columns we want in the specific sheet
-                # (We don't need the algorithm name column inside the sheet since the sheet name tells us)
-                sheet_data = alg_data[['delta', 'epsilon', 'average_runtime_seconds']]
+                # Select columns (Now including Standard Deviation)
+                sheet_data = alg_data[[
+                    'delta', 
+                    'epsilon', 
+                    'average_runtime_seconds', 
+                    'variance_runtime_seconds',
+                    'std_dev_runtime_seconds'
+                ]]
 
                 # Excel sheet names cannot exceed 31 chars. Truncate if necessary.
                 safe_sheet_name = str(alg_name)[:31]

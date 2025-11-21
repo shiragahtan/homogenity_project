@@ -123,6 +123,8 @@ def calc_utility_for_subgroups(
     exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
 
     subgroup_records = []
+    cate_calc_count = 0
+
     # Iterate through subgroups
     for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
         # Filter the dataframe to the current subgroup
@@ -132,11 +134,16 @@ def calc_utility_for_subgroups(
 
         try:
             cate = calculate_ate_safe(sub_df, treatment_col, tgtO)
+            # --- CHANGE: Increment counter on successful calculation ---
+            cate_calc_count += 1
         except LinAlgError:  # XᵀX still singular
             continue
 
         if mode == 0 and abs(utility_all - cate) > epsilon:
             # We found a violation. Stop immediately.
+            # --- CHANGE: Print counter before returning ---
+            print(f"breaking subgroup = {filt} size {sz} cate {cate}")
+            print(f"Stopping early: Calculated CATE {cate_calc_count} times before finding violation.")
             return False
         else:
             subgroup_records.append({

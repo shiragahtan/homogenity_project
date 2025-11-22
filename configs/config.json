@@ -11,15 +11,15 @@
     ["Continent", "Gender", "Age", "FormalEducation", "UndergradMajor", "Country"]
   ],
   "ATTRIBUTE_WEIGHTS": {
-    "HDI": 8205,
-    "GDP": 8726,
-    "GINI": 11414,
-    "Hobby": 10754,
-    "Gender": 10543,
+    "GINI": 13462,
+    "Hobby": 12406,
+    "Student": 12472,
+    "RaceEthnicity": 11414,
+    "Gender": 10754,
+    "SexualOrientation": 10543,
     "Continent": 10446,
-    "SexualOrientation": 10051,
-    "RaceEthnicity": 12406,
-    "Student": 13462,
+    "GDP": 8726,
+    "HDI": 8205,
     "Dependents": 7415,
     "Country": 7328,
     "DevType": 5210,
@@ -32,4 +32,3 @@
     "YearsCoding": 105
   }
 }
-

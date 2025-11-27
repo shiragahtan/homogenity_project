@@ -21,30 +21,37 @@ from algorithms.multiProcessing_algorithm import \
     calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
 from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_calc_utility_for_subgroups
+from greedy_algorithm import calc_utility_for_subgroups as greedy_calc_utility_for_subgroups
+# NEW: Import Random Baseline
+from random_algorithm import calc_utility_for_subgroups as random_calc_utility_for_subgroups
 
 # Load config
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
 # DELTAS = config['DELTAS']
-#DELTAS = list(range(5000, 20001, 5000))
 DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-ALGORITHM_NAMES = ["Apriori", "RW"]  # Your temporary list for iteration
+# Ensure "Random" is NOT in this list manually, it gets triggered automatically by RW
+ALGORITHM_NAMES = ["RW", "Random"]
+RUN_RANDOM = False
+if "Random" in ALGORITHM_NAMES:
+    RUN_RANDOM = True
+    ALGORITHM_NAMES.remove("Random")
 
 ALGORITHM_DISPATCH_MAP = {
-    "BruteForce": 0,  # Naive
-    "Apriori": 1,  # Apriori
-    "FPGrowth": 2,  # FPGrowth
-    "MultiProcessing": 3,  # Optimized FP
-    "RW_Direct": 4,  # RW Unlearning Direct
-    "RW_Hybrid": 5,  # RW Unlearning Hybrid
+    "BruteForce": 0,
+    "Apriori": 1,
+    "FPGrowth": 2,
+    "MultiProcessing": 3,
+    "RW_Direct": 4,
+    "RW_Hybrid": 5,
+    "Greedy": 6,
+    "Random": 7,  # Added Random
 }
 
 MODES = config['MODES']
-# EPSILONS = config['EPSILONS']
-#EPSILONS = list(range(5000, 65001, 5000))
 EPSILONS = [30000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']
@@ -54,35 +61,20 @@ OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
 
 @contextmanager
-def timer() -> callable:  # yields a function that returns elapsed seconds
+def timer() -> callable:
     t0 = perf_counter()
     yield lambda: perf_counter() - t0
 
 
 def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=0):
-    """
-    Save subgroup analysis results to an Excel file with multiple sheets.
-
-    Args:
-        subgroup_data: List of dictionaries containing subgroup information
-        num_subgroups: Total number of subgroups
-        condition: Dictionary of conditions used to filter the original data
-        treatment: Dictionary of treatment interventions
-        delta: Minimum group size threshold used in analysis
-
-    Returns:
-        str: Path to the output Excel file
-    """
+    """Save subgroup analysis results to an Excel file."""
     subgroup_df = pd.DataFrame(subgroup_data)
     summary_df = pd.DataFrame([{"NumSubgroups": num_subgroups}])
-    chosen_treatment_df = pd.DataFrame([{"Condition": condition,
-                                         "Treatment": treatment}])
+    chosen_treatment_df = pd.DataFrame([{"Condition": condition, "Treatment": treatment}])
 
-    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
     results_dir = Path("../algorithms_results")
     results_dir.mkdir(exist_ok=True)
 
-    # Save the DataFrame to an Excel file in the algotithms_results directory
     output_file = results_dir / f"{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
     with pd.ExcelWriter(output_file) as writer:
         chosen_treatment_df.to_excel(writer, sheet_name="ChosenTreatment", index=False)
@@ -94,33 +86,24 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
 
 
 def _append_df_to_excel(excel_path: Path, new_row: dict):
-    """
-    Append a new row to an Excel file. Creates the file if it doesn't exist.
-    """
+    """Append a new row to an Excel file."""
     if not excel_path.exists():
-        # Create new Excel file with headers
         df = pd.DataFrame([new_row])
         df.to_excel(excel_path, index=False)
     else:
-        # Append to existing file
         existing_df = pd.read_excel(excel_path)
         updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
         updated_df.to_excel(excel_path, index=False)
 
 
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
-    """
-    Append algorithm timing results to an Excel file.
-    Creates the file if it doesn't exist.
-    """
-    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
+    """Append algorithm timing results to an Excel file."""
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    
+
     excel_path = results_dir / "algorithms_time.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Data to append
     new_row = {
         "date": current_date,
         "algorithm": algorithm_name,
@@ -137,19 +120,14 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
 
 
 def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
-                               runtime_seconds):
-    """
-    Append homogeneity check results to an Excel file.
-    Creates the file if it doesn't exist.
-    """
-    # Create algotithms_results directory if it doesn't exist (at same level as algorithms)
+                               runtime_seconds, num_checked=0):
+    """Append homogeneity check results to an Excel file."""
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
 
     excel_path = results_dir / "homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Data to append
     new_row = {
         "date": current_date,
         "algorithm": algorithm_name,
@@ -158,6 +136,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "delta": delta,
         "epsilon": epsilon,
         "homogeneity_status": homogeneity_status,
+        "num_subgroups_checked": num_checked,  # Added this helpful metric
         "run_time_seconds": runtime_seconds,
         "run_time_minutes": runtime_seconds / 60
     }
@@ -166,30 +145,68 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
 
+def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
+                         utility_time, attr_vals_time):
+    """
+    Helper function to run the actual algorithm logic, timing, and logging.
+    Returns: The result of the algorithm (e.g., tuple (bool, count) or list).
+    """
+    with timer() as elapsed:
+        res = algo_func()
+    algorithm_time = elapsed()
+
+    # Add all timing components
+    total_time = algorithm_time + utility_time + attr_vals_time
+
+    if chosen_mode == 0:  # Homogeneity check
+        # Standardize result: Expecting (status, count) or just status
+        homogeneity_status = res
+        num_checked = 0
+
+        # Handle tuple returns (like from RW and Random)
+        if isinstance(res, tuple):
+            homogeneity_status = res[0]
+            num_checked = res[1]
+
+        status_str = "Homogeneous" if homogeneity_status else "NOT Homogeneous (Violation Found)"
+        color = "\033[92m" if homogeneity_status else "\033[91m"
+        print(f"{color}Result: {status_str}\033[0m")
+
+        append_homogeneity_results(
+            algorithm_name=algorithm_name,
+            treatment=treatment,
+            condition=condition,
+            delta=delta,
+            epsilon=epsilon,
+            homogeneity_status=homogeneity_status,
+            runtime_seconds=total_time,
+            num_checked=num_checked
+        )
+        return res
+    else:
+        # AllSubgroups mode
+        subgroup_data, num_subgroups = res
+        save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
+                              treatment, delta, index=0)
+
+        append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta,
+                              total_time)
+        return res
+
+
 def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
-                    attr_vals_time=0):
+                    attr_vals_time=0, force_n_subgroups=None):
     """
-    Run experiments for each treatment and save results to an Excel file.
-    Args:
-        chosen_mode: Mode of operation (0 for homogeneity check, other for all subgroups)
-        chosen_algorithm_name: Algorithm to use (e.g., "BruteForce", "Apriori", "FPGrowth", "MultiProcessing", "RW_Direct", "RW_Hybrid")
-        delta: Minimum group size threshold
-        df: Input DataFrame
-        tgtO: Target outcome column name
-        attr_vals: Dictionary of attribute values for subgroup generation
-        condition: Dictionary of conditions used to filter the original data
-        treatment: Dictionary of treatment interventions
-        i: Index of the current dataset/treatment being processed
-        attr_vals_time: Time taken to compute attribute values (only for naive algorithm)
+    Main experiment runner.
     """
-    # Use the name directly
+
     algorithm_name = chosen_algorithm_name
     print(f"Using algorithm: {algorithm_name}")
     epsilons = EPSILONS
     if chosen_mode != 0:
-        epsilons = [epsilons[0]]  # You don't actually use epsilon in AllSubgroups mode, just chose random value.
+        epsilons = [epsilons[0]]
 
-    # Calculate utility for subgroups (measure time separately)
+    # Calculate utility
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     with timer() as utility_timer:
         utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO)
@@ -199,7 +216,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         if chosen_mode == 0:
             print(f"Running with epsilon: {epsilon}")
 
-        # Common parameters for all algorithms
+        # Common parameters
         common = dict(
             df=df,
             treatment_col=TREATMENT_COL,
@@ -210,14 +227,15 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             utility_all=utility_all
         )
 
-        # Parameters for each algorithm
+        # Algorithm setup
         _naive_kw = dict(common, attr_vals=attr_vals)
         _apriori_kw = dict(common, algorithm=apriori)
         _fpgrowth_kw = dict(common, algorithm=fpgrowth)
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
         _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8,
                                         optimization_mode=OPTIMIZATION_MODES[0])
-        _rw_unlearning_kw_hybrid = dict(common, algorithm=apriori, size_stop=1, optimization_mode=OPTIMIZATION_MODES[1])
+        # Random receives n_subgroups if provided (from RW return)
+        _random_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
 
         algo_dispatch = {
             "BruteForce": lambda: naive_calc_utility_for_subgroups(**_naive_kw),
@@ -225,59 +243,46 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             "FPGrowth": lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
             "MultiProcessing": lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
             "RW_Direct": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
-            "RW_Hybrid": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_hybrid),
+            "Greedy": lambda: greedy_calc_utility_for_subgroups(**common),
+            "Random": lambda: random_calc_utility_for_subgroups(**_random_kw),
         }
 
+        # Resolve dispatch key
         dispatch_key = algorithm_name
-        if algorithm_name == "Naive":  # Assuming "Naive" is the name for BruteForce
+        if algorithm_name == "Naive":
             dispatch_key = "BruteForce"
         elif algorithm_name == "RW":
             dispatch_key = "RW_Direct"
+
         try:
-            with timer() as elapsed:
-                res = algo_dispatch[dispatch_key]()
-            algorithm_time = elapsed()
+            # --- RUN THE MAIN ALGORITHM ---
+            result = run_single_execution(
+                algo_dispatch[dispatch_key], algorithm_name, chosen_mode,
+                condition, treatment, delta, epsilon, utility_time, attr_vals_time
+            )
 
-            # Add all timing components
-            total_time = algorithm_time + utility_time + attr_vals_time
-
-            if chosen_mode == 0: # Homogeneity check
-                # 'res' is now a Boolean (True = Homogeneous, False = Not Homogeneous)
-                if res:
-                    print(f"\033[92mResult: Homogeneous\033[0m")  # Green
-                else:
-                    print(f"\033[91mResult: NOT Homogeneous (Violation Found)\033[0m")  # Red
-
-                append_homogeneity_results(
-                    # Use the algorithm name for logging
-                    algorithm_name=algorithm_name,
-                    treatment=treatment,
-                    condition=condition,
-                    delta=delta,
-                    epsilon=epsilon,
-                    homogeneity_status=res,
-                    runtime_seconds=total_time
-                )
-            else:  # Only append timing results for AllSubgroups mode
-                subgroup_data, num_subgroups = res
-                save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
-                                      treatment, delta, index=i)
-
-                append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta,
-                                      total_time)
+            # --- CHECK FOR RANDOM CHAINING ---
+            # If we just ran RW, and it returned a count, run Random immediately
+            if RUN_RANDOM and algorithm_name == "RW" and chosen_mode == 0:
+                if isinstance(result, tuple):
+                    _, rw_count = result
+                    if rw_count > 0:
+                        print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
+                        # Recursive call, but forced to Random
+                        run_experiments(
+                            chosen_mode, "Random", delta, df, tgtO, attr_vals,
+                            condition, treatment, i, attr_vals_time,
+                            force_n_subgroups=rw_count
+                        )
+                    else:
+                        print("RW checked 0 subgroups, skipping Random baseline.")
 
         except KeyError:
-            raise ValueError(f"Unknown algorithm name: {algorithm_name} (using dispatch key: {dispatch_key})")
-
-        print(f"⏱  Total execution time: {total_time:.2f} seconds ({total_time / 60:.2f} minutes)")
-        if attr_vals_time > 0:
-            print(f"   - Attribute values calculation: {attr_vals_time:.2f} seconds")
-        print(f"   - Utility calculation: {utility_time:.2f} seconds")
-        print(f"   - Algorithm execution: {algorithm_time:.2f} seconds")
+            raise ValueError(f"Unknown algorithm name: {algorithm_name}")
 
 
 def clean_results_files(mode):
-    """Delete algorithms_time.xlsx and homogeneity_results.xlsx in ../graphs unless -d is passed."""
+    """Delete results files."""
     skip_delete = '-d' in sys.argv
     results_dir_graphs = Path("../graphs")
     results_dir_graphs.mkdir(exist_ok=True)
@@ -294,16 +299,12 @@ def clean_results_files(mode):
 
 
 def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, chosen_algorithm_name, tgtO):
-    """
-    Process a single dataset with the given parameters.
-    """
     dataset = treated_rules_datasets[i]
     df = pd.read_csv(dataset)
     condition = good_treatments[i]["condition"]
     attr, _ = list(condition.items())[0]
     treatment = good_treatments[i]["treatment"]
 
-    # Measure attr_vals calculation time
     with timer() as attr_timer:
         attr_vals = {
             col: sorted(v for v in df[col].dropna().unique()
@@ -314,34 +315,27 @@ def process_dataset(i, treated_rules_datasets, good_treatments, chosen_mode, cho
 
     for delta in DELTAS:
         if len(df) < delta:
-            print(f"Skipping delta {delta} for treatment {i + 1}: DataFrame too small ({len(df)} rows).")
-            continue  # Skip if the filtered DataFrame is too small
+            print(f"Skipping delta {delta}: DataFrame too small.")
+            continue
 
         print(f"Running for delta: {delta}")
-        # Pass attr_vals_time only for naive DFS (algorithm name "BruteForce"), otherwise pass 0
         attr_time = attr_vals_time if chosen_algorithm_name == "BruteForce" else 0
 
-        # Check for RW algorithm by name
         if chosen_algorithm_name == "RW":
-            # For algorithm "RW" (random walks), run multiple times
             num_runs = NUM_RW_RUNS
             print(f"Running {num_runs} times")
             for run_num in range(num_runs):
                 print(f"--- Run number: {run_num} ---")
-                # Pass algorithm name
                 run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
                                 attr_time)
         else:
-            # For other algorithms, run once
-            # Pass algorithm name
             run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
                             attr_time)
 
 
 def main():
-    # Output the results
-    tgtO = "ConvertedSalary"  # Target outcome column in the dataset
-    TREATMENT_FILE = "Chosen10Treatments.json"  # Use the new file name
+    tgtO = "ConvertedSalary"
+    TREATMENT_FILE = "Chosen10Treatments.json"
     OUTPUT_DIR_NAME = 'processed_db'
 
     print(f"Loading treatments from {TREATMENT_FILE}...")
@@ -349,11 +343,10 @@ def main():
         with open(TREATMENT_FILE, "r") as f:
             good_treatments = [json.loads(line) for line in f]
     except FileNotFoundError:
-        print(f"Error: Treatment file '{TREATMENT_FILE}' not found.")
+        print(f"Error: {TREATMENT_FILE} not found.")
         return
 
     num_expected_datasets = len(good_treatments)
-    print(f"Found {num_expected_datasets} treatments in the JSON file.")
     base_data_dir = Path('../stackoverflow').resolve()
     processed_db_dir = base_data_dir / OUTPUT_DIR_NAME
 
@@ -361,27 +354,26 @@ def main():
     for i in range(1, num_expected_datasets + 1):
         filename = f"so_countries_treatment_{i}_encoded.csv"
         file_path = processed_db_dir / filename
-
         if file_path.exists():
             treated_rules_datasets.append(str(file_path))
         else:
-            print(f"Warning: Dataset for index {i} not found at {file_path}. Skipping.")
+            print(f"Warning: Dataset {i} not found.")
 
     if not treated_rules_datasets:
-        print("Error: No processed datasets found. Please run batch_process_treatments.py first.")
+        print("Error: No datasets found.")
         return
 
-    print(f"Identified {len(treated_rules_datasets)} existing datasets for experiments.")
-
     print(f"Available Algorithms: {ALGORITHM_NAMES}")
-    chosen_mode = int(input(f"Choose your experiment mode {list(enumerate(MODES))}: \n"))
+    chosen_mode = int(input(f"Choose mode {list(enumerate(MODES))}: \n"))
     clean_results_files(chosen_mode)
 
     algorithms_to_run = ALGORITHM_NAMES
-    if chosen_mode == 1:
+
+    # Don't run RW in AllSubgroups mode usually
+    if chosen_mode == 1 and "RW" in algorithms_to_run:
         try:
             algorithms_to_run.remove("RW")
-        except ValueError:
+        except:
             pass
 
     for chosen_algorithm_name in reversed(algorithms_to_run):

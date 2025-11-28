@@ -181,7 +181,6 @@ def calc_utility_for_subgroups(
         epsilon: float,
         utility_all: float,
         *,
-        outcome_col: Optional[str] = None,
         tgtO: Optional[str] = None,
         **kwargs: object,
 ):
@@ -190,15 +189,14 @@ def calc_utility_for_subgroups(
     Currently configured to run ONLY the Greedy Narrowest Path if mode is appropriate,
     or you can just call the function directly.
     """
-    outcome_col = outcome_col or tgtO
-    if outcome_col is None:
-        raise ValueError("Need outcome_col / tgtO")
+    if mode == 0:
+        return _greedy_narrowest_path_fast(
+            df,
+            treatment_col=treatment_col,
+            outcome_col=tgtO,
+            delta=delta,
+            epsilon=epsilon,
+            utility_all=utility_all
+        )
 
-    return _greedy_narrowest_path_fast(
-        df,
-        treatment_col=treatment_col,
-        outcome_col=outcome_col,
-        delta=delta,
-        epsilon=epsilon,
-        utility_all=utility_all
-    )
+    return [], 0

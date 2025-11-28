@@ -22,8 +22,8 @@ from algorithms.multiProcessing_algorithm import \
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
 from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_calc_utility_for_subgroups
 from greedy_algorithm import calc_utility_for_subgroups as greedy_calc_utility_for_subgroups
-# NEW: Import Random Baseline
 from random_algorithm import calc_utility_for_subgroups as random_calc_utility_for_subgroups
+from causalForest_algorithm import calc_utility_for_subgroups as causalForest_calc_utility_for_subgroups
 
 # Load config
 with open('../configs/config.json', 'r') as f:
@@ -34,7 +34,7 @@ DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 # Ensure "Random" is NOT in this list manually, it gets triggered automatically by RW
-ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy"]
+ALGORITHM_NAMES = ["RW", "Random", "Greedy"]
 RUN_RANDOM = False
 if "Random" in ALGORITHM_NAMES:
     RUN_RANDOM = True
@@ -48,7 +48,8 @@ ALGORITHM_DISPATCH_MAP = {
     "RW_Direct": 4,
     "RW_Hybrid": 5,
     "Greedy": 6,
-    "Random": 7,  # Added Random
+    "Random": 7,
+    "CausalForest": 8,
 }
 
 MODES = config['MODES']
@@ -237,6 +238,8 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         # Random receives n_subgroups if provided (from RW return)
         _random_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
 
+        _causalForest_kw = dict(common)
+
         algo_dispatch = {
             "BruteForce": lambda: naive_calc_utility_for_subgroups(**_naive_kw),
             "Apriori": lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
@@ -245,6 +248,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             "RW_Direct": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
             "Greedy": lambda: greedy_calc_utility_for_subgroups(**common),
             "Random": lambda: random_calc_utility_for_subgroups(**_random_kw),
+            "CausalForest": lambda: causalForest_calc_utility_for_subgroups(**_causalForest_kw),
         }
 
         # Resolve dispatch key

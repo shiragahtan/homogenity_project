@@ -243,4 +243,4 @@ def calc_utility_for_subgroups(
             rng=rng,
         )
 
-    return True, 0
+    return [], 0

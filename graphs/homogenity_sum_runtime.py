@@ -1,7 +1,10 @@
 import os
 import pandas as pd
 
+
 def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homogeneity_runtime_summary.xlsx"):
+    print("--- Calculating Runtime Statistics (All Algos in One Sheet) ---")
+
     # 1. Check if input file exists
     if not os.path.exists(input_file):
         print(f"Error: The file '{input_file}' was not found in the current directory.")
@@ -21,45 +24,36 @@ def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homog
 
         # 2. Group by Algorithm, Delta, and Epsilon
         print("Calculating averages, variance, and standard deviation...")
-        
+
         # We use .agg() to calculate mean, variance, and standard deviation
         summary_df = df.groupby(['algorithm', 'delta', 'epsilon']).agg(
-            average_runtime_seconds=('run_time_seconds', 'mean'),
-            variance_runtime_seconds=('run_time_seconds', 'var'),
-            std_dev_runtime_seconds=('run_time_seconds', 'std')  # Added Standard Deviation
+            Runs_Count=('run_time_seconds', 'count'),
+            Avg_Runtime_Sec=('run_time_seconds', 'mean'),
+            Variance_Runtime=('run_time_seconds', 'var'),
+            Std_Dev_Runtime=('run_time_seconds', 'std')
         ).reset_index()
 
-        # Fill NaN values with 0 (happens if an algorithm only has 1 run, std dev is undefined)
-        summary_df['std_dev_runtime_seconds'] = summary_df['std_dev_runtime_seconds'].fillna(0)
-        summary_df['variance_runtime_seconds'] = summary_df['variance_runtime_seconds'].fillna(0)
+        # Fill NaN values (happens if an algorithm only has 1 run, std dev is undefined)
+        summary_df['Std_Dev_Runtime'] = summary_df['Std_Dev_Runtime'].fillna(0)
+        summary_df['Variance_Runtime'] = summary_df['Variance_Runtime'].fillna(0)
 
-        # 3. Write to Excel with separate sheets
+        # Round for cleaner output
+        summary_df['Avg_Runtime_Sec'] = summary_df['Avg_Runtime_Sec'].round(4)
+        summary_df['Variance_Runtime'] = summary_df['Variance_Runtime'].round(4)
+        summary_df['Std_Dev_Runtime'] = summary_df['Std_Dev_Runtime'].round(4)
+
+        # Sort for better readability: Delta -> Epsilon -> Avg Runtime (Ascending)
+        summary_df = summary_df.sort_values(['delta', 'epsilon', 'Avg_Runtime_Sec'])
+
+        # 3. Write to Excel (Single Sheet)
         print(f"Writing results to {output_file}...")
 
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            # Get unique algorithms to create sheets
-            algorithms = summary_df['algorithm'].unique()
-
-            for alg_name in algorithms:
-                # Filter data for this specific algorithm
-                alg_data = summary_df[summary_df['algorithm'] == alg_name]
-
-                # Select columns (Now including Standard Deviation)
-                sheet_data = alg_data[[
-                    'delta', 
-                    'epsilon', 
-                    'average_runtime_seconds', 
-                    'variance_runtime_seconds',
-                    'std_dev_runtime_seconds'
-                ]]
-
-                # Excel sheet names cannot exceed 31 chars. Truncate if necessary.
-                safe_sheet_name = str(alg_name)[:31]
-
-                sheet_data.to_excel(writer, sheet_name=safe_sheet_name, index=False)
-                print(f" - Created sheet for: {safe_sheet_name}")
+        # Using simple to_excel since we want everything in one sheet
+        summary_df.to_excel(output_file, index=False, sheet_name="Runtime_Summary")
 
         print("Done! Summary file created successfully.")
+        print("\nPreview of Results:")
+        print(summary_df.head(10))
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

@@ -169,6 +169,7 @@ def calc_utility_for_subgroups(
         treatment_col: str,
         delta: int,
         epsilon: float,
+        utility_all: float,
         *,
         outcome_col: Optional[str] = None,
         tgtO: Optional[str] = None,
@@ -183,13 +184,6 @@ def calc_utility_for_subgroups(
     # Compatibility: Check if caller passed 'k_walks' (legacy) or 'max_checks'
     n = kwargs.get('max_checks', kwargs.get('k_walks', n_subgroups))
 
-    utility_all = kwargs.get("utility_all")
-    if utility_all is None:
-        try:
-            utility_all = calculate_ate_safe(df, treatment_col, outcome_col)
-        except LinAlgError:
-            print("Global ATE calculation failed. Exiting.")
-            return True, 0
 
     if mode == 0:
         return _random_baseline_algo(

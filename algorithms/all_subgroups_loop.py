@@ -34,7 +34,7 @@ DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
 # Ensure "Random" is NOT in this list manually, it gets triggered automatically by RW
-ALGORITHM_NAMES = ["RW", "Random"]
+ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy"]
 RUN_RANDOM = False
 if "Random" in ALGORITHM_NAMES:
     RUN_RANDOM = True

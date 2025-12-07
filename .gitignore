@@ -1,0 +1,58 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Mac system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Results and output files
+graphs/*.xlsx
+graphs/*.csv
+graphs/*.png
+graphs/*.jpg
+graphs/*.jpeg
+graphs/*.txt
+algorithms_results/
+
+# Algorithm analysis scripts (generated)
+algorithms/analyze_results.py
+algorithms/diagnose_causalForest.py
+graphs/compare_algorithm_runtime.py
+graphs/create_all_comparisons.py
+
+# Documentation files (generated)
+RESULTS_GUIDE.md
+comparison_summary_report.txt
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python egg files
+*.egg-info/
+dist/
+build/
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+

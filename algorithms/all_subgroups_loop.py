@@ -33,7 +33,7 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy"]
+ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy", "CausalForest"]
 
 RUN_RANDOM = False
 RUN_GREEDY = False

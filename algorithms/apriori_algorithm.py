@@ -5,10 +5,12 @@ This module contains functions for finding subgroups and calculating their utili
 import sys
 import json
 import pandas as pd
+import random
+import time
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import calculate_ate_safe
-from typing import Dict, List, Tuple, Any, Callable, Optional
+from typing import Dict, List, Tuple, Any, Callable, Optional, Union
 from numpy.linalg import LinAlgError
 
 with open('../configs/config.json', 'r') as f:
@@ -25,25 +27,16 @@ def mine_subgroups(
 ) -> List[Tuple[Dict[str, object], int]]:
     """
     Return [(filter‑dict, size), …] for every subgroup size ≥ delta.
-
-    Args:
-        algorithm: Apriori algorithm function to use
-        df: Input DataFrame
-        delta: Minimum group size threshold
-        exclude_cols: List of columns to exclude from mining (e.g., treatment columns)
-
-    Returns:
-        List of tuples containing (filter_dict, size) for each subgroup
     """
     if exclude_cols is None:
         exclude_cols = []
-    
+
     # Filter out columns that should not be used for subgroup mining
     mining_df = df.drop(columns=exclude_cols, errors='ignore')
-    
+
     # one‑hot encode attribute=value pairs
     onehot_parts = []
-    lookup: Dict[str, Tuple[str, object]] = {}    # dummy‑col ➜ (attr, value)
+    lookup: Dict[str, Tuple[str, object]] = {}
     for col in mining_df.columns:
         d = pd.get_dummies(mining_df[col].fillna('⧫NA⧫'), prefix=col, dtype=bool)
         onehot_parts.append(d)
@@ -53,6 +46,9 @@ def mine_subgroups(
     # Apriori algorithm for frequent itemsets
     min_sup = delta / len(df)
     freq = algorithm(onehot, min_support=min_sup, use_colnames=True)
+
+    if freq.empty:
+        return []
 
     # discard item‑sets that mention the same attribute twice
     def valid(itemset):
@@ -71,14 +67,7 @@ def mine_subgroups(
 
 def filter_by_attribute(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """
-    Vectorised AND-filter without early-exit (support already ≥ delta).
-
-    Args:
-        df: Input DataFrame
-        filters: Dictionary of attribute-value pairs to filter on
-
-    Returns:
-        Filtered DataFrame
+    Vectorised AND-filter without early-exit.
     """
     if not filters:
         return df
@@ -95,57 +84,59 @@ def calc_utility_for_subgroups(
     treatment_col: str,
     tgtO: str,
     delta: int,
-    epsilon: int,
+    epsilon: float,
     utility_all: float
-):
+) -> Union[Tuple[bool, int, float, float], Tuple[List[dict], int, float, float]]:
     """
-    Calculate utility for each subgroup in the DataFrame using Apriori algorithm.
-
-    Args:
-        mode: Mode of operation (0 for homogeneity check, other for all subgroups)
-        algorithm: Apriori algorithm function to use
-        df: Input DataFrame
-        treatment: Dictionary mapping treatment variables to their values
-        target_col: Target outcome column
-        cate_func: Function to calculate CATE values (expects boolean mask)
-        delta: Minimum group size threshold
-        epsilon: Threshold for homogeneity check
-        utility_all: Overall utility value for comparison
+    Calculate utility for subgroups using Apriori.
 
     Returns:
-        Tuple containing:
-        - List of dictionaries with subgroup data (if mode != 0)
-        - Number of subgroups (if mode != 0)
-        - Boolean indicating homogeneity (if mode == 0)
+        If mode == 0: (is_homogeneous, count_checked, enum_time, iter_time)
+        If mode != 0: (subgroup_records, count_checked, enum_time, iter_time)
     """
-    # Find all subgroups meeting the minimum size requirement
-    # Exclude treatment columns and target outcome from mining
     exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
+
+    # --- PHASE 1: ENUMERATION (Mining) ---
+    start_enum = time.time()  # <--- Start Timer
+    all_subgroups = mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols)
+    end_enum = time.time()    # <--- End Timer
+
+    enumeration_time = end_enum - start_enum
+
+    # --- PHASE 2: ITERATION (Search) ---
+    # Shuffle to ensure random search order
+    random.shuffle(all_subgroups)
 
     subgroup_records = []
     cate_calc_count = 0
+    is_homogeneous = True
 
-    # Iterate through subgroups
-    for filt, sz in mine_subgroups(algorithm, df, delta, exclude_cols=exclude_cols):
-        # Filter the dataframe to the current subgroup
+    start_iter = time.time()
+
+    for filt, sz in all_subgroups:
         sub_df = filter_by_attribute(df, filt)
+
+        # Skip if empty
         if sub_df.empty:
             continue
 
         try:
             cate = calculate_ate_safe(sub_df, treatment_col, tgtO)
-            # --- CHANGE: Increment counter on successful calculation ---
             cate_calc_count += 1
-        except LinAlgError:  # XᵀX still singular
+        except LinAlgError:
             continue
 
-        if mode == 0 and abs(utility_all - cate) > epsilon:
-            # We found a violation. Stop immediately.
-            # --- CHANGE: Print counter before returning ---
-            print(f"breaking subgroup = {filt} size {sz} cate {cate}")
-            print(f"Stopping early: Calculated CATE {cate_calc_count} times before finding violation.")
-            return False
+        # Check for violation (Mode 0)
+        if mode == 0:
+            if abs(utility_all - cate) > epsilon:
+                print(f"breaking subgroup = {filt} size {sz} cate {cate}")
+                print(f"Total unique subgroups checked: {cate_calc_count}")
+
+                # Stop timer immediately upon finding violation
+                iteration_time = time.time() - start_iter
+                return False, cate_calc_count, enumeration_time, iteration_time
         else:
+            # Mode != 0: Collect all records
             subgroup_records.append({
                 "AttributeValues": str(filt),
                 "Size": sz,
@@ -153,7 +144,13 @@ def calc_utility_for_subgroups(
                 "UtilityDiff": cate - utility_all,
             })
 
-    if mode == 0:
-        return True
+    # End timer if loop finishes without returning
+    iteration_time = time.time() - start_iter
 
-    return subgroup_records, len(subgroup_records)
+    if mode == 0:
+        # Returns: (Passed?, Count, Enum Time, Iter Time)
+        print(f"Total unique subgroups checked: {cate_calc_count}")
+        return True, cate_calc_count, enumeration_time, iteration_time
+
+    # Returns: (Records, Count, Enum Time, Iter Time)
+    return subgroup_records, cate_calc_count, enumeration_time, iteration_time

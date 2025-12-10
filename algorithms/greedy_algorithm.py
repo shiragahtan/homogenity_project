@@ -1,202 +1,119 @@
-from __future__ import annotations
-
-import json
-import sys
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Set, Any
-
-import numpy as np
+import heapq
+from typing import List, Tuple, Set, Dict, Optional, Any
 import pandas as pd
+import numpy as np
 from numpy.linalg import LinAlgError
 
-# --- CONFIGURATION ---
-# Load config to get Treatment Column
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
-with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
-    _CFG = json.load(fp)
+# ... (Keep your imports and CONFIG setup from previous code) ...
 
-BINARY_TREATMENT: str = _CFG["TREATMENT_COL"]
+def _greedy_best_first_search(
+    df: pd.DataFrame,
+    *,
+    treatment_col: str,
+    outcome_col: str,
+    delta: int,
+    epsilon: float,
+    max_depth: int = 3  # Optional: prevent predicates from getting too complex
+) -> Tuple[bool, int]:
+    
+    # 1. Base ATE
+    try:
+        ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
+    except LinAlgError:
+        return True, 0
 
-# Import ATE calculation helper
-sys.path.append(str(Path(__file__).resolve().parent.parent / "yarden_files"))
-from ATE_update import calculate_ate_safe
-
-
-# helper function: One-Hot Encoding & Lookup
-def _onehot_lookup(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
-    """
-    Preprocesses the data into One-Hot columns.
-    Returns:
-        1. DataFrame of booleans (The Matrix)
-        2. Dictionary mapping {OneHotCol -> OriginalAttribute}
-        3. List of column names for indexing
-    """
-    parts: List[pd.DataFrame] = []
-    lookup: Dict[str, str] = {}
-
-    for col in df.columns:
-        # Create dummies, treat NAs as a distinct category
-        dummies = pd.get_dummies(df[col].fillna("⧫NA⧫").astype(str), prefix=col, dtype=bool)
-        parts.append(dummies)
-
-        # Map specific column "Age_18" back to attribute "Age"
-        for c in dummies.columns:
-            lookup[c] = col
-
-    final_df = pd.concat(parts, axis=1)
-    return final_df, lookup, list(final_df.columns)
-
-
-# CORE ALGORITHM: Greedy Narrowest Path
-def _greedy_narrowest_path_fast(
-        df: pd.DataFrame,
-        *,
-        treatment_col: str,
-        outcome_col: str,
-        delta: int,
-        epsilon: float,
-        utility_all: float,
-) -> bool:
-    """
-    Greedy Depth-First Search.
-    1. Scan ALL possible next filters.
-    2. Pick the one producing the MINIMUM subgroup size >= delta.
-    3. Check homogeneity.
-    4. Repeat.
-    """
-    # 1. Prepare Data
-    # Drop columns we shouldn't filter on (Treatment, Outcome, etc.)
     excl = {treatment_col, BINARY_TREATMENT, outcome_col}
     mining_df = df.drop(columns=[c for c in excl if c in df], errors="ignore")
 
-    # Create the Boolean Matrix (Rows x Features)
-    onehot_df, col_to_attr, col_names = _onehot_lookup(mining_df)
-    X_matrix = onehot_df.values
-    n_features = X_matrix.shape[1]
+    # 2. One-Hot Encoding (Reuse your logic)
+    onehot, lookup = _onehot_lookup(mining_df)
+    
+    # We map column names to integer indices for faster processing
+    col_names = list(onehot.columns)
+    n_cols = len(col_names)
+    
+    # 3. Priority Queue (Max-Heap)
+    # Python's heap is a min-heap, so we store (-size) to simulate max-heap.
+    # Structure: (-size, tie_breaker_id, current_mask, set_of_col_indices)
+    pq = []
+    
+    # TRACKING
+    visited_signatures: Set[frozenset] = set()
+    unique_checks = 0
+    
+    # 4. Initialize with 1-itemsets (Roots)
+    # This matches your intuition: the "biggest" are the roots.
+    for i, col in enumerate(col_names):
+        mask = onehot[col]
+        size = mask.sum()
+        
+        if size >= delta:
+            # We use 'i' as a tiebreaker and part of the signature
+            # Store indices as a frozenset to avoid duplicates like {A, B} vs {B, A}
+            sig = frozenset([i])
+            visited_signatures.add(sig)
+            
+            # Push to heap
+            heapq.heappush(pq, (-size, i, mask, sig))
 
-    # 2. State Initialization
-    current_mask = np.ones(len(df), dtype=bool)  # Start with full dataset
-    used_attrs: Set[str] = set()  # Attributes already filtered (e.g., 'Age')
-    current_path_cols: List[str] = []  # History for debugging/logging
+    # 5. The Greedy Loop
+    while pq:
+        neg_size, _, current_mask, current_sig_indices = heapq.heappop(pq)
+        current_size = -neg_size
 
-    print(f"--- Starting Greedy Search (Base Size: {len(df)}) ---")
-
-    # 3. The Greedy Loop
-    while True:
-        # --- A. VECTORIZED COUNTING ---
-        # Get the sub-matrix defined by the current mask
-        subset_matrix = X_matrix[current_mask]
-
-        # If we ran out of data rows, stop
-        if subset_matrix.shape[0] == 0:
+        # A. STOPPING CONDITION: Size
+        # Since we pop largest first, if this one is too small, ALL remaining are too small.
+        if current_size < delta:
+            print(f"Stopping: Largest remaining subgroup size ({current_size}) < delta ({delta})")
             break
 
-        # INSTANTLY count intersection size for ALL columns
-        # Summing the boolean columns gives the count of True values
-        counts = subset_matrix.sum(axis=0)
+        # B. CHECK CATE
+        unique_checks += 1
+        sub_df = df[current_mask]
+        
+        try:
+            val = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+            if abs(val - ate_all) > epsilon:
+                # Reconstruct readable name for logging
+                pretty_name = " AND ".join([lookup[col_names[idx]][0] + "=" + lookup[col_names[idx]][1] for idx in current_sig_indices])
+                print(f"Breaking Subgroup Found: {pretty_name} (Size: {current_size})")
+                print(f"CATE: {val:.4f} vs ATE: {ate_all:.4f}")
+                return False, unique_checks
+        except LinAlgError:
+            pass # Skip calculation errors
 
-        # --- B. FIND BEST CANDIDATE (Min Size >= Delta) ---
-        best_idx = -1
-        min_size = float('inf')
-        found_candidate = False
-
-        # Scan the counts array
-        for i in range(n_features):
-            size = counts[i]
-
-            # Optimization: Skip if size is clearly not the min or too small
-            if size < delta: continue
-            if size >= min_size: continue
-
-            # Logic: Check if attribute is already used
-            col_name = col_names[i]
-            attr_name = col_to_attr[col_name]
-
-            if attr_name in used_attrs:
+        # C. EXPAND (Generate Children)
+        # Only expand if we haven't hit max depth
+        if len(current_sig_indices) >= max_depth:
+            continue
+            
+        # Optimization: Only combine with columns having index > max(current_indices)
+        # This prevents checking {A, B} and {B, A}. We strictly enforce order A->B.
+        start_index = max(current_sig_indices) + 1
+        
+        for next_idx in range(start_index, n_cols):
+            # Check if this combination has been visited (redundancy check)
+            new_sig = set(current_sig_indices)
+            new_sig.add(next_idx)
+            new_sig_frozen = frozenset(new_sig)
+            
+            if new_sig_frozen in visited_signatures:
+                continue
+                
+            # Create new mask
+            new_col_name = col_names[next_idx]
+            
+            # Optimization: Check if the raw column size is even large enough
+            # (If column B has 10 rows, A & B cannot have more than 10)
+            if onehot[new_col_name].sum() < delta:
                 continue
 
-            # If we are here, this is the new best candidate
-            min_size = size
-            best_idx = i
-            found_candidate = True
+            new_mask = current_mask & onehot[new_col_name]
+            new_size = new_mask.sum()
+            
+            if new_size >= delta:
+                visited_signatures.add(new_sig_frozen)
+                heapq.heappush(pq, (-new_size, next_idx, new_mask, new_sig_frozen))
 
-        # --- C. TERMINATION OR UPDATE ---
-        if not found_candidate:
-            print("Terminating: No further filters satisfy size >= delta.")
-            # No valid filters left that satisfy size >= delta
-            break
-
-        # Apply the Best Choice
-        chosen_col = col_names[best_idx]
-        chosen_attr = col_to_attr[chosen_col]
-
-        # Update State
-        # Intersect current mask with new column
-        current_mask = current_mask & X_matrix[:, best_idx]
-        used_attrs.add(chosen_attr)
-        # FIX: Lists use .append(), not .add()
-        current_path_cols.append(chosen_col)
-
-        # --- D. CHECK HOMOGENEITY & LOG ---
-        # Get the actual rows from the original dataframe
-        sub_df = df[current_mask]
-        current_size = len(sub_df)
-
-        # >>>> DEBUG PRINT <<<<
-        print(f"Checking Subgroup: {current_path_cols} | Size: {current_size}")
-
-        if current_size < delta:  # Sanity check
-            break
-
-        try:
-            # Calculate Utility (ATE) for this subgroup
-            ate_sub = calculate_ate_safe(sub_df, treatment_col, outcome_col)
-
-            # Compare with Global Utility
-            diff = abs(ate_sub - utility_all)
-
-            if diff > epsilon:
-                # Heterogeneity Found!
-                print(f"  >>> VIOLATION FOUND! Path={current_path_cols}")
-                print(
-                    f"  >>> Size: {current_size}, ATE Sub: {ate_sub:.4f}, ATE All: {utility_all:.4f}, Diff: {diff:.4f}")
-                return False
-
-        except LinAlgError:
-            print(f"  > LinAlgError (Singular Matrix) for path {current_path_cols}. Skipping.")
-            pass
-
-    # If we exit the loop, no heterogeneity was found along the narrowest path
-    return True
-
-
-# -------------------------------------------------------------------------
-# PUBLIC API
-# -------------------------------------------------------------------------
-def calc_utility_for_subgroups(
-        mode: int,
-        df: pd.DataFrame,
-        treatment_col: str,
-        delta: int,
-        epsilon: float,
-        utility_all: float,
-        *,
-        tgtO: Optional[str] = None,
-        **kwargs: object,
-):
-    """
-    Dispatcher.
-    Currently configured to run ONLY the Greedy Narrowest Path if mode is appropriate,
-    or you can just call the function directly.
-    """
-    if mode == 0:
-        return _greedy_narrowest_path_fast(
-            df,
-            treatment_col=treatment_col,
-            outcome_col=tgtO,
-            delta=delta,
-            epsilon=epsilon,
-            utility_all=utility_all
-        )
-
-    return [], 0
+    print(f"Exhausted search. Total unique subgroups checked: {unique_checks}")
+    return True, unique_checks

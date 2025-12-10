@@ -33,12 +33,18 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-# Ensure "Random" is NOT in this list manually, it gets triggered automatically by RW
-ALGORITHM_NAMES = ["RW", "Random", "Greedy"]
+ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy"]
+
 RUN_RANDOM = False
+RUN_GREEDY = False
+
 if "Random" in ALGORITHM_NAMES:
     RUN_RANDOM = True
     ALGORITHM_NAMES.remove("Random")
+
+if "Greedy" in ALGORITHM_NAMES:
+    RUN_GREEDY = True
+    ALGORITHM_NAMES.remove("Greedy")
 
 ALGORITHM_DISPATCH_MAP = {
     "BruteForce": 0,
@@ -121,7 +127,8 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
 
 
 def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
-                               runtime_seconds, num_checked=0):
+                               runtime_seconds, num_subgroups=None,
+                               enumeration_time=None, iteration_time=None):
     """Append homogeneity check results to an Excel file."""
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
@@ -137,9 +144,11 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "delta": delta,
         "epsilon": epsilon,
         "homogeneity_status": homogeneity_status,
-        "num_subgroups_checked": num_checked,  # Added this helpful metric
+        "num_subgroups": num_subgroups,  # Now populated for Apriori/FPGrowth/RW
         "run_time_seconds": runtime_seconds,
-        "run_time_minutes": runtime_seconds / 60
+        "run_time_minutes": runtime_seconds / 60,
+        "enumeration_time_sec": enumeration_time,
+        "iteration_time_sec": iteration_time
     }
 
     _append_df_to_excel(excel_path, new_row)
@@ -162,16 +171,25 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
     if chosen_mode == 0:  # Homogeneity check
         # Standardize result: Expecting (status, count) or just status
         homogeneity_status = res
-        num_checked = 0
+        num_checked = None  # Default to None (empty in CSV)
+        enum_time = None
+        iter_time = None
 
-        # Handle tuple returns (like from RW and Random)
+        # All these algorithms return (Status, Count)
         if isinstance(res, tuple):
-            homogeneity_status = res[0]
-            num_checked = res[1]
+            if len(res) == 2:
+                # RW / Apriori / FPGrowth / Greedy / Random
+                homogeneity_status = res[0]
+                num_checked = res[1]
+            elif len(res) == 3:
+                # Older signatures or specific custom returns
+                homogeneity_status, enum_time, iter_time = res
 
         status_str = "Homogeneous" if homogeneity_status else "NOT Homogeneous (Violation Found)"
         color = "\033[92m" if homogeneity_status else "\033[91m"
         print(f"{color}Result: {status_str}\033[0m")
+        if num_checked is not None:
+            print(f"Subgroups checked: {num_checked}")
 
         append_homogeneity_results(
             algorithm_name=algorithm_name,
@@ -181,12 +199,21 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
             epsilon=epsilon,
             homogeneity_status=homogeneity_status,
             runtime_seconds=total_time,
-            num_checked=num_checked
+            num_subgroups=num_checked,
+            enumeration_time=enum_time,
+            iteration_time=iter_time
         )
         return res
     else:
         # AllSubgroups mode
-        subgroup_data, num_subgroups = res
+        if isinstance(res, tuple) and len(res) == 4:
+            subgroup_data, num_subgroups, _, _ = res
+        elif isinstance(res, tuple) and len(res) == 2:
+            subgroup_data, num_subgroups = res
+        else:
+            # Fallback for unexpected formats
+            subgroup_data, num_subgroups = res, len(res)
+
         save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
                               treatment, delta, index=0)
 
@@ -235,8 +262,10 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
         _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8,
                                         optimization_mode=OPTIMIZATION_MODES[0])
-        # Random receives n_subgroups if provided (from RW return)
+
         _random_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
+
+        _greedy_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
 
         _causalForest_kw = dict(common)
 
@@ -246,7 +275,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             "FPGrowth": lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
             "MultiProcessing": lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
             "RW_Direct": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
-            "Greedy": lambda: greedy_calc_utility_for_subgroups(**common),
+            "Greedy": lambda: greedy_calc_utility_for_subgroups(**_greedy_kw),
             "Random": lambda: random_calc_utility_for_subgroups(**_random_kw),
             "CausalForest": lambda: causalForest_calc_utility_for_subgroups(**_causalForest_kw),
         }
@@ -265,21 +294,33 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                 condition, treatment, delta, epsilon, utility_time, attr_vals_time
             )
 
-            # --- CHECK FOR RANDOM CHAINING ---
-            # If we just ran RW, and it returned a count, run Random immediately
-            if RUN_RANDOM and algorithm_name == "RW" and chosen_mode == 0:
-                if isinstance(result, tuple):
-                    _, rw_count = result
-                    if rw_count > 0:
+            if algorithm_name == "RW" and chosen_mode == 0:
+                # RW returns (status, count)
+                rw_count = 0
+                if isinstance(result, tuple) and len(result) >= 2:
+                    if isinstance(result[1], int):
+                        rw_count = result[1]
+
+                if rw_count > 0:
+                    # 1. Trigger Random (if enabled)
+                    if RUN_RANDOM:
                         print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                        # Recursive call, but forced to Random
                         run_experiments(
                             chosen_mode, "Random", delta, df, tgtO, attr_vals,
                             condition, treatment, i, attr_vals_time,
                             force_n_subgroups=rw_count
                         )
-                    else:
-                        print("RW checked 0 subgroups, skipping Random baseline.")
+
+                    # 2. Trigger Greedy (if enabled)
+                    if RUN_GREEDY:
+                        print(f"\n\033[96m>>> Triggering Greedy Baseline with n={rw_count} (matched to RW) <<<\033[0m")
+                        run_experiments(
+                            chosen_mode, "Greedy", delta, df, tgtO, attr_vals,
+                            condition, treatment, i, attr_vals_time,
+                            force_n_subgroups=rw_count
+                        )
+                else:
+                    print("RW checked 0 subgroups, skipping baselines.")
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")

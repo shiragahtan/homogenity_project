@@ -32,7 +32,9 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # --- ALGORITHM SETUP ---
-ALGORITHM_NAMES = ["Apriori", "Greedy", "Random", "RW", "CausalForest"]
+# FIX: Removed "Random" from here.
+# It is still in the DISPATCH_MAP, so RW can call it, but it won't run standalone.
+ALGORITHM_NAMES = ["Apriori", "Greedy", "RW", "CausalForest"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
@@ -408,6 +410,13 @@ def main():
     if chosen_mode == 1 and "RW" in algorithms_to_run:
         try:
             algorithms_to_run.remove("RW")
+        except:
+            pass
+
+    # FIX: Also remove "Random" if we are in RW-baseline mode, to prevent standalone runs
+    if RUN_RANDOM_BASELINE and "Random" in algorithms_to_run:
+        try:
+            algorithms_to_run.remove("Random")
         except:
             pass
 

@@ -1,119 +1,249 @@
+from __future__ import annotations
+
 import heapq
-from typing import List, Tuple, Set, Dict, Optional, Any
-import pandas as pd
+import json
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Set, Any
+
 import numpy as np
+import pandas as pd
 from numpy.linalg import LinAlgError
 
-# ... (Keep your imports and CONFIG setup from previous code) ...
+# --- CONFIGURATION ---
+# Load config to get Treatment Column
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
+with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
+    _CFG = json.load(fp)
 
-def _greedy_best_first_search(
-    df: pd.DataFrame,
-    *,
-    treatment_col: str,
-    outcome_col: str,
-    delta: int,
-    epsilon: float,
-    max_depth: int = 3  # Optional: prevent predicates from getting too complex
-) -> Tuple[bool, int]:
-    
-    # 1. Base ATE
-    try:
-        ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
-    except LinAlgError:
-        return True, 0
+BINARY_TREATMENT: str = _CFG["TREATMENT_COL"]
 
+# Import ATE calculation helper
+sys.path.append(str(Path(__file__).resolve().parent.parent / "yarden_files"))
+from ATE_update import calculate_ate_safe
+
+
+# helper function: One-Hot Encoding & Lookup
+def _onehot_lookup(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
+    """
+    Preprocesses the data into One-Hot columns.
+    Returns:
+        1. DataFrame of booleans (The Matrix)
+        2. Dictionary mapping {OneHotCol -> OriginalAttribute}
+        3. List of column names for indexing
+    """
+    parts: List[pd.DataFrame] = []
+    lookup: Dict[str, str] = {}
+
+    for col in df.columns:
+        # Create dummies, treat NAs as a distinct category
+        dummies = pd.get_dummies(df[col].fillna("⧫NA⧫").astype(str), prefix=col, dtype=bool)
+        parts.append(dummies)
+
+        # Map specific column "Age_18" back to attribute "Age"
+        for c in dummies.columns:
+            lookup[c] = col
+
+    final_df = pd.concat(parts, axis=1)
+    return final_df, lookup, list(final_df.columns)
+
+
+# CORE ALGORITHM: Best-First Search (Max-Heap)
+def _best_first_subgroup_search(
+        df: pd.DataFrame,
+        *,
+        treatment_col: str,
+        outcome_col: str,
+        delta: int,
+        epsilon: float,
+        utility_all: float,
+) -> Tuple[bool, int]:  # <--- CHANGED RETURN TYPE
+    """
+    Best-First Search prioritized by Subgroup Size.
+
+    Strategy:
+    1. Maintain a Max-Heap of subgroups, ordered by size (largest first).
+    2. Pop the largest subgroup.
+    3. Check homogeneity (ATE check). If violated, return False immediately.
+    4. "Expand" this subgroup: Generate all 'children' by adding 1 new filter.
+       - Only add children if their size >= delta.
+       - Only add children if we haven't processed that combination of filters yet.
+    5. Repeat until the heap is empty or the largest item in the heap < delta.
+
+    Returns:
+        (is_homogeneous: bool, number_of_subgroups_checked: int)
+    """
+
+    # 1. Prepare Data
+    # Drop columns we shouldn't filter on
     excl = {treatment_col, BINARY_TREATMENT, outcome_col}
     mining_df = df.drop(columns=[c for c in excl if c in df], errors="ignore")
 
-    # 2. One-Hot Encoding (Reuse your logic)
-    onehot, lookup = _onehot_lookup(mining_df)
-    
-    # We map column names to integer indices for faster processing
-    col_names = list(onehot.columns)
-    n_cols = len(col_names)
-    
-    # 3. Priority Queue (Max-Heap)
-    # Python's heap is a min-heap, so we store (-size) to simulate max-heap.
-    # Structure: (-size, tie_breaker_id, current_mask, set_of_col_indices)
-    pq = []
-    
-    # TRACKING
-    visited_signatures: Set[frozenset] = set()
-    unique_checks = 0
-    
-    # 4. Initialize with 1-itemsets (Roots)
-    # This matches your intuition: the "biggest" are the roots.
-    for i, col in enumerate(col_names):
-        mask = onehot[col]
-        size = mask.sum()
-        
-        if size >= delta:
-            # We use 'i' as a tiebreaker and part of the signature
-            # Store indices as a frozenset to avoid duplicates like {A, B} vs {B, A}
-            sig = frozenset([i])
-            visited_signatures.add(sig)
-            
-            # Push to heap
-            heapq.heappush(pq, (-size, i, mask, sig))
+    # Create the Boolean Matrix (Rows x Features)
+    onehot_df, col_to_attr, col_names = _onehot_lookup(mining_df)
+    X_matrix = onehot_df.values
+    n_features = X_matrix.shape[1]
+    total_rows = len(df)
 
-    # 5. The Greedy Loop
+    # 2. Heap Initialization
+    # Python's heapq is a Min-Heap. To simulate Max-Heap, we store (-size).
+    # Structure: (-size, [list_of_feature_indices], {set_of_used_attributes})
+    # We start with the "Root" (Empty filters, meaning all rows).
+
+    # Root represents the full dataset
+    initial_indices: List[int] = []
+    initial_used_attrs: Set[str] = set()
+
+    # Heap stores: (priority_neg_size, sort_key_tuple, feature_indices_list, used_attrs_set)
+    # We need 'sort_key_tuple' (tuple of indices) because lists aren't comparable in ties.
+    pq = []
+    heapq.heappush(pq, (-total_rows, tuple(), initial_indices, initial_used_attrs))
+
+    # Visited set to avoid redundant processing (e.g., {A, B} vs {B, A})
+    # Stores tuple(sorted(feature_indices))
+    visited: Set[Tuple[int, ...]] = set()
+    visited.add(tuple())
+
+    # Counter for checked subgroups
+    checked_count = 0
+
     while pq:
-        neg_size, _, current_mask, current_sig_indices = heapq.heappop(pq)
+        # --- A. POP LARGEST SUBGROUP ---
+        neg_size, _, current_indices, current_used_attrs = heapq.heappop(pq)
         current_size = -neg_size
 
-        # A. STOPPING CONDITION: Size
-        # Since we pop largest first, if this one is too small, ALL remaining are too small.
+        # If the largest remaining group is smaller than delta, we are done.
+        # Since it's a Max-Heap, everything else is also smaller.
         if current_size < delta:
-            print(f"Stopping: Largest remaining subgroup size ({current_size}) < delta ({delta})")
+            print("Terminating: Largest remaining subgroup in heap is smaller than delta.")
             break
 
-        # B. CHECK CATE
-        unique_checks += 1
-        sub_df = df[current_mask]
-        
+        # We are about to "check" this node (calculate ATE or attempt to)
+        checked_count += 1
+
+        # Reconstruct Mask
+        # (We don't store masks in heap to save memory, we reconstruct via fast bitwise AND)
+        if not current_indices:
+            current_mask = np.ones(total_rows, dtype=bool)
+        else:
+            # Start with the first feature's column
+            current_mask = X_matrix[:, current_indices[0]].copy()
+            # AND with the rest
+            for idx in current_indices[1:]:
+                current_mask &= X_matrix[:, idx]
+
+        # --- B. CHECK HOMOGENEITY (The "Validation") ---
+        # Construct path name for logging
+        path_names = [col_names[i] for i in current_indices]
+
+        # >>>> DEBUG PRINT <<<<
+        # print(f"Checking Subgroup: {path_names} | Size: {current_size}")
+
         try:
-            val = calculate_ate_safe(sub_df, treatment_col, outcome_col)
-            if abs(val - ate_all) > epsilon:
-                # Reconstruct readable name for logging
-                pretty_name = " AND ".join([lookup[col_names[idx]][0] + "=" + lookup[col_names[idx]][1] for idx in current_sig_indices])
-                print(f"Breaking Subgroup Found: {pretty_name} (Size: {current_size})")
-                print(f"CATE: {val:.4f} vs ATE: {ate_all:.4f}")
-                return False, unique_checks
+            sub_df = df[current_mask]
+
+            # Calculate Utility (ATE)
+            ate_sub = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+
+            # Compare with Global Utility
+            diff = abs(ate_sub - utility_all)
+
+            if diff > epsilon:
+                print(f"  >>> VIOLATION FOUND! Path={path_names}")
+                print(
+                    f"  >>> Size: {current_size}, ATE Sub: {ate_sub:.4f}, ATE All: {utility_all:.4f}, Diff: {diff:.4f}")
+                print(f"Total unique subgroups checked: {checked_count}")
+                return False, checked_count
+
         except LinAlgError:
-            pass # Skip calculation errors
+            # Singular matrix errors still count as a "check" attempt
+            print(f"  > LinAlgError for path {path_names}. Skipping check, but will try children.")
+            pass
 
-        # C. EXPAND (Generate Children)
-        # Only expand if we haven't hit max depth
-        if len(current_sig_indices) >= max_depth:
+        # --- C. EXPAND (Generate Children) ---
+        # Try adding every possible unused attribute
+
+        # Optimization: We only calculate the size of children.
+        # We do NOT check their ATE yet. That happens only when they are popped.
+
+        # Filter candidate columns:
+        # 1. Attribute not already used (e.g., don't filter 'Age' if 'Age' is present)
+        candidate_indices = [
+            i for i in range(n_features)
+            if col_to_attr[col_names[i]] not in current_used_attrs
+        ]
+
+        if not candidate_indices:
             continue
-            
-        # Optimization: Only combine with columns having index > max(current_indices)
-        # This prevents checking {A, B} and {B, A}. We strictly enforce order A->B.
-        start_index = max(current_sig_indices) + 1
-        
-        for next_idx in range(start_index, n_cols):
-            # Check if this combination has been visited (redundancy check)
-            new_sig = set(current_sig_indices)
-            new_sig.add(next_idx)
-            new_sig_frozen = frozenset(new_sig)
-            
-            if new_sig_frozen in visited_signatures:
-                continue
-                
-            # Create new mask
-            new_col_name = col_names[next_idx]
-            
-            # Optimization: Check if the raw column size is even large enough
-            # (If column B has 10 rows, A & B cannot have more than 10)
-            if onehot[new_col_name].sum() < delta:
+
+        # Get the sub-matrix for the current rows
+        # shape: (current_size, n_features)
+        # We only care about columns in candidate_indices
+        subset_matrix = X_matrix[current_mask]
+
+        # Vectorized Size Check:
+        # Summing columns of the subset gives the size of the child node immediately
+        child_sizes = subset_matrix[:, candidate_indices].sum(axis=0)
+
+        for i, idx in enumerate(candidate_indices):
+            new_size = child_sizes[i]
+
+            # 1. Pruning: Size < Delta
+            if new_size < delta:
                 continue
 
-            new_mask = current_mask & onehot[new_col_name]
-            new_size = new_mask.sum()
-            
-            if new_size >= delta:
-                visited_signatures.add(new_sig_frozen)
-                heapq.heappush(pq, (-new_size, next_idx, new_mask, new_sig_frozen))
+            # 2. Create New State
+            new_indices = current_indices + [idx]
+            # Sort to ensure uniqueness in 'visited'
+            new_key = tuple(sorted(new_indices))
 
-    print(f"Exhausted search. Total unique subgroups checked: {unique_checks}")
-    return True, unique_checks
+            # 3. Pruning: Already Visited
+            if new_key in visited:
+                continue
+
+            visited.add(new_key)
+
+            # 4. Update Attributes Used
+            new_attr = col_to_attr[col_names[idx]]
+            new_used_attrs = current_used_attrs.copy()
+            new_used_attrs.add(new_attr)
+
+            # 5. Push to Heap
+            # Priority is (-size). Tie-breaker is new_key (tuple), which is comparable.
+            heapq.heappush(pq, (-new_size, new_key, new_indices, new_used_attrs))
+
+    # If we exit the loop without returning False, no heterogeneity was found
+    print(f"Total unique subgroups checked: {checked_count}")
+    return True, checked_count
+
+
+# -------------------------------------------------------------------------
+# PUBLIC API
+# -------------------------------------------------------------------------
+def calc_utility_for_subgroups(
+        mode: int,
+        df: pd.DataFrame,
+        treatment_col: str,
+        delta: int,
+        epsilon: float,
+        utility_all: float,
+        *,
+        tgtO: Optional[str] = None,
+        **kwargs: object,
+) -> Tuple[bool, int]:  # <--- UPDATED SIGNATURE
+    """
+    Dispatcher.
+    Mode 0: Runs Best-First Search (Prioritized by Size) to detect heterogeneity.
+    """
+    if mode == 0:
+        return _best_first_subgroup_search(
+            df,
+            treatment_col=treatment_col,
+            outcome_col=tgtO,
+            delta=delta,
+            epsilon=epsilon,
+            utility_all=utility_all
+        )
+
+    # Default return for other modes or if needed
+    return [], 0

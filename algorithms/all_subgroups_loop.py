@@ -5,7 +5,6 @@ import pandas as pd
 from pathlib import Path
 import multiprocessing as mp
 from time import perf_counter
-from functools import partial
 from contextlib import contextmanager
 import os
 
@@ -32,19 +31,14 @@ with open('../configs/config.json', 'r') as f:
 # DELTAS = config['DELTAS']
 DELTAS = [1000]
 
+# --- ALGORITHM SETUP ---
 # ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-ALGORITHM_NAMES = ["Apriori", "RW", "Random", "Greedy", "CausalForest"]
+# Ensure Greedy and RW are treated as standalone algorithms
+ALGORITHM_NAMES = ["Apriori", "Greedy", "Random", "RW", "CausalForest"]
 
-RUN_RANDOM = False
-RUN_GREEDY = False
-
-if "Random" in ALGORITHM_NAMES:
-    RUN_RANDOM = True
-    ALGORITHM_NAMES.remove("Random")
-
-if "Greedy" in ALGORITHM_NAMES:
-    RUN_GREEDY = True
-    ALGORITHM_NAMES.remove("Greedy")
+# If you want Random to act as a baseline dependent on RW's count, set this True
+# If False, "Random" must be in ALGORITHM_NAMES to run (with fixed size)
+RUN_RANDOM_BASELINE = True
 
 ALGORITHM_DISPATCH_MAP = {
     "BruteForce": 0,
@@ -144,7 +138,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "delta": delta,
         "epsilon": epsilon,
         "homogeneity_status": homogeneity_status,
-        "num_subgroups": num_subgroups,  # Now populated for Apriori/FPGrowth/RW
+        "num_subgroups": num_subgroups,  # Now populated for Apriori/FPGrowth/RW/Greedy
         "run_time_seconds": runtime_seconds,
         "run_time_minutes": runtime_seconds / 60,
         "enumeration_time_sec": enumeration_time,
@@ -176,9 +170,9 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
         iter_time = None
 
         # All these algorithms return (Status, Count)
+        # Includes: RW, Apriori, FPGrowth, Greedy, Random
         if isinstance(res, tuple):
             if len(res) == 2:
-                # RW / Apriori / FPGrowth / Greedy / Random
                 homogeneity_status = res[0]
                 num_checked = res[1]
             elif len(res) == 3:
@@ -263,9 +257,11 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8,
                                         optimization_mode=OPTIMIZATION_MODES[0])
 
+        # Random needs a size count (either fixed or based on RW)
         _random_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
 
-        _greedy_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
+        # Greedy (Best-First) determines its own stop based on delta, no n_subgroups needed
+        _greedy_kw = dict(common)
 
         _causalForest_kw = dict(common)
 
@@ -294,6 +290,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                 condition, treatment, delta, epsilon, utility_time, attr_vals_time
             )
 
+            # --- OPTIONAL: Run Random Baseline if RW ran ---
             if algorithm_name == "RW" and chosen_mode == 0:
                 # RW returns (status, count)
                 rw_count = 0
@@ -301,26 +298,18 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                     if isinstance(result[1], int):
                         rw_count = result[1]
 
-                if rw_count > 0:
-                    # 1. Trigger Random (if enabled)
-                    if RUN_RANDOM:
-                        print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                        run_experiments(
-                            chosen_mode, "Random", delta, df, tgtO, attr_vals,
-                            condition, treatment, i, attr_vals_time,
-                            force_n_subgroups=rw_count
-                        )
+                if rw_count > 0 and RUN_RANDOM_BASELINE:
+                    # Trigger Random Baseline matched to RW
+                    print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
+                    run_experiments(
+                        chosen_mode, "Random", delta, df, tgtO, attr_vals,
+                        condition, treatment, i, attr_vals_time,
+                        force_n_subgroups=rw_count
+                    )
+                elif rw_count == 0:
+                    print("RW checked 0 subgroups, skipping random baseline.")
 
-                    # 2. Trigger Greedy (if enabled)
-                    if RUN_GREEDY:
-                        print(f"\n\033[96m>>> Triggering Greedy Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                        run_experiments(
-                            chosen_mode, "Greedy", delta, df, tgtO, attr_vals,
-                            condition, treatment, i, attr_vals_time,
-                            force_n_subgroups=rw_count
-                        )
-                else:
-                    print("RW checked 0 subgroups, skipping baselines.")
+            # NOTE: Greedy is no longer triggered here; it runs via the main loop in main()
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")

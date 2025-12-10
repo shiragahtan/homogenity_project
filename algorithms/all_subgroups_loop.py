@@ -32,12 +32,9 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # --- ALGORITHM SETUP ---
-# ALGORITHM_NAMES = config['ALGORITHM_NAMES']
-# Ensure Greedy and RW are treated as standalone algorithms
 ALGORITHM_NAMES = ["Apriori", "Greedy", "Random", "RW", "CausalForest"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
-# If False, "Random" must be in ALGORITHM_NAMES to run (with fixed size)
 RUN_RANDOM_BASELINE = True
 
 ALGORITHM_DISPATCH_MAP = {
@@ -138,7 +135,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "delta": delta,
         "epsilon": epsilon,
         "homogeneity_status": homogeneity_status,
-        "num_subgroups": num_subgroups,  # Now populated for Apriori/FPGrowth/RW/Greedy
+        "num_subgroups": num_subgroups,
         "run_time_seconds": runtime_seconds,
         "run_time_minutes": runtime_seconds / 60,
         "enumeration_time_sec": enumeration_time,
@@ -169,15 +166,18 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
         enum_time = None
         iter_time = None
 
-        # All these algorithms return (Status, Count)
-        # Includes: RW, Apriori, FPGrowth, Greedy, Random
+        # Handle different return signatures
         if isinstance(res, tuple):
             if len(res) == 2:
+                # Standard: (Status, Count)
                 homogeneity_status = res[0]
                 num_checked = res[1]
             elif len(res) == 3:
-                # Older signatures or specific custom returns
+                # Older: (Status, EnumTime, IterTime)
                 homogeneity_status, enum_time, iter_time = res
+            elif len(res) == 4:
+                # Apriori/FPGrowth/MP often return: (Status, Count, EnumTime, IterTime)
+                homogeneity_status, num_checked, enum_time, iter_time = res
 
         status_str = "Homogeneous" if homogeneity_status else "NOT Homogeneous (Violation Found)"
         color = "\033[92m" if homogeneity_status else "\033[91m"
@@ -201,12 +201,13 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
     else:
         # AllSubgroups mode
         if isinstance(res, tuple) and len(res) == 4:
+            # Apriori AllSubgroups returns: (Records, Count, EnumTime, IterTime)
             subgroup_data, num_subgroups, _, _ = res
         elif isinstance(res, tuple) and len(res) == 2:
             subgroup_data, num_subgroups = res
         else:
             # Fallback for unexpected formats
-            subgroup_data, num_subgroups = res, len(res)
+            subgroup_data, num_subgroups = res, len(res) if isinstance(res, list) else 0
 
         save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
                               treatment, delta, index=0)
@@ -292,10 +293,12 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
 
             # --- OPTIONAL: Run Random Baseline if RW ran ---
             if algorithm_name == "RW" and chosen_mode == 0:
-                # RW returns (status, count)
+                # RW returns (status, count) or (status, count, enum, iter)
                 rw_count = 0
-                if isinstance(result, tuple) and len(result) >= 2:
-                    if isinstance(result[1], int):
+
+                # Handle varying tuple lengths for RW as well just in case
+                if isinstance(result, tuple):
+                    if len(result) >= 2 and isinstance(result[1], int):
                         rw_count = result[1]
 
                 if rw_count > 0 and RUN_RANDOM_BASELINE:
@@ -308,8 +311,6 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                     )
                 elif rw_count == 0:
                     print("RW checked 0 subgroups, skipping random baseline.")
-
-            # NOTE: Greedy is no longer triggered here; it runs via the main loop in main()
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")

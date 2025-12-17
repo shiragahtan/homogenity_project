@@ -33,7 +33,7 @@ def calculate_summary_metrics():
 
     # Dynamic GT Detection
     if GT_NAME not in unique_algos:
-        matches = [x for x in unique_algos if 'Brute' in x or 'Apriori' in x]
+        matches = [x for x in unique_algos if 'Brute' in x or 'Apriori' in x or 'FPGrowth' in x]
         if matches:
             GT_NAME = matches[0]
             print(f"Ground Truth Algorithm identified as: {GT_NAME}")

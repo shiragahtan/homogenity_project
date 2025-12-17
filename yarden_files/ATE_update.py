@@ -10,34 +10,87 @@ with open('../configs/config.json', 'r') as f:
 
 TREATMENT_COL = config['TREATMENT_COL']
 
+
 def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
-    """
-    Calculate ATE safely with error handling, similar to naive_DFS_algorithm.py
-    """
+    # 1. Basic Validity Checks
+    if df.empty or df[treatment_col].nunique() < 2:
+        return np.nan
+
+    # Get feature columns (excluding metadata)
+    exclude_cols = {treatment_col, outcome_col, 'TREATMENT_COL'}
+    features_cols = [c for c in df.columns if c not in exclude_cols]
+
+    # 2. Fast Variance Check (Drop constants)
+    if not features_cols:
+        return np.nan
+
+    X_vals = df[features_cols].values
+    # Check peak-to-peak (max - min) as a fast proxy for variance
+    ptp = np.ptp(X_vals, axis=0)
+    non_const_mask = ptp > 0
+
+    if not np.any(non_const_mask):
+        return np.nan
+
+    # Keep only non-constant features
+    features_cols = [features_cols[i] for i in range(len(features_cols)) if non_const_mask[i]]
+    X_vals = X_vals[:, non_const_mask]
+
+    # 3. Fast Correlation Check (Replacing .corrwith)
+    T_vals = df[treatment_col].values
+
+    # Center data (x - mean)
+    X_mean = X_vals.mean(axis=0)
+    T_mean = T_vals.mean()
+
+    X_centered = X_vals - X_mean
+    T_centered = T_vals - T_mean
+
+    # Compute Correlation via Dot Product
+    # formula: dot(u, v) / (|u| * |v|)
+    X_norms = np.linalg.norm(X_centered, axis=0)
+    T_norm = np.linalg.norm(T_centered)
+
+    if T_norm < 1e-10: return np.nan
+
+    numerators = np.dot(X_centered.T, T_centered)
+
+    # Safe division to get correlations
+    with np.errstate(divide='ignore', invalid='ignore'):
+        corrs = numerators / (X_norms * T_norm)
+
+    # Identify valid columns (Mask out highly correlated ones)
+    # This replicates your logic: "features_cols = [c for c in features_cols if c not in high_corr_cols]"
+    valid_mask = np.abs(corrs) <= 0.99
+
+    # Filter the features list
+    final_features_cols = [features_cols[i] for i in range(len(features_cols)) if valid_mask[i]]
+
+    if not final_features_cols:
+        return np.nan
+
+    # 4. Calculation
     try:
-        if df.empty or df[treatment_col].nunique() < 2:
+        ate_obj = ATEUpdateLinear(
+            df[final_features_cols],  # Use the filtered list
+            df[treatment_col],
+            df[outcome_col]
+        )
+        cate_value = ate_obj.get_original_ate()
+
+        # 5. Sanity Check (Keep this, it is cheap and effective)
+        y_range = df[outcome_col].max() - df[outcome_col].min()
+        threshold = max(y_range * 100.0, 1e6)
+
+        if abs(cate_value) > threshold:
             return np.nan
-        
-        # Get feature columns excluding treatment and outcome
-        features_cols = [col for col in df.columns if col not in [treatment_col, TREATMENT_COL, outcome_col]]
-        
-        # Drop every column that is constant in this slice
-        features_cols = [c for c in features_cols if df[c].nunique() > 1]
-        if not features_cols:  # nothing varies → skip slice
-            return np.nan
-        
-        try:
-            ate_obj = ATEUpdateLinear(
-                df[features_cols],
-                df[TREATMENT_COL],
-                df[outcome_col]
-            )
-            cate_value = ate_obj.get_original_ate()
-            return cate_value if not ret_obj else ate_obj
-        except LinAlgError:  # XᵀX still singular
-            return np.nan if not ret_obj else None
-    except Exception as e:
-        import ipdb; ipdb.set_trace()
+
+        return cate_value if not ret_obj else ate_obj
+
+    except LinAlgError:
+        return np.nan if not ret_obj else None
+    except Exception:
+        return np.nan
 
 
 class ATEUpdateLinear:

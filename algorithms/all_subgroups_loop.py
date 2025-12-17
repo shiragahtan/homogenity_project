@@ -34,7 +34,7 @@ DELTAS = [1000]
 # --- ALGORITHM SETUP ---
 # FIX: Removed "Random" from here.
 # It is still in the DISPATCH_MAP, so RW can call it, but it won't run standalone.
-ALGORITHM_NAMES = ["Apriori", "Greedy", "RW", "CausalForest"]
+ALGORITHM_NAMES = ["FPGrowth"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
@@ -52,7 +52,8 @@ ALGORITHM_DISPATCH_MAP = {
 }
 
 MODES = config['MODES']
-EPSILONS = [30000]
+#EPSILONS = [30000]
+EPSILONS = [100000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
@@ -149,7 +150,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
 
 
 def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
-                         utility_time, attr_vals_time):
+                         utility_time, attr_vals_time, index=0):
     """
     Helper function to run the actual algorithm logic, timing, and logging.
     Returns: The result of the algorithm (e.g., tuple (bool, count) or list).
@@ -211,8 +212,9 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
             # Fallback for unexpected formats
             subgroup_data, num_subgroups = res, len(res) if isinstance(res, list) else 0
 
+        # FIX: Added index=index to ensure unique filenames per treatment
         save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
-                              treatment, delta, index=0)
+                              treatment, delta, index=index)
 
         append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta,
                               total_time)
@@ -288,9 +290,10 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
 
         try:
             # --- RUN THE MAIN ALGORITHM ---
+            # FIX: Passed index=i to run_single_execution so files get unique names
             result = run_single_execution(
                 algo_dispatch[dispatch_key], algorithm_name, chosen_mode,
-                condition, treatment, delta, epsilon, utility_time, attr_vals_time
+                condition, treatment, delta, epsilon, utility_time, attr_vals_time, index=i
             )
 
             # --- OPTIONAL: Run Random Baseline if RW ran ---

@@ -143,7 +143,7 @@ def _best_first_subgroup_search(
             sub_df = df[current_mask]
 
             # Calculate Utility (ATE)
-            ate_sub = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+            ate_sub = calculate_ate_safe(sub_df, treatment_col, outcome_col, delta)
 
             # Compare with Global Utility
             diff = abs(ate_sub - utility_all)

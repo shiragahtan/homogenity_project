@@ -62,7 +62,7 @@ def _homog_random_walks_direct(
     rng = rng or random.Random()
 
     try:
-        ate_all = calculate_ate_safe(df, treatment_col, outcome_col)
+        ate_all = calculate_ate_safe(df, treatment_col, outcome_col, delta)
     except LinAlgError:
         print("Total unique subgroups checked: 0")
         return True, 0
@@ -143,7 +143,7 @@ def _homog_random_walks_direct(
 
             sub_df = df[mask]
             try:
-                val = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+                val = calculate_ate_safe(sub_df, treatment_col, outcome_col, delta)
                 cate_cache[key] = val
                 return val
             except LinAlgError:

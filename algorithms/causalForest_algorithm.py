@@ -275,7 +275,7 @@ def calc_utility_for_subgroups(
 
             for idx, (description, size, avg_cate, subgroup_df) in enumerate(subgroups, 1):
                 try:
-                    subgroup_ate = calculate_ate_safe(subgroup_df, treatment_col, tgtO)
+                    subgroup_ate = calculate_ate_safe(subgroup_df, treatment_col, tgtO, delta)
 
                     if np.isnan(subgroup_ate):
                         continue
@@ -313,7 +313,7 @@ def calc_utility_for_subgroups(
 
             for description, size, avg_cate, subgroup_df in subgroups:
                 try:
-                    subgroup_ate = calculate_ate_safe(subgroup_df, treatment_col, tgtO)
+                    subgroup_ate = calculate_ate_safe(subgroup_df, treatment_col, tgtO, delta)
                     if np.isnan(subgroup_ate):
                         continue
 

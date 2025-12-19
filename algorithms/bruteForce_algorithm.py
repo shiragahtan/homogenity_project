@@ -134,7 +134,7 @@ def calc_utility_for_subgroups(
 
             if not filtered_df.empty:
                 try:
-                    cate_value = calculate_ate_safe(filtered_df, treatment_col, tgtO)
+                    cate_value = calculate_ate_safe(filtered_df, treatment_col, tgtO, delta)
                 except LinAlgError:  # XᵀX still singular
                     continue
 

@@ -26,7 +26,7 @@ def mine_subgroups(
     exclude_cols: List[str] = None
 ) -> List[Tuple[Dict[str, object], int]]:
     """
-    Return [(filter‑dict, size), …] for every subgroup size ≥ delta.
+    Return [(filter-dict, size), …] for every subgroup size ≥ delta.
     """
     if exclude_cols is None:
         exclude_cols = []
@@ -121,7 +121,7 @@ def calc_utility_for_subgroups(
             continue
 
         try:
-            cate = calculate_ate_safe(sub_df, treatment_col, tgtO)
+            cate = calculate_ate_safe(sub_df, treatment_col, tgtO, delta)
             cate_calc_count += 1
         except LinAlgError:
             continue

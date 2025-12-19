@@ -147,7 +147,7 @@ def _random_baseline_algo(
         # Calculate CATE
         sub_df = df[mask]
         try:
-            cate = calculate_ate_safe(sub_df, treatment_col, outcome_col)
+            cate = calculate_ate_safe(sub_df, treatment_col, outcome_col, delta)
         except LinAlgError:
             continue
 

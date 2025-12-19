@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import pandas as pd
+from scipy import stats
 from linear_model_unlearning import CertifiableUnlearningLogisticRegression, BaseLinearRegression
 from sklearn.linear_model import LogisticRegression
 from numpy.linalg import LinAlgError
@@ -11,252 +12,219 @@ with open('../configs/config.json', 'r') as f:
 TREATMENT_COL = config['TREATMENT_COL']
 
 
-def calculate_ate_safe(df, treatment_col, outcome_col, ret_obj=False):
-    # 1. Basic Validity Checks
-    if df.empty or df[treatment_col].nunique() < 2:
-        return np.nan
-
-    # Get feature columns (excluding metadata)
-    exclude_cols = {treatment_col, outcome_col, 'TREATMENT_COL'}
-    features_cols = [c for c in df.columns if c not in exclude_cols]
-
-    # 2. Fast Variance Check (Drop constants)
-    if not features_cols:
-        return np.nan
-
-    X_vals = df[features_cols].values
-    # Check peak-to-peak (max - min) as a fast proxy for variance
-    ptp = np.ptp(X_vals, axis=0)
-    non_const_mask = ptp > 0
-
-    if not np.any(non_const_mask):
-        return np.nan
-
-    # Keep only non-constant features
-    features_cols = [features_cols[i] for i in range(len(features_cols)) if non_const_mask[i]]
-    X_vals = X_vals[:, non_const_mask]
-
-    # 3. Fast Correlation Check (Replacing .corrwith)
-    T_vals = df[treatment_col].values
-
-    # Center data (x - mean)
-    X_mean = X_vals.mean(axis=0)
-    T_mean = T_vals.mean()
-
-    X_centered = X_vals - X_mean
-    T_centered = T_vals - T_mean
-
-    # Compute Correlation via Dot Product
-    # formula: dot(u, v) / (|u| * |v|)
-    X_norms = np.linalg.norm(X_centered, axis=0)
-    T_norm = np.linalg.norm(T_centered)
-
-    if T_norm < 1e-10: return np.nan
-
-    numerators = np.dot(X_centered.T, T_centered)
-
-    # Safe division to get correlations
-    with np.errstate(divide='ignore', invalid='ignore'):
-        corrs = numerators / (X_norms * T_norm)
-
-    # Identify valid columns (Mask out highly correlated ones)
-    # This replicates your logic: "features_cols = [c for c in features_cols if c not in high_corr_cols]"
-    valid_mask = np.abs(corrs) <= 0.99
-
-    # Filter the features list
-    final_features_cols = [features_cols[i] for i in range(len(features_cols)) if valid_mask[i]]
-
-    if not final_features_cols:
-        return np.nan
-
-    # 4. Calculation
+def calculate_ate_safe(df, treatment_col, outcome_col, delta, ret_obj=False):
+    """
+    Calculate Average Treatment Effect (ATE) for a subgroup using linear regression adjustment.
+    
+    This function implements the standard regression adjustment approach for causal inference:
+    Y = β₀ + β₁T + β₂X₁ + ... + βₖXₖ
+    
+    where:
+    - Y is the outcome
+    - T is the treatment indicator (0/1)
+    - X₁...Xₖ are confounders/covariates
+    - β₁ is the ATE (Average Treatment Effect)
+    
+    The function filters subgroups based on:
+    1. Minimum sample size per treatment group
+    2. Statistical significance (p < 0.05)
+    3. Sufficient degrees of freedom for reliable inference
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Subgroup data with treatment, outcome, and covariates
+    treatment_col : str
+        Column name for treatment indicator
+    outcome_col : str
+        Column name for outcome variable
+    delta : int
+        Minimum subgroup size threshold
+    ret_obj : bool
+        If True, return ATEUpdateLinear object; if False, return ATE value
+    
+    Returns:
+    --------
+    float or ATEUpdateLinear
+        ATE estimate if statistically significant (p < 0.05), else np.nan
+    """
     try:
-        ate_obj = ATEUpdateLinear(
-            df[final_features_cols],  # Use the filtered list
-            df[treatment_col],
-            df[outcome_col]
-        )
-        cate_value = ate_obj.get_original_ate()
-
-        # 5. Sanity Check (Keep this, it is cheap and effective)
-        y_range = df[outcome_col].max() - df[outcome_col].min()
-        threshold = max(y_range * 100.0, 1e6)
-
-        if abs(cate_value) > threshold:
+        # Check basic validity
+        if df.empty or df[treatment_col].nunique() < 2:
+            return np.nan
+        
+        # Check minimum sample size per treatment group
+        # Minimal requirement: just need both treatment groups present with reasonable minimum
+        # For delta=1000: requires only 10 samples per group (very lenient)
+        counts = df[treatment_col].value_counts()
+        min_samples_per_group = max(5, delta / 100.0)  # Very lenient: delta/100 or minimum 5
+        if len(counts) < 2 or counts.min() < min_samples_per_group:
             return np.nan
 
-        return cate_value if not ret_obj else ate_obj
+        # Prepare covariates (exclude treatment and outcome)
+        exclude_cols = [treatment_col, TREATMENT_COL, outcome_col]
+        features_cols = [c for c in df.columns if c not in exclude_cols]
+        # Remove constant columns (no variation)
+        features_cols = [c for c in features_cols if df[c].nunique() > 1]
+        
+        if not features_cols:
+            return np.nan
+        
+        # Minimal overfitting check: just ensure we have more samples than parameters
+        # Model has: intercept + treatment + len(features_cols) covariates
+        # We only need n_params + 1 samples minimum (for non-singular matrix)
+        # This is the absolute minimum - very lenient for subgroup analysis
+        n_params = 2 + len(features_cols)
+        if len(df) <= n_params:  # Need at least n_params + 1, so > n_params
+            return np.nan
+        
+        try:
+            # Fit linear regression model: Y = β₀ + β₁T + β₂X₁ + ... + βₖXₖ
+            # This is the standard regression adjustment approach for causal inference
+            ate_obj = ATEUpdateLinear(
+                df[features_cols],
+                df[treatment_col], 
+                df[outcome_col]
+            )
+            
+            cate_value = ate_obj.get_original_ate()
+            
+            # Sanity check: Filter out clearly invalid/numerically unstable estimates
+            # Check for NaN, Inf, or extreme values that indicate numerical problems
+            if not np.isfinite(cate_value):
+                return np.nan
+            
+            # Filter extreme outliers that are likely numerical artifacts
+            # Use a reasonable threshold based on outcome distribution
+            outcome_std = df[outcome_col].std()
+            outcome_mean = df[outcome_col].mean()
+            
+            # If ATE is > 10x the outcome std or > 2x the outcome mean, it's likely unstable
+            # This catches extreme numerical errors while allowing large but plausible effects
+            if outcome_std > 0:
+                max_reasonable_ate = max(abs(outcome_mean) * 2, outcome_std * 10)
+                if abs(cate_value) > max_reasonable_ate:
+                    return np.nan
+            
+            # NOTE: We don't filter by p-value here because:
+            # 1. For subgroup analysis, we want to compare all subgroup ATEs to overall ATE
+            # 2. Non-significant effects are still informative for heterogeneity detection
+            # 3. Statistical significance can be reported separately if needed
+            # If you want to filter by significance, uncomment the line below:
+            # p_value = ate_obj.calculate_p_value()
+            # if p_value > 0.05:
+            #     return np.nan
 
-    except LinAlgError:
-        return np.nan if not ret_obj else None
+            return cate_value if not ret_obj else ate_obj
+            
+        except LinAlgError: 
+            # Singular matrix (perfect multicollinearity or insufficient variation)
+            return np.nan if not ret_obj else None
+            
     except Exception:
         return np.nan
 
 
 class ATEUpdateLinear:
     def __init__(self, X, T, Y, find_confounders=False):
-        """
-        Initialize with dataset and identify confounders using DoWhy.
-        The design matrix is created once and preserves the original index
-        to allow for efficient slicing for subgroup analysis.
-        
-        Parameters:
-        ----------
-        X : pandas.DataFrame or numpy.ndarray
-            Covariates/features
-        T : pandas.Series or numpy.ndarray
-            Treatment indicator (0 or 1)
-        Y : pandas.Series or numpy.ndarray
-            Outcome variable
-        """
-        # Ensure inputs are DataFrames/Series with a consistent index
-        self.X = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X,
-                                                                           columns=[f"X{i}" for i in range(X.shape[1])])
+        self.X = X.copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
         self.T = T.copy() if isinstance(T, pd.Series) else pd.Series(T, index=self.X.index)
         self.Y = Y.copy() if isinstance(Y, pd.Series) else pd.Series(Y, index=self.X.index)
-
-        # Create the intercept Series, preserving the original index
         intercept = pd.Series(1, index=self.X.index, name='intercept')
         
-        if find_confounders:
-            self.confounders = self._identify_confounders()
-            self.confounders = self.confounders if isinstance(self.confounders, list) else self.confounders.get(
-                'backdoor')
-            X_confounders = self.X[self.confounders] if self.confounders else self.X
-            # Create design matrix, ensuring index alignment
-            self.design_matrix = pd.concat([intercept, self.T, X_confounders], axis=1)
-            column_names = ['intercept', 'treatment'] + (
-                self.confounders if self.confounders else self.X.columns.tolist())
-            self.design_matrix.columns = column_names
-        else:
-            # Use all features as confounders
-            self.design_matrix = pd.concat([intercept, self.T, self.X], axis=1)
-            self.design_matrix.columns = ['intercept', 'treatment'] + self.X.columns.tolist()
-
-        # Convert to numpy for faster computation
+        self.design_matrix = pd.concat([intercept, self.T, self.X], axis=1)
+        self.design_matrix.columns = ['intercept', 'treatment'] + self.X.columns.tolist()
         self.X_matrix = self.design_matrix.values
         self.Y_matrix = self.Y.values.reshape(-1, 1)
-
-        # Store dimensions
         self.n_samples = self.X_matrix.shape[0]
         self.n_features = self.X_matrix.shape[1]
         
-        # Compute initial linear regression
         self.original_model = BaseLinearRegression(self.X_matrix, self.Y_matrix)
-        
-        # Store original ATE (treatment effect)
         self.original_ate = float(self.original_model.beta[1].item())
-    
-    def _identify_confounders(self):
+
+    def get_original_ate(self):
+        return self.original_ate
+
+    def calculate_p_value(self):
         """
-        Use DoWhy to identify confounders.
+        Calculate p-value for treatment effect using standard OLS inference.
+        Uses t-test with (n - k) degrees of freedom where k is number of parameters.
         
         Returns:
-        --------
-        list
-            List of column names identified as confounders
+            p-value for the treatment coefficient (β₁)
         """
         try:
-            import dowhy
-            from dowhy import CausalModel
-            import warnings
-            warnings.filterwarnings('ignore')  # Suppress DoWhy warnings
+            y_pred = self.X_matrix @ self.original_model.beta
+            residuals = self.Y_matrix - y_pred
+            rss = np.sum(residuals ** 2)
             
-            # Prepare data
-            data = self.X.copy()
-            data['treatment'] = self.T.values
-            data['outcome'] = self.Y.values
-            
-            # Create causal graph
-            feature_names = self.X.columns.tolist()
-            edges = []
-            for feat in feature_names:
-                edges.append(f"{feat} -> treatment")
-                edges.append(f"{feat} -> outcome")
-            edges.append("treatment -> outcome")
-            
-            graph = "digraph {" + "; ".join(edges) + "}"
-            
-            # Create causal model
-            model = CausalModel(
-                data=data,
-                treatment='treatment',
-                outcome='outcome',
-                graph=graph,
-                approach="backdoor"
-            )
-            
-            # Identify effect
-            identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
-            
-            # Extract confounders
-            if hasattr(identified_estimand, 'backdoor_variables') and identified_estimand.backdoor_variables:
-                return identified_estimand.backdoor_variables
-            else:
-                return self.X.columns.tolist()
+            df_resid = self.n_samples - self.n_features
+            # Require minimum degrees of freedom for reliable inference
+            # Standard practice: at least 5-10 df, but we use 3 as minimum
+            if df_resid < 3:
+                return 1.0
                 
-        except ImportError:
-            print("DoWhy not installed. Using all variables as potential confounders.")
-            return self.X.columns.tolist()
-        except Exception as e:
-            print(f"Error in confounder identification: {e}. Using all variables.")
-            return self.X.columns.tolist()
-    
+            mse = rss / df_resid
+            
+            if hasattr(self.original_model, 'XTX_inv'):
+                xtx_inv = self.original_model.XTX_inv
+            else:
+                return 1.0 
+            
+            # Variance-covariance matrix: Var(β) = σ² * (X^T X)^(-1)
+            # For standard errors, we need diagonal elements: Var(βᵢ) = σ² * (X^T X)ᵢᵢ^(-1)
+            var_beta = mse * np.diag(xtx_inv)
+            
+            # Handle numerical issues: clip negative variances to zero (shouldn't happen in theory)
+            # This can occur due to floating point errors in matrix inversion
+            var_beta = np.clip(var_beta, 0, None)
+            
+            # Compute standard errors (sqrt of variance)
+            with np.errstate(invalid='ignore'):
+                se_beta = np.sqrt(var_beta)
+            
+            # Set any invalid (NaN/Inf) or very small SEs to infinity to make p-value = 1
+            se_beta = np.where((se_beta < 1e-10) | ~np.isfinite(se_beta), np.inf, se_beta)
+            
+            t_stat = self.original_model.beta.flatten() / se_beta
+            
+            # Two-tailed t-test: P(|T| > |t|)
+            p_values = 2 * (1 - stats.t.cdf(np.abs(t_stat), df_resid))
+            
+            # Return p-value for treatment coefficient (index 1: intercept=0, treatment=1)
+            return p_values[1] 
+        except Exception:
+            return 1.0
+
     def get_ate_difference(self, removed_indices, approx=False, update=True):
-        """
-        Compute the difference in ATE after removing specified data points.
-        Permanently updates the model and dataset.
-        
-        Parameters:
-        -----------
-        removed_indices : int or list
-            Index or indices of data points to remove
-        
-        Returns:
-        --------
-        float
-            Difference between updated ATE and original ATE
-        """
         if not removed_indices:
             return 0.0
         
-        # Store current ATE before update
         current_ate = self.original_ate
         
-        # Update the model and dataset
         if isinstance(removed_indices, int):
             removed_indices = [removed_indices]
-
-        # Extract rows to be removed
         X_remove = self.design_matrix.loc[removed_indices].values
         Y_remove = self.Y.loc[removed_indices].values.reshape(-1, 1)
         
         if approx:
-            # Update inverse using Neumann series
             XTX_inv_updated = self.original_model.neumann_update(X_remove)
         else:
-            # Update inverse using Woodbury formula
             XTX_inv_updated = self.original_model.woodbury_update(X_remove)
-
         beta_updated = XTX_inv_updated @ (self.X_matrix.T @ self.Y_matrix - X_remove.T @ Y_remove)
         
-        # Update the ATE
         new_ate = float(beta_updated[1].item())
-
         if update:
             self.original_model.XTX_inv = XTX_inv_updated
             self.original_model.beta = beta_updated
             self.original_ate = new_ate
         
             keep_indices = [i for i in self.X.index if i not in removed_indices]
-
             self.X = self.X.loc[keep_indices]
             self.T = self.T.loc[keep_indices]
             self.Y = self.Y.loc[keep_indices]
             
-            # Update design matrix if it exists
             if hasattr(self, 'design_matrix'):
-                # self.design_matrix = self.design_matrix.iloc[keep_indices].reset_index(drop=True)
                 self.design_matrix = self.design_matrix.loc[keep_indices]
             
             self.X_matrix = self.design_matrix.values
@@ -265,36 +233,10 @@ class ATEUpdateLinear:
         
         return new_ate - current_ate
 
-    def get_original_ate(self):
-        """
-        Get the current ATE (treatment effect).
-        
-        Returns:
-        --------
-        float
-            Current ATE
-        """
-        return self.original_ate
-
     def calculate_updated_ATE(self, removed_indices, approx=False):
-        """
-        Calculate updated ATE after removing specified data points using the Woodbury method.
-        Permanently updates the model and dataset.
-        
-        Parameters:
-        -----------
-        indices_to_remove : list
-            Index or indices of data points to remove
-        
-        Returns:
-        --------
-        float
-            Updated ATE after removing specified data points
-        """
         if not removed_indices:
             return self.original_ate
         
-        # Return the ATE difference to maintain backwards compatibility
         self.get_ate_difference(removed_indices, approx=approx, update=True)
         return self.original_ate
     

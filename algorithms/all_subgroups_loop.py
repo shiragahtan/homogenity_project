@@ -32,8 +32,6 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # --- ALGORITHM SETUP ---
-# FIX: Removed "Random" from here.
-# It is still in the DISPATCH_MAP, so RW can call it, but it won't run standalone.
 ALGORITHM_NAMES = ["FPGrowth"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
@@ -53,7 +51,7 @@ ALGORITHM_DISPATCH_MAP = {
 
 MODES = config['MODES']
 #EPSILONS = [30000]
-EPSILONS = [100000]
+EPSILONS = [76000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
@@ -236,7 +234,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
     # Calculate utility
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     with timer() as utility_timer:
-        utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO)
+        utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO, delta)
     utility_time = utility_timer()
 
     for epsilon in epsilons:

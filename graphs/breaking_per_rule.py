@@ -11,7 +11,8 @@ TARGET_DIRECTORY = '../algorithms_results'
 # Directory where the final summary Excel files will be saved
 OUTPUT_DIR = './breaking_subgroups_by_rule'
 # The range of epsilon values to iterate over
-EPSILON_RANGE = range(5000, 65001, 5000)
+EPSILON_RANGE = range(5000, 100001, 5000)
+#EPSILON_RANGE = [50000]
 # Regex to match the files and extract delta and index (the rule number)
 # Captures: 1: delta value, 2: index value (Rule ID)
 FILE_PATTERN = re.compile(r'_delta_(\d+)_(\d+)\.xlsx$', re.IGNORECASE)
@@ -63,7 +64,10 @@ def group_files_by_rule(target_dir):
 
 
 def process_rule_group(index, file_list):
-    """Processes all files belonging to a single rule (index) and generates one output file."""
+    """
+    Processes all files belonging to a single rule (index) and generates one output file.
+    Returns: A list of dictionaries containing the summary stats for this rule (to be aggregated later).
+    """
 
     # Data structures to collect results for this rule
     rule_attribute_counts = Counter()
@@ -110,7 +114,10 @@ def process_rule_group(index, file_list):
 
             # --- Collect data for Sheet 2 (Percentage Summary) ---
             percentage = (num_breaking_subgroups / num_all_subgroups) * 100 if num_all_subgroups > 0 else 0
+
+            # Store summary data (We add Rule Index here so we can identify it in the master file later)
             rule_percentage_summary.append({
+                'Rule Index': int(index),
                 'Delta': int(delta),
                 'Epsilon': epsilon,
                 'Num All Subgroups': num_all_subgroups,
@@ -151,12 +158,12 @@ def process_rule_group(index, file_list):
     # --- Write Output File for the Rule ---
     if not rule_attribute_counts and not rule_percentage_summary:
         print(f"--- Rule {index} finished with no data to write. ---")
-        return
+        return []
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     output_path = os.path.join(OUTPUT_DIR, f'rule_breaking_summary_index_{index}.xlsx')
 
-    print(f"  > Writing final results to {output_path}...")
+    print(f"  > Writing individual summary to {output_path}...")
 
     try:
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
@@ -171,9 +178,8 @@ def process_rule_group(index, file_list):
             # 2. Write Sheet 2: Percentage Summary
             if rule_percentage_summary:
                 summary_df = pd.DataFrame(rule_percentage_summary)
-                # Sort by Delta then Epsilon
+                # Remove Rule Index from individual file if desired, or keep it. Keeping it for now.
                 summary_df = summary_df.sort_values(['Delta', 'Epsilon'])
-                # Sheet name starting with 2 to ensure it's the second sheet
                 summary_df.to_excel(writer, sheet_name='2_Percentage_Summary', index=False)
 
             # 3. Write Sheet 3+: Breaking Subgroups Data
@@ -185,10 +191,14 @@ def process_rule_group(index, file_list):
                 breaking_df = breaking_df.sort_values('UtilityDiff', ascending=False)
                 breaking_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        print(f"--- Successfully created output for Rule {index} at {output_path} ---")
+        print(f"--- Successfully created output for Rule {index} ---")
+
+        # Return the summary data so Main can aggregate it
+        return rule_percentage_summary
 
     except Exception as e:
         print(f"  ! Error writing output file for Rule {index}: {e}")
+        return []
 
 
 # --- Main Execution ---
@@ -205,9 +215,43 @@ def main():
     print(
         f"Found {sum(len(v) for v in files_by_rule.values())} files grouped into {len(files_by_rule)} rules (indices).")
 
+    # List to hold summary stats from ALL rules
+    all_rules_summary_data = []
+
     # Process each rule group
     for index, file_list in files_by_rule.items():
-        process_rule_group(index, file_list)
+        # process_rule_group now returns the summary list
+        rule_summary_data = process_rule_group(index, file_list)
+
+        # Add to our master list
+        if rule_summary_data:
+            all_rules_summary_data.extend(rule_summary_data)
+
+    # --- Generate Master Summary File ---
+    if all_rules_summary_data:
+        print("\n--- Generating Master Summary File ---")
+        master_output_path = os.path.join(OUTPUT_DIR, 'master_summary_all_rules.xlsx')
+
+        try:
+            master_df = pd.DataFrame(all_rules_summary_data)
+
+            # Reorder columns for better readability
+            cols_order = ['Rule Index', 'Delta', 'Epsilon', 'Num All Subgroups', 'Num Breaking Subgroups',
+                          'Percentage Breaking']
+            # Only select columns that exist (in case something went wrong, though it shouldn't)
+            cols_to_use = [c for c in cols_order if c in master_df.columns]
+            master_df = master_df[cols_to_use]
+
+            # Sort by Rule Index, then Delta
+            master_df = master_df.sort_values(by=['Rule Index', 'Delta', 'Epsilon'])
+
+            master_df.to_excel(master_output_path, index=False)
+            print(f"Success! Master summary saved to: {master_output_path}")
+
+        except Exception as e:
+            print(f"Error creating master summary file: {e}")
+    else:
+        print("No data available to generate master summary.")
 
     print("\n\nAll processing complete. Results are saved in the './breaking_subgroups_by_rule' directory.")
 

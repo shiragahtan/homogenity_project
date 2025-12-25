@@ -18,3 +18,5 @@ z3_solver==4.13.0.0
 openpyxl==3.1.5
 pygraphviz
 seaborn==0.13.2
+econml==0.16.0
+xgboost==3.1.2

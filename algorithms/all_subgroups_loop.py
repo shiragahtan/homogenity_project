@@ -23,6 +23,7 @@ from rw_multiProcesing import calc_utility_for_subgroups as rw_multiProcessing_c
 from greedy_algorithm import calc_utility_for_subgroups as greedy_calc_utility_for_subgroups
 from random_algorithm import calc_utility_for_subgroups as random_calc_utility_for_subgroups
 from causalForest_algorithm import calc_utility_for_subgroups as causalForest_calc_utility_for_subgroups
+from algorithms.code.code.main import run_wte_homogeneity_baseline
 
 # Load config
 with open('../configs/config.json', 'r') as f:
@@ -32,7 +33,7 @@ with open('../configs/config.json', 'r') as f:
 DELTAS = [1000]
 
 # --- ALGORITHM SETUP ---
-ALGORITHM_NAMES = ["FPGrowth"]
+ALGORITHM_NAMES = ["FPGrowth", "Greedy", "RW", "CausalForest", "WTE"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
@@ -47,6 +48,7 @@ ALGORITHM_DISPATCH_MAP = {
     "Greedy": 6,
     "Random": 7,
     "CausalForest": 8,
+    "WTE": 9,
 }
 
 MODES = config['MODES']
@@ -277,6 +279,7 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             "Greedy": lambda: greedy_calc_utility_for_subgroups(**_greedy_kw),
             "Random": lambda: random_calc_utility_for_subgroups(**_random_kw),
             "CausalForest": lambda: causalForest_calc_utility_for_subgroups(**_causalForest_kw),
+            "WTE": lambda: run_wte_homogeneity_baseline(**common),
         }
 
         # Resolve dispatch key
@@ -414,7 +417,6 @@ def main():
         except:
             pass
 
-    # FIX: Also remove "Random" if we are in RW-baseline mode, to prevent standalone runs
     if RUN_RANDOM_BASELINE and "Random" in algorithms_to_run:
         try:
             algorithms_to_run.remove("Random")

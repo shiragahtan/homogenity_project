@@ -13,114 +13,70 @@ TREATMENT_COL = config['TREATMENT_COL']
 
 
 def calculate_ate_safe(df, treatment_col, outcome_col, delta, ret_obj=False):
-    """
-    Calculate Average Treatment Effect (ATE) for a subgroup using linear regression adjustment.
-    
-    This function implements the standard regression adjustment approach for causal inference:
-    Y = β₀ + β₁T + β₂X₁ + ... + βₖXₖ
-    
-    where:
-    - Y is the outcome
-    - T is the treatment indicator (0/1)
-    - X₁...Xₖ are confounders/covariates
-    - β₁ is the ATE (Average Treatment Effect)
-    
-    The function filters subgroups based on:
-    1. Minimum sample size per treatment group
-    2. Statistical significance (p < 0.05)
-    3. Sufficient degrees of freedom for reliable inference
-    
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        Subgroup data with treatment, outcome, and covariates
-    treatment_col : str
-        Column name for treatment indicator
-    outcome_col : str
-        Column name for outcome variable
-    delta : int
-        Minimum subgroup size threshold
-    ret_obj : bool
-        If True, return ATEUpdateLinear object; if False, return ATE value
-    
-    Returns:
-    --------
-    float or ATEUpdateLinear
-        ATE estimate if statistically significant (p < 0.05), else np.nan
-    """
     try:
-        # Check basic validity
-        if df.empty or df[treatment_col].nunique() < 2:
-            return np.nan
-        
-        # Check minimum sample size per treatment group
-        # Minimal requirement: just need both treatment groups present with reasonable minimum
-        # For delta=1000: requires only 10 samples per group (very lenient)
+        # 1. SAMPLE SIZE FILTER
         counts = df[treatment_col].value_counts()
-        min_samples_per_group = max(5, delta / 100.0)  # Very lenient: delta/100 or minimum 5
+        min_samples_per_group = max(30, delta / 20.0)
+
         if len(counts) < 2 or counts.min() < min_samples_per_group:
             return np.nan
 
-        # Prepare covariates (exclude treatment and outcome)
+        # Prepare covariates
         exclude_cols = [treatment_col, TREATMENT_COL, outcome_col]
         features_cols = [c for c in df.columns if c not in exclude_cols]
-        # Remove constant columns (no variation)
         features_cols = [c for c in features_cols if df[c].nunique() > 1]
-        
+
         if not features_cols:
             return np.nan
-        
-        # Minimal overfitting check: just ensure we have more samples than parameters
-        # Model has: intercept + treatment + len(features_cols) covariates
-        # We only need n_params + 1 samples minimum (for non-singular matrix)
-        # This is the absolute minimum - very lenient for subgroup analysis
+
         n_params = 2 + len(features_cols)
-        if len(df) <= n_params:  # Need at least n_params + 1, so > n_params
+        if len(df) <= n_params + 5:
             return np.nan
-        
+
         try:
-            # Fit linear regression model: Y = β₀ + β₁T + β₂X₁ + ... + βₖXₖ
-            # This is the standard regression adjustment approach for causal inference
             ate_obj = ATEUpdateLinear(
                 df[features_cols],
-                df[treatment_col], 
+                df[treatment_col],
                 df[outcome_col]
             )
-            
+
             cate_value = ate_obj.get_original_ate()
-            
-            # Sanity check: Filter out clearly invalid/numerically unstable estimates
-            # Check for NaN, Inf, or extreme values that indicate numerical problems
+
             if not np.isfinite(cate_value):
                 return np.nan
-            
-            # Filter extreme outliers that are likely numerical artifacts
-            # Use a reasonable threshold based on outcome distribution
-            outcome_std = df[outcome_col].std()
-            outcome_mean = df[outcome_col].mean()
-            
-            # If ATE is > 10x the outcome std or > 2x the outcome mean, it's likely unstable
-            # This catches extreme numerical errors while allowing large but plausible effects
-            if outcome_std > 0:
-                max_reasonable_ate = max(abs(outcome_mean) * 2, outcome_std * 10)
-                if abs(cate_value) > max_reasonable_ate:
-                    return np.nan
-            
-            # NOTE: We don't filter by p-value here because:
-            # 1. For subgroup analysis, we want to compare all subgroup ATEs to overall ATE
-            # 2. Non-significant effects are still informative for heterogeneity detection
-            # 3. Statistical significance can be reported separately if needed
-            # If you want to filter by significance, uncomment the line below:
-            # p_value = ate_obj.calculate_p_value()
-            # if p_value > 0.05:
-            #     return np.nan
+
+            # If ATE is > $10,000,000, it is a math error, not a real salary difference.
+            if abs(cate_value) > 10_000_000:
+                return np.nan
+            # -----------------------------------------------------
+
+            # 3. STANDARD ERROR FILTER
+            y_pred = ate_obj.X_matrix @ ate_obj.original_model.beta
+            residuals = ate_obj.Y_matrix - y_pred
+            rss = np.sum(residuals ** 2)
+            df_resid = ate_obj.n_samples - ate_obj.n_features
+            mse = rss / df_resid
+
+            xtx_inv = ate_obj.original_model.XTX_inv
+            var_beta_treatment = mse * xtx_inv[1, 1]
+
+            # If variance is negative, the matrix inversion failed numerically.
+            if var_beta_treatment <= 0:
+                return np.nan
+
+            se_beta_treatment = np.sqrt(var_beta_treatment)
+            # -------------------------------------------------------------
+
+            # THRESHOLD: Filter if SE is > 50% of the mean outcome
+            outcome_mean = abs(df[outcome_col].mean())
+            if outcome_mean > 0 and se_beta_treatment > (outcome_mean * 0.5):
+                return np.nan
 
             return cate_value if not ret_obj else ate_obj
-            
-        except LinAlgError: 
-            # Singular matrix (perfect multicollinearity or insufficient variation)
+
+        except LinAlgError:
             return np.nan if not ret_obj else None
-            
+
     except Exception:
         return np.nan
 

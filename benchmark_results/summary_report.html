@@ -1,0 +1,251 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benchmark Results Summary - Problems 2 & 3</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .subtitle { font-size: 1.2em; opacity: 0.9; }
+        .content { padding: 40px; }
+        
+        .problem-section {
+            margin: 30px 0;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .problem-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .problem-content {
+            padding: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        thead {
+            background: #f8f9fa;
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 10px 5px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        }
+        
+        .btn-epsilon {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .emoji { font-size: 1.2em; }
+        
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span class="emoji">🎯</span> Homogeneity Algorithm Benchmarks</h1>
+            <p class="subtitle">Problems 2 & 3: Binary Search Performance Analysis</p>
+            <p class="subtitle" style="font-size: 0.9em; margin-top: 10px;">
+                Generated on 2025-12-27 14:47:06
+            </p>
+        </header>
+        
+        <div class="content">
+            <div class="problem-section">
+                <div class="problem-header">
+                    <span class="emoji">📊</span> Problem 2: Find Largest Delta Breaking Homogeneity
+                </div>
+                <div class="problem-content">
+                    <p style="margin-bottom: 15px;">
+                        <strong>Objective:</strong> Given a fixed epsilon (ε), find the largest minimum subgroup size (δ*) 
+                        where the rule remains heterogeneous.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr>
+                                <td><strong>Total Experiments</strong></td>
+                                <td>4.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Avg Runtime (seconds)</strong></td>
+                                <td>12.882</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Avg Oracle Calls</strong></td>
+                                <td>12.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Min Oracle Calls</strong></td>
+                                <td>12.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Max Oracle Calls</strong></td>
+                                <td>12.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Avg Efficiency Ratio</strong></td>
+                                <td>1.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Total Runtime (minutes)</strong></td>
+                                <td>0.859</td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <a href="problem2_largest_delta/benchmark_report.html" class="btn">
+                            <span class="emoji">📈</span> View Detailed Report
+                        </a>
+                        <a href="problem2_largest_delta/find_delta_benchmark_results.xlsx" class="btn">
+                            <span class="emoji">📊</span> Download Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="problem-section">
+                <div class="problem-header btn-epsilon">
+                    <span class="emoji">🎯</span> Problem 3: Find Smallest Epsilon Achieving Homogeneity
+                </div>
+                <div class="problem-content">
+                    <p style="margin-bottom: 15px;">
+                        <strong>Objective:</strong> Given a fixed delta (δ), find the smallest epsilon (ε*) 
+                        where the rule becomes homogeneous.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr>
+                                <td><strong>Total Experiments</strong></td>
+                                <td>4.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Avg Runtime (seconds)</strong></td>
+                                <td>20.178</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Avg Oracle Calls</strong></td>
+                                <td>8.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Min Oracle Calls</strong></td>
+                                <td>8.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Max Oracle Calls</strong></td>
+                                <td>8.0</td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Total Runtime (minutes)</strong></td>
+                                <td>1.345</td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <a href="problem3_smallest_epsilon/benchmark_report.html" class="btn btn-epsilon">
+                            <span class="emoji">📈</span> View Detailed Report
+                        </a>
+                        <a href="problem3_smallest_epsilon/find_epsilon_benchmark_results.xlsx" class="btn btn-epsilon">
+                            <span class="emoji">📊</span> Download Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p><span class="emoji">⚡</span> Both algorithms use binary search with FPGrowth oracle</p>
+            <p>Dataset: Stack Overflow Developer Survey</p>
+        </footer>
+    </div>
+</body>
+</html>

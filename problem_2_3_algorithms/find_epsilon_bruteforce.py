@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Tuple, Optional, Dict
 import time
+import math
 
 import pandas as pd
 from mlxtend.frequent_patterns import fpgrowth
@@ -97,12 +98,14 @@ def find_smallest_epsilon_bruteforce(
             print("⚠️  Unexpected return format from FPGrowth")
         return None, 0, None, utility_all, elapsed_time
     
-    smallest_epsilon = max_abs_diff if max_abs_diff > 0 else 0
+    # Binary-search method tests integer epsilons; to make the two methods comparable,
+    # we return the smallest *integer* epsilon that guarantees homogeneity.
+    smallest_epsilon = int(math.ceil(max_abs_diff)) if max_abs_diff > 0 else 0
     
     if verbose:
         print(f"\n✓ Enumerated {num_checked} subgroups")
         print(f"✓ Maximum utility difference found: {max_abs_diff:.2f}")
-        print(f"✓ Smallest epsilon needed: {smallest_epsilon:.2f}")
+        print(f"✓ Smallest integer epsilon needed: {smallest_epsilon:,}")
         
         if max_violation_info:
             print(f"\nSubgroup with maximum deviation:")

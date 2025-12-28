@@ -47,7 +47,7 @@ def run_comparison_benchmark(
     delta_values: List[int] = None,
     epsilon_start: float = 1000.0,
     epsilon_max: float = 500000.0,
-    output_dir: str = "../benchmark_results_epsilon_comparison"
+    output_dir: str = "benchmark_results_epsilon_comparison"
 ) -> pd.DataFrame:
     """Run both methods and compare."""
     
@@ -55,6 +55,8 @@ def run_comparison_benchmark(
         delta_values = [500, 1000, 1500, 2000, 2500, 3000]
     
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     output_path.mkdir(exist_ok=True, parents=True)
     
     print("="*80)
@@ -193,6 +195,8 @@ def run_comparison_benchmark(
 def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
     """Generate HTML report comparing both methods."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     html_path = output_path / 'epsilon_comparison_report.html'
     
     # Summary statistics
@@ -433,7 +437,7 @@ def main():
                        help='Comma-separated delta values')
     parser.add_argument('--epsilon_start', type=float, default=1000.0)
     parser.add_argument('--epsilon_max', type=float, default=500000.0)
-    parser.add_argument('--output', type=str, default='../benchmark_results_epsilon_comparison')
+    parser.add_argument('--output', type=str, default='benchmark_results_epsilon_comparison')
     
     args = parser.parse_args()
     

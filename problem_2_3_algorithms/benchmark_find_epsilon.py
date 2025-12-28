@@ -49,7 +49,7 @@ def run_benchmark(
     delta_values: List[int] = None,
     epsilon_start: float = 1000.0,
     epsilon_max: float = 500000.0,
-    output_dir: str = "../benchmark_results_epsilon"
+    output_dir: str = "benchmark_results"
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and delta values.
@@ -59,6 +59,8 @@ def run_benchmark(
     
     # Create output directory
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     output_path.mkdir(exist_ok=True, parents=True)
     
     print("="*80)
@@ -201,6 +203,8 @@ def generate_summary_statistics(results_df: pd.DataFrame) -> pd.DataFrame:
 def create_visualizations(results_df: pd.DataFrame, output_dir: str):
     """Create visualization plots for benchmark results."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     
     sns.set_style("whitegrid")
     plt.rcParams['figure.figsize'] = (12, 8)
@@ -283,6 +287,8 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str):
 def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, output_dir: str):
     """Generate beautiful HTML report."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     html_path = output_path / 'benchmark_report.html'
     
     total_exp = len(results_df)
@@ -732,6 +738,8 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
 def save_results(results_df: pd.DataFrame, summary_df: pd.DataFrame, output_dir: str):
     """Save results to Excel and CSV."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     excel_path = output_path / 'find_epsilon_benchmark_results.xlsx'
     
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
@@ -767,7 +775,7 @@ def main():
                        help='Comma-separated delta values')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon')
     parser.add_argument('--epsilon_max', type=float, default=500000.0, help='Max epsilon')
-    parser.add_argument('--output', type=str, default='../benchmark_results_epsilon',
+    parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory')
     
     args = parser.parse_args()

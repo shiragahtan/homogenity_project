@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Results: Problems 2 & 3</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        h1 { color: #333; border-bottom: 4px solid #667eea; padding-bottom: 15px; margin-bottom: 30px; }
+        h2 { color: #667eea; margin-top: 40px; background: #f0f4ff; padding: 15px; border-left: 5px solid #667eea; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        th { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600; }
+        tr:hover { background: #f5f5f5; }
+        .winner { background: #e8f5e9 !important; font-weight: bold; }
+        .badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; margin-left: 10px; }
+        .badge-problem2 { background: #ffd54f; color: #333; }
+        .badge-problem3 { background: #4caf50; color: white; }
+        .metric { font-size: 1.3em; font-weight: bold; color: #667eea; }
+        .section { background: #f9f9f9; padding: 25px; border-radius: 10px; margin: 20px 0; border: 1px solid #e0e0e0; }
+        .highlight { background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 15px 0; }
+        ul { line-height: 1.8; }
+        .comparison-box { display: flex; gap: 20px; margin: 20px 0; }
+        .method-card { flex: 1; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Comprehensive Test Results</h1>
+        
+        <div class="highlight">
+            <strong>Dataset:</strong> 29,496 rows | <strong>Population ATE:</strong> 27113.43<br>
+            <strong>Treatment Distribution:</strong> Control: 23,270, Treatment: 6,226
+        </div>
+        
+        <h2><span class="badge badge-problem2">PROBLEM 2</span> Find Largest Delta Breaking Homogeneity</h2>
+        
+        <div class="section">
+            <h3>📋 Problem Definition</h3>
+            <p>Given a <strong>fixed epsilon (ε = 30,000)</strong>, find the largest delta (δ) where the rule is still heterogeneous.</p>
+            <p><em>Interpretation: The largest minimum subgroup size where we can still find violations.</em></p>
+            
+            <h3>🔧 Algorithm</h3>
+            <p><strong>Binary Search with FPGrowth Oracle</strong></p>
+            <ul>
+                <li>Search space: δ ∈ [500, 2,000]</li>
+                <li>Oracle: FPGrowth checks heterogeneity at each delta candidate</li>
+                <li>Monotonicity: If heterogeneous at δ, remains heterogeneous for all δ' < δ</li>
+                <li>Complexity: O(log(δ_max - δ_min)) oracle calls</li>
+            </ul>
+            
+            <h3>📊 Results</h3>
+            <table>
+                <tr>
+                    <th style="width: 50%">Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Largest δ (Heterogeneous)</td>
+                    <td class="metric">2000</td>
+                </tr>
+                <tr>
+                    <td>Smallest δ (Homogeneous)</td>
+                    <td class="metric">2001</td>
+                </tr>
+                <tr>
+                    <td>Oracle Calls</td>
+                    <td>11</td>
+                </tr>
+                <tr>
+                    <td>Runtime</td>
+                    <td>12.09s</td>
+                </tr>
+                <tr>
+                    <td>Population ATE</td>
+                    <td>27113.43</td>
+                </tr>
+            </table>
+            
+            <div class="highlight">
+                <strong>Violating Subgroup Details:</strong>
+                <ul>
+                    <li><strong>Subgroup:</strong> {'HoursComputer': '1', 'Gender': '1', 'GINI': '2', 'FormalEducation': '1'}</li>
+                    <li><strong>Size:</strong> 2,211 individuals</li>
+                    <li><strong>Subgroup Utility:</strong> -9174.70</li>
+                    <li><strong>Population Utility:</strong> 27113.43</li>
+                    <li><strong>|Difference|:</strong> 36288.13 (> ε=30,000)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <h2><span class="badge badge-problem3">PROBLEM 3</span> Find Smallest Epsilon Achieving Homogeneity</h2>
+        
+        <div class="section">
+            <h3>📋 Problem Definition</h3>
+            <p>Given a <strong>fixed delta (δ = 1,000)</strong>, find the smallest epsilon (ε) where the rule becomes homogeneous.</p>
+            <p><em>Interpretation: The minimum threshold needed to consider all subgroups as "similar enough".</em></p>
+            
+            <h3>🔧 Methods Compared</h3>
+            <div class="comparison-box">
+                <div class="method-card">
+                    <h4>Method 1: Binary Search</h4>
+                    <ul>
+                        <li>Binary search on [0, 2,000,000]</li>
+                        <li>Uses FPGrowth as oracle</li>
+                        <li>Complexity: O(log ε_max)</li>
+                    </ul>
+                </div>
+                <div class="method-card">
+                    <h4>Method 2: Brute Force</h4>
+                    <ul>
+                        <li>FPGrowth enumerates ALL subgroups</li>
+                        <li>Finds max utility difference</li>
+                        <li>Complexity: O(number of subgroups)</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h3>📊 Results Comparison</h3>
+            <table>
+                <tr>
+                    <th style="width: 40%">Metric</th>
+                    <th style="width: 30%">Binary Search</th>
+                    <th style="width: 30%">Brute Force</th>
+                </tr>
+                <tr>
+                    <td><strong>Smallest ε</strong></td>
+                    <td class="metric">1,071,374</td>
+                    <td class="metric">1,071,374</td>
+                </tr>
+                <tr>
+                    <td>Results Match?</td>
+                    <td colspan="2" style="text-align:center; font-weight:bold;">✓ YES</td>
+                </tr>
+                <tr>
+                    <td>Efficiency</td>
+                    <td>22 oracle calls</td>
+                    <td>138,397 subgroups examined</td>
+                </tr>
+                <tr class="">
+                    <td>Runtime</td>
+                    <td>2250.10s</td>
+                    <td class="winner">136.42s</td>
+                </tr>
+                <tr>
+                    <td><strong>Winner</strong></td>
+                    <td colspan="2" style="text-align:center; font-weight:bold; color:#4caf50;">
+                        Brute Force 
+                        (speedup: 16.49x)
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <h2>📝 Summary & Key Takeaways</h2>
+        <div class="section">
+            <h3>Algorithm Comparison</h3>
+            <table>
+                <tr>
+                    <th>Problem</th>
+                    <th>Algorithms Used</th>
+                    <th>Comparison Type</th>
+                </tr>
+                <tr>
+                    <td><strong>Problem 2</strong><br>(Find Largest Delta)</td>
+                    <td>Binary Search + FPGrowth oracle</td>
+                    <td>❌ No comparison<br>(Single method)</td>
+                </tr>
+                <tr>
+                    <td><strong>Problem 3</strong><br>(Find Smallest Epsilon)</td>
+                    <td>1. Binary Search + FPGrowth oracle<br>2. Brute Force (FPGrowth enumeration)</td>
+                    <td>✅ Yes<br>(Two methods compared)</td>
+                </tr>
+            </table>
+            
+            <h3>Key Insights</h3>
+            <ul>
+                <li><strong>Binary Search:</strong> More efficient for large search spaces (logarithmic oracle calls)</li>
+                <li><strong>Brute Force:</strong> Can be competitive for smaller datasets (single enumeration)</li>
+                <li><strong>FPGrowth Role:</strong> Acts as oracle in Binary Search, enumerator in Brute Force</li>
+                <li><strong>Trade-off:</strong> Binary Search makes fewer calls but each call has overhead; Brute Force enumerates once but examines all subgroups</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

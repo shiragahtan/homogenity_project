@@ -272,10 +272,16 @@ def main():
     parser.add_argument('--delta_max', type=int, default=10000, help='Max delta for Problem 2 search')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon for Problem 3')
     parser.add_argument('--epsilon_max', type=float, default=500000.0, help='Max epsilon for Problem 3')
-    parser.add_argument('--output', type=str, default='../benchmark_results',
-                       help='Output directory (default: ../benchmark_results)')
+    parser.add_argument('--output', type=str, default='benchmark_results',
+                       help='Output directory (default: benchmark_results)')
     
     args = parser.parse_args()
+    
+    # Resolve output directory relative to this script (so it works from any cwd)
+    output_path = Path(args.output)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
+    args.output = str(output_path)
     
     # Create output directory structure
     base_output = Path(args.output)

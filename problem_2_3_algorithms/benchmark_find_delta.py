@@ -47,7 +47,7 @@ def run_benchmark(
     epsilon_values: List[float] = None,
     delta_min: int = 100,
     delta_max: int = 10000,
-    output_dir: str = "../benchmark_results"
+    output_dir: str = "benchmark_results"
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and epsilon values.
@@ -67,6 +67,8 @@ def run_benchmark(
     
     # Create output directory
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     output_path.mkdir(exist_ok=True, parents=True)
     
     print("="*80)
@@ -204,9 +206,11 @@ def generate_summary_statistics(results_df: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-def create_visualizations(results_df: pd.DataFrame, output_dir: str = "../benchmark_results"):
+def create_visualizations(results_df: pd.DataFrame, output_dir: str = "benchmark_results"):
     """Create visualization plots for benchmark results."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     
     # Set style
     sns.set_style("whitegrid")
@@ -291,9 +295,11 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str = "../benchm
 
 
 def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
-                         output_dir: str = "../benchmark_results"):
+                         output_dir: str = "benchmark_results"):
     """Generate a beautiful HTML report with interactive tables."""
     output_path = Path(output_dir)
+    if not output_path.is_absolute():
+        output_path = Path(__file__).resolve().parent / output_path
     html_path = output_path / 'benchmark_report.html'
     
     # HTML template with modern styling
@@ -568,8 +574,8 @@ def main():
                        help='Comma-separated epsilon values (default: 10k,20k,30k,40k,50k,60k)')
     parser.add_argument('--delta_min', type=int, default=100, help='Minimum delta (default: 100)')
     parser.add_argument('--delta_max', type=int, default=10000, help='Maximum delta (default: 10000)')
-    parser.add_argument('--output', type=str, default='../benchmark_results',
-                       help='Output directory (default: ../benchmark_results)')
+    parser.add_argument('--output', type=str, default='benchmark_results',
+                       help='Output directory (default: benchmark_results)')
     
     args = parser.parse_args()
     

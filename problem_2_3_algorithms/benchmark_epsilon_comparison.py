@@ -1,8 +1,8 @@
 """
-Benchmark Comparison: Two-Phase Search vs Brute Force for Finding Smallest Epsilon.
+Benchmark Comparison: Binary Search vs Brute Force for Finding Smallest Epsilon.
 
 Compares:
-- Method 1 (Two-Phase): Exponential search + binary search
+- Method 1 (Binary Search): Standard binary search on [0, epsilon_max]
 - Method 2 (Brute Force): FPGrowth enumeration of all subgroups
 
 Metrics:
@@ -60,7 +60,7 @@ def run_comparison_benchmark(
     print("="*80)
     print("EPSILON FINDING - METHOD COMPARISON BENCHMARK")
     print("="*80)
-    print(f"Method 1: Two-Phase Search (Exponential + Binary)")
+    print(f"Method 1: Binary Search on [0, epsilon_max]")
     print(f"Method 2: Brute Force (FPGrowth All Subgroups)")
     print(f"\nTesting {num_rules} rules with {len(delta_values)} delta values")
     print(f"Total experiments per method: {num_rules * len(delta_values)}")
@@ -101,8 +101,8 @@ def run_comparison_benchmark(
             print(f"\n[{current_experiment}/{total_experiments}] Delta = {delta:,}")
             print("-"*80)
             
-            # METHOD 1: Two-Phase Search
-            print("Method 1 (Two-Phase):")
+            # METHOD 1: Binary Search Search
+            print("Method 1 (Binary Search):")
             try:
                 start_time = time.time()
                 epsilon_twophase, oracle_calls_twophase, violation_info_twophase, utility_all_twophase = \
@@ -176,7 +176,7 @@ def run_comparison_benchmark(
                 'Runtime_TwoPhase': round(runtime_twophase, 3),
                 'Runtime_BruteForce': round(runtime_bruteforce, 3),
                 'Speedup_TwoPhase': round(runtime_bruteforce / runtime_twophase, 2) if runtime_twophase > 0 else 0,
-                'Winner': 'Two-Phase' if runtime_twophase < runtime_bruteforce else 'Brute Force',
+                'Winner': 'Binary Search' if runtime_twophase < runtime_bruteforce else 'Brute Force',
                 'Dataset_Size': len(df)
             }
             results.append(result)
@@ -200,7 +200,7 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
     avg_runtime_bruteforce = results_df['Runtime_BruteForce'].mean()
     avg_speedup = results_df['Speedup_TwoPhase'].mean()
     
-    twophase_wins = len(results_df[results_df['Winner'] == 'Two-Phase'])
+    twophase_wins = len(results_df[results_df['Winner'] == 'Binary Search'])
     bruteforce_wins = len(results_df[results_df['Winner'] == 'Brute Force'])
     
     html = f"""
@@ -317,26 +317,26 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
     <div class="container">
         <header>
             <h1><span class="emoji">⚔️</span> Method Comparison</h1>
-            <p class="subtitle">Finding Smallest Epsilon: Two-Phase vs Brute Force</p>
+            <p class="subtitle">Finding Smallest Epsilon: Binary Search vs Brute Force</p>
         </header>
         
         <div class="content">
             <div class="winner-box">
                 <h2><span class="emoji">🏆</span> Overall Winner</h2>
                 <div style="font-size: 2.5em; font-weight: bold; margin: 20px 0;">
-                    {'Two-Phase Search' if twophase_wins > bruteforce_wins else 'Brute Force'}
+                    {'Binary Search Search' if twophase_wins > bruteforce_wins else 'Brute Force'}
                 </div>
                 <p style="font-size: 1.2em;">
                     Average speedup: <strong>{avg_speedup:.2f}x</strong> 
-                    {'(Two-Phase faster)' if avg_speedup > 1 else '(Brute Force faster)'}
+                    {'(Binary Search faster)' if avg_speedup > 1 else '(Brute Force faster)'}
                 </p>
                 <p style="margin-top: 10px;">
-                    Wins: Two-Phase <strong>{twophase_wins}</strong> | Brute Force <strong>{bruteforce_wins}</strong>
+                    Wins: Binary Search <strong>{twophase_wins}</strong> | Brute Force <strong>{bruteforce_wins}</strong>
                 </p>
             </div>
             
             <div class="method-box method-twophase">
-                <h3><span class="emoji">🔍</span> Method 1: Two-Phase Search</h3>
+                <h3><span class="emoji">🔍</span> Method 1: Binary Search Search</h3>
                 <p>Exponential search + Binary search</p>
                 <div class="stat">{avg_runtime_twophase:.3f}s</div>
                 <p>Average Runtime</p>
@@ -355,10 +355,10 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
                     <tr>
                         <th>Rule</th>
                         <th>Delta</th>
-                        <th>ε* Two-Phase</th>
+                        <th>ε* Binary Search</th>
                         <th>ε* Brute Force</th>
                         <th>Match</th>
-                        <th>Runtime Two-Phase</th>
+                        <th>Runtime Binary Search</th>
                         <th>Runtime Brute Force</th>
                         <th>Speedup</th>
                         <th>Winner</th>
@@ -377,7 +377,7 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
             eps_bf = f"{float(eps_bf):,.0f}"
         
         match_badge = f'<span class="badge badge-match">✓ {row["Match"]}</span>'
-        winner_badge = f'<span class="badge badge-{"twophase" if row["Winner"] == "Two-Phase" else "bruteforce"}">{row["Winner"]}</span>'
+        winner_badge = f'<span class="badge badge-{"twophase" if row["Winner"] == "Binary Search" else "bruteforce"}">{row["Winner"]}</span>'
         
         html += f"""
                     <tr>
@@ -409,7 +409,7 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
         </div>
         
         <footer>
-            <p>Benchmark completed: {total_experiments} experiments per method</p>
+            <p>Benchmark completed: {len(results_df)} experiments per method</p>
             <p>Dataset: Stack Overflow Developer Survey</p>
         </footer>
     </div>

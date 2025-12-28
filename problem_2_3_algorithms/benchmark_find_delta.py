@@ -133,18 +133,6 @@ def run_benchmark(
             theoretical_max = math.ceil(math.log2(delta_max - delta_min + 1))
             efficiency_ratio = oracle_calls / theoretical_max if theoretical_max > 0 else 1.0
             
-            # Calculate smallest delta where homogeneous (inverse relationship)
-            smallest_delta_homogeneous = None
-            if largest_delta is not None:
-                if largest_delta < delta_max:
-                    smallest_delta_homogeneous = largest_delta + 1
-                else:
-                    # If largest_delta = delta_max, we don't know the smallest homogeneous
-                    smallest_delta_homogeneous = f">{delta_max}"
-            else:
-                # No violations found at all - homogeneous everywhere
-                smallest_delta_homogeneous = delta_min
-            
             # Extract violation details
             violating_subgroup = str(violation_info['subgroup']) if violation_info else 'N/A'
             subgroup_size = violation_info['size'] if violation_info else 'N/A'
@@ -159,7 +147,6 @@ def run_benchmark(
                 'Treatment': str(treatment),
                 'Epsilon': epsilon,
                 'Largest_Delta_Heterogeneous': largest_delta if largest_delta is not None else 'None',
-                'Smallest_Delta_Homogeneous': smallest_delta_homogeneous,
                 'Oracle_Calls': oracle_calls,
                 'Runtime_Seconds': round(elapsed_time, 3),
                 'Runtime_Minutes': round(elapsed_time / 60, 3),
@@ -502,8 +489,6 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
             if col == 'Largest_Delta_Heterogeneous':
                 badge_class = 'badge-warning' if value != 'None' else 'badge-success'
                 detailed_html += f'<td><span class="badge {badge_class}">{value}</span></td>'
-            elif col == 'Smallest_Delta_Homogeneous':
-                detailed_html += f'<td><span class="badge badge-success">{value}</span></td>'
             elif col == 'Oracle_Calls':
                 detailed_html += f'<td class="metric-value">{value}</td>'
             elif col in ['Runtime_Seconds', 'Runtime_Minutes']:

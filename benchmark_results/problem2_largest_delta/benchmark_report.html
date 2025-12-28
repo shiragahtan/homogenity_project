@@ -151,54 +151,62 @@
                     
         <div class="summary-card">
             <h3>Total Experiments</h3>
-            <div class="value">4.0</div>
+            <div class="value">30.0</div>
         </div>
         
         <div class="summary-card">
             <h3>Avg Runtime (seconds)</h3>
-            <div class="value">12.882</div>
+            <div class="value">22.234</div>
         </div>
         
         <div class="summary-card">
             <h3>Avg Oracle Calls</h3>
-            <div class="value">12.0</div>
+            <div class="value">13.8</div>
         </div>
         
         <div class="summary-card">
             <h3>Min Oracle Calls</h3>
-            <div class="value">12.0</div>
+            <div class="value">13.0</div>
         </div>
         
         <div class="summary-card">
             <h3>Max Oracle Calls</h3>
-            <div class="value">12.0</div>
+            <div class="value">14.0</div>
         </div>
         
         <div class="summary-card">
             <h3>Avg Efficiency Ratio</h3>
-            <div class="value">1.0</div>
+            <div class="value">0.986</div>
         </div>
         
         <div class="summary-card">
             <h3>Total Runtime (minutes)</h3>
-            <div class="value">0.859</div>
+            <div class="value">11.117</div>
         </div>
         
                 </div>
                 
                 <h2>📋 Detailed Results</h2>
-                <table><thead><tr><th>Rule ID</th><th>Condition</th><th>Treatment</th><th>Epsilon</th><th>Largest Delta Heterogeneous</th><th>Smallest Delta Homogeneous</th><th>Oracle Calls</th><th>Runtime Seconds</th><th>Runtime Minutes</th><th>Theoretical Max Iterations</th><th>Efficiency Ratio</th><th>Dataset Size</th><th>Population Utility</th><th>Violating Subgroup</th><th>Subgroup Size</th><th>Subgroup Utility</th><th>Utility Difference</th><th>Abs Utility Difference</th></tr></thead><tbody><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>25000.0</td><td><span class="badge badge-warning">3000</span></td><td><span class="badge badge-success">>3000</span></td><td class="metric-value">12</td><td><span class="badge badge-info">11.884</span></td><td><span class="badge badge-info">0.198</span></td><td>12</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'Student': '1', 'Dependents': '2', 'DevType': '2', 'Continent': '2', 'SexualOrientation': '1', 'Country': '2', 'GINI': '2'}</td><td>3526</td><td>-13762.93</td><td>-25389.7</td><td>25389.7</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>50000.0</td><td><span class="badge badge-warning">3000</span></td><td><span class="badge badge-success">>3000</span></td><td class="metric-value">12</td><td><span class="badge badge-info">12.882</span></td><td><span class="badge badge-info">0.215</span></td><td>12</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'Student': '1', 'Age': '3', 'UndergradMajor': '2', 'GINI': '1', 'SexualOrientation': '1'}</td><td>3778</td><td>185791.63</td><td>174164.86</td><td>174164.86</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>25000.0</td><td><span class="badge badge-warning">3000</span></td><td><span class="badge badge-success">>3000</span></td><td class="metric-value">12</td><td><span class="badge badge-info">12.537</span></td><td><span class="badge badge-info">0.209</span></td><td>12</td><td>1.0</td><td>35296</td><td>17285.53</td><td>{'HoursComputer': '2', 'GINI': '1', 'Gender': '1', 'HDI': '1', 'Continent': '1', 'RaceEthnicity': '1'}</td><td>4532</td><td>-21573.32</td><td>-38858.85</td><td>38858.85</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>50000.0</td><td><span class="badge badge-warning">3000</span></td><td><span class="badge badge-success">>3000</span></td><td class="metric-value">12</td><td><span class="badge badge-info">14.225</span></td><td><span class="badge badge-info">0.237</span></td><td>12</td><td>1.0</td><td>35296</td><td>17285.53</td><td>{'Dependents': '1', 'GINI': '1'}</td><td>3752</td><td>-120802.19</td><td>-138087.72</td><td>138087.72</td></tr></tbody></table>
+                <table><thead><tr><th>Rule ID</th><th>Condition</th><th>Treatment</th><th>Epsilon</th><th>Largest Delta Heterogeneous</th><th>Oracle Calls</th><th>Runtime Seconds</th><th>Runtime Minutes</th><th>Theoretical Max Iterations</th><th>Efficiency Ratio</th><th>Dataset Size</th><th>Population Utility</th><th>Violating Subgroup</th><th>Subgroup Size</th><th>Subgroup Utility</th><th>Utility Difference</th><th>Abs Utility Difference</th></tr></thead><tbody><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>10000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">2.934</span></td><td><span class="badge badge-info">0.049</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'Hobby': '1', 'HDI': '1', 'DevType': '2', 'Student': '1'}</td><td>12261</td><td>1613.35</td><td>-10013.41</td><td>10013.41</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>20000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.326</span></td><td><span class="badge badge-info">0.072</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'SexualOrientation': '1', 'GINI': '1', 'Student': '1'}</td><td>10619</td><td>-134410.12</td><td>-146036.89</td><td>146036.89</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>30000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.255</span></td><td><span class="badge badge-info">0.071</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'Hobby': '1', 'GINI': '1'}</td><td>11149</td><td>-413855.8</td><td>-425482.56</td><td>425482.56</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>40000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.812</span></td><td><span class="badge badge-info">0.08</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'GINI': '1', 'Student': '1'}</td><td>11220</td><td>-149012.01</td><td>-160638.78</td><td>160638.78</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>50000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.573</span></td><td><span class="badge badge-info">0.076</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'Hobby': '1', 'GINI': '1'}</td><td>11149</td><td>-413855.8</td><td>-425482.56</td><td>425482.56</td></tr><tr><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>60000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.455</span></td><td><span class="badge badge-info">0.074</span></td><td>14</td><td>1.0</td><td>35112</td><td>11626.77</td><td>{'SexualOrientation': '1', 'GINI': '1', 'RaceEthnicity': '1'}</td><td>10997</td><td>82218.61</td><td>70591.84</td><td>70591.84</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>10000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">3.166</span></td><td><span class="badge badge-info">0.053</span></td><td>14</td><td>1.0</td><td>35296</td><td>17285.53</td><td>{'GDP': '1', 'HDI': '1', 'Gender': '1', 'RaceEthnicity': '1'}</td><td>12923</td><td>753.37</td><td>-16532.15</td><td>16532.15</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>20000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">5.747</span></td><td><span class="badge badge-info">0.096</span></td><td>14</td><td>1.0</td><td>35296</td><td>17285.53</td><td>{'GINI': '1'}</td><td>13376</td><td>51261.39</td><td>33975.86</td><td>33975.86</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>30000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">6.079</span></td><td><span class="badge badge-info">0.101</span></td><td>14</td><td>1.0</td><td>35296</td><td>17285.53</td><td>{'GINI': '1'}</td><td>13376</td><td>51261.39</td><td>33975.86</td><td>33975.86</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>40000.0</td><td><span class="badge badge-warning">9480</span></td><td class="metric-value">13</td><td><span class="badge badge-info">7.07</span></td><td><span class="badge badge-info">0.118</span></td><td>14</td><td>0.929</td><td>35296</td><td>17285.53</td><td>{'GINI': '1', 'Student': '1'}</td><td>11181</td><td>-128566.34</td><td>-145851.87</td><td>145851.87</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>50000.0</td><td><span class="badge badge-warning">9480</span></td><td class="metric-value">13</td><td><span class="badge badge-info">8.086</span></td><td><span class="badge badge-info">0.135</span></td><td>14</td><td>0.929</td><td>35296</td><td>17285.53</td><td>{'GINI': '1', 'Student': '1'}</td><td>11181</td><td>-128566.34</td><td>-145851.87</td><td>145851.87</td></tr><tr><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>60000.0</td><td><span class="badge badge-warning">9480</span></td><td class="metric-value">13</td><td><span class="badge badge-info">7.829</span></td><td><span class="badge badge-info">0.13</span></td><td>14</td><td>0.929</td><td>35296</td><td>17285.53</td><td>{'GINI': '1', 'Student': '1'}</td><td>11181</td><td>-128566.34</td><td>-145851.87</td><td>145851.87</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>10000.0</td><td><span class="badge badge-warning">5400</span></td><td class="metric-value">13</td><td><span class="badge badge-info">15.974</span></td><td><span class="badge badge-info">0.266</span></td><td>14</td><td>0.929</td><td>31715</td><td>43992.62</td><td>{'SexualOrientation': '1', 'Hobby': '1'}</td><td>23894</td><td>54044.09</td><td>10051.47</td><td>10051.47</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>20000.0</td><td><span class="badge badge-warning">3780</span></td><td class="metric-value">14</td><td><span class="badge badge-info">34.961</span></td><td><span class="badge badge-info">0.583</span></td><td>14</td><td>1.0</td><td>31715</td><td>43992.62</td><td>{'HDI': '1', 'Continent': '2'}</td><td>13264</td><td>21856.37</td><td>-22136.25</td><td>22136.25</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>30000.0</td><td><span class="badge badge-warning">2960</span></td><td class="metric-value">13</td><td><span class="badge badge-info">85.142</span></td><td><span class="badge badge-info">1.419</span></td><td>14</td><td>0.929</td><td>31715</td><td>43992.62</td><td>{'Hobby': '1', 'HDI': '1', 'GINI': '2'}</td><td>9657</td><td>13264.3</td><td>-30728.32</td><td>30728.32</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>40000.0</td><td><span class="badge badge-warning">2160</span></td><td class="metric-value">14</td><td><span class="badge badge-info">117.085</span></td><td><span class="badge badge-info">1.951</span></td><td>14</td><td>1.0</td><td>31715</td><td>43992.62</td><td>{'UndergradMajor': '2', 'GINI': '2', 'HDI': '1', 'Gender': '1'}</td><td>6300</td><td>-18937.25</td><td>-62929.87</td><td>62929.87</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>50000.0</td><td><span class="badge badge-warning">2160</span></td><td class="metric-value">14</td><td><span class="badge badge-info">117.181</span></td><td><span class="badge badge-info">1.953</span></td><td>14</td><td>1.0</td><td>31715</td><td>43992.62</td><td>{'UndergradMajor': '2', 'GINI': '2', 'HDI': '1', 'Gender': '1'}</td><td>6300</td><td>-18937.25</td><td>-62929.87</td><td>62929.87</td></tr><tr><td>3</td><td>{'Student': 'No'}</td><td>{'DevType': 'Engineering manager'}</td><td>60000.0</td><td><span class="badge badge-warning">2160</span></td><td class="metric-value">14</td><td><span class="badge badge-info">142.851</span></td><td><span class="badge badge-info">2.381</span></td><td>14</td><td>1.0</td><td>31715</td><td>43992.62</td><td>{'UndergradMajor': '2', 'GINI': '2', 'HDI': '1', 'Gender': '1'}</td><td>6300</td><td>-18937.25</td><td>-62929.87</td><td>62929.87</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>10000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">2.118</span></td><td><span class="badge badge-info">0.035</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'Hobby': '1', 'GDP': '1', 'HDI': '1'}</td><td>12093</td><td>19915.34</td><td>12836.75</td><td>12836.75</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>20000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">2.702</span></td><td><span class="badge badge-info">0.045</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'Hobby': '1', 'Gender': '1', 'DevType': '2', 'Student': '1'}</td><td>12069</td><td>27841.08</td><td>20762.5</td><td>20762.5</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>30000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">7.163</span></td><td><span class="badge badge-info">0.119</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'SexualOrientation': '1', 'Gender': '1', 'GINI': '1'}</td><td>10997</td><td>74335.23</td><td>67256.64</td><td>67256.64</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>40000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">6.9</span></td><td><span class="badge badge-info">0.115</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'SexualOrientation': '1', 'Gender': '1', 'GINI': '1'}</td><td>10997</td><td>74335.23</td><td>67256.64</td><td>67256.64</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>50000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">6.51</span></td><td><span class="badge badge-info">0.109</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'SexualOrientation': '1', 'Gender': '1', 'GINI': '1'}</td><td>10997</td><td>74335.23</td><td>67256.64</td><td>67256.64</td></tr><tr><td>4</td><td>{'RaceEthnicity': 'White or of European descent'}</td><td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td><td>60000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">6.992</span></td><td><span class="badge badge-info">0.117</span></td><td>14</td><td>1.0</td><td>29496</td><td>7078.58</td><td>{'SexualOrientation': '1', 'Gender': '1', 'GINI': '1'}</td><td>10997</td><td>74335.23</td><td>67256.64</td><td>67256.64</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>10000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">2.665</span></td><td><span class="badge badge-info">0.044</span></td><td>14</td><td>1.0</td><td>31715</td><td>26000.06</td><td>{'GDP': '1', 'GINI': '1'}</td><td>11307</td><td>12709.83</td><td>-13290.23</td><td>13290.23</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>20000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.421</span></td><td><span class="badge badge-info">0.074</span></td><td>14</td><td>1.0</td><td>31715</td><td>26000.06</td><td>{'GINI': '1'}</td><td>11997</td><td>-12416.19</td><td>-38416.25</td><td>38416.25</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>30000.0</td><td><span class="badge badge-warning">10000</span></td><td class="metric-value">14</td><td><span class="badge badge-info">4.936</span></td><td><span class="badge badge-info">0.082</span></td><td>14</td><td>1.0</td><td>31715</td><td>26000.06</td><td>{'GINI': '1'}</td><td>11997</td><td>-12416.19</td><td>-38416.25</td><td>38416.25</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>40000.0</td><td><span class="badge badge-warning">9480</span></td><td class="metric-value">13</td><td><span class="badge badge-info">6.835</span></td><td><span class="badge badge-info">0.114</span></td><td>14</td><td>0.929</td><td>31715</td><td>26000.06</td><td>{'GINI': '1', 'Gender': '1'}</td><td>11220</td><td>-23769.0</td><td>-49769.06</td><td>49769.06</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>50000.0</td><td><span class="badge badge-warning">6120</span></td><td class="metric-value">14</td><td><span class="badge badge-info">19.249</span></td><td><span class="badge badge-info">0.321</span></td><td>14</td><td>1.0</td><td>31715</td><td>26000.06</td><td>{'Gender': '1', 'Continent': '1', 'SexualOrientation': '1', 'Hobby': '1', 'GINI': '1'}</td><td>6772</td><td>-43889.54</td><td>-69889.6</td><td>69889.6</td></tr><tr><td>5</td><td>{'Student': 'No'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>60000.0</td><td><span class="badge badge-warning">6120</span></td><td class="metric-value">14</td><td><span class="badge badge-info">19.998</span></td><td><span class="badge badge-info">0.333</span></td><td>14</td><td>1.0</td><td>31715</td><td>26000.06</td><td>{'Gender': '1', 'Continent': '1', 'SexualOrientation': '1', 'Hobby': '1', 'GINI': '1'}</td><td>6772</td><td>-43889.54</td><td>-69889.6</td><td>69889.6</td></tr></tbody></table>
                 
                 <h2>📈 Analysis by Rule</h2>
                 <h3>Oracle Calls by Rule × Epsilon</h3><table class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th>Epsilon</th>
-      <th>25000.0</th>
+      <th>10000.0</th>
+      <th>20000.0</th>
+      <th>30000.0</th>
+      <th>40000.0</th>
       <th>50000.0</th>
+      <th>60000.0</th>
     </tr>
     <tr>
       <th>Rule_ID</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
       <th></th>
       <th></th>
     </tr>
@@ -206,24 +214,67 @@
   <tbody>
     <tr>
       <th>1</th>
-      <td>12</td>
-      <td>12</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>12</td>
-      <td>12</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>13</td>
+      <td>13</td>
+      <td>13</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>13</td>
+      <td>14</td>
+      <td>13</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>14</td>
+      <td>14</td>
+      <td>14</td>
+      <td>13</td>
+      <td>14</td>
+      <td>14</td>
     </tr>
   </tbody>
 </table><h3 style='margin-top: 30px;'>Runtime (seconds) by Rule × Epsilon</h3><table class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th>Epsilon</th>
-      <th>25000.0</th>
+      <th>10000.0</th>
+      <th>20000.0</th>
+      <th>30000.0</th>
+      <th>40000.0</th>
       <th>50000.0</th>
+      <th>60000.0</th>
     </tr>
     <tr>
       <th>Rule_ID</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
       <th></th>
       <th></th>
     </tr>
@@ -231,20 +282,55 @@
   <tbody>
     <tr>
       <th>1</th>
-      <td>11.884</td>
-      <td>12.882</td>
+      <td>2.934</td>
+      <td>4.326</td>
+      <td>4.255</td>
+      <td>4.812</td>
+      <td>4.573</td>
+      <td>4.455</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>12.537</td>
-      <td>14.225</td>
+      <td>3.166</td>
+      <td>5.747</td>
+      <td>6.079</td>
+      <td>7.070</td>
+      <td>8.086</td>
+      <td>7.829</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>15.974</td>
+      <td>34.961</td>
+      <td>85.142</td>
+      <td>117.085</td>
+      <td>117.181</td>
+      <td>142.851</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>2.118</td>
+      <td>2.702</td>
+      <td>7.163</td>
+      <td>6.900</td>
+      <td>6.510</td>
+      <td>6.992</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>2.665</td>
+      <td>4.421</td>
+      <td>4.936</td>
+      <td>6.835</td>
+      <td>19.249</td>
+      <td>19.998</td>
     </tr>
   </tbody>
 </table>
             </div>
             
             <footer>
-                <p>Generated on 2025-12-27 14:45:44</p>
+                <p>Generated on 2025-12-28 10:00:00</p>
                 <p>Algorithm: Binary Search with FPGrowth Oracle</p>
             </footer>
         </div>

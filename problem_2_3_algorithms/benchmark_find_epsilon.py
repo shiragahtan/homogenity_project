@@ -125,13 +125,11 @@ def run_benchmark(
             
             elapsed_time = time.time() - start_time
             
-            # Calculate largest epsilon where heterogeneous (inverse relationship)
-            largest_epsilon_heterogeneous = None
-            if smallest_epsilon is not None:
-                if smallest_epsilon > 0:
-                    largest_epsilon_heterogeneous = smallest_epsilon - 1
-                else:
-                    largest_epsilon_heterogeneous = 0
+            # If two-phase didn't find answer, use the violation info (it has the actual epsilon needed)
+            if smallest_epsilon is None and violation_info and 'abs_diff' in violation_info:
+                smallest_epsilon = violation_info['abs_diff']
+                if verbose:
+                    print(f"  → Two-phase reached limit, using violation diff: ε* = {smallest_epsilon:,.0f}")
             
             # Extract violation details
             violating_subgroup = str(violation_info['subgroup']) if violation_info else 'N/A'
@@ -147,7 +145,6 @@ def run_benchmark(
                 'Treatment': str(treatment),
                 'Delta': delta,
                 'Smallest_Epsilon_Homogeneous': smallest_epsilon if smallest_epsilon is not None else 'None',
-                'Largest_Epsilon_Heterogeneous': largest_epsilon_heterogeneous if largest_epsilon_heterogeneous is not None else 'None',
                 'Oracle_Calls': oracle_calls,
                 'Runtime_Seconds': round(elapsed_time, 3),
                 'Runtime_Minutes': round(elapsed_time / 60, 3),
@@ -649,8 +646,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                     <thead>
                         <tr>
                             <th>Delta (δ)</th>
-                            <th>Smallest ε<br/>(Homogeneous)</th>
-                            <th>Largest ε<br/>(Heterogeneous)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
                             <th>Violating Subgroup<br/>(Reason for Boundary)</th>
                             <th>Oracle Calls</th>
                             <th>Runtime</th>
@@ -662,11 +658,16 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
         for _, row in rule_data.iterrows():
             delta = f"{int(row['Delta']):,}"
             smallest = row['Smallest_Epsilon_Homogeneous']
-            if smallest != 'None':
+            
+            # If smallest is None but we have violation info, use that
+            if (smallest == 'None' or pd.isna(smallest)) and 'Abs_Utility_Difference' in row and row['Abs_Utility_Difference'] != 'N/A':
+                smallest = float(row['Abs_Utility_Difference'])
+            
+            if smallest != 'None' and not pd.isna(smallest):
                 smallest = f"{int(float(smallest)):,}"
-            largest = row['Largest_Epsilon_Heterogeneous']
-            if largest != 'None':
-                largest = f"{int(float(largest)):,}"
+            else:
+                smallest = 'N/A'
+                
             oracle = int(row['Oracle_Calls'])
             runtime = row['Runtime_Seconds']
             
@@ -680,8 +681,8 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                     <div style="font-size: 0.85em; line-height: 1.4;">
                         <strong>{subgroup}</strong><br/>
                         Size: {row['Subgroup_Size']}<br/>
-                        Pop ATE: {pop_util} | Sub ATE: {sub_util}<br/>
-                        |Diff|: <strong>{abs_diff}</strong> (needs ε ≥ {smallest})
+                        Pop ATE: {pop_util:.2f} | Sub ATE: {sub_util:.2f}<br/>
+                        |Diff|: <strong>{abs_diff:.2f}</strong> (needs ε ≥ {smallest})
                     </div>
                 """
             else:
@@ -690,8 +691,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
             html += f"""
                         <tr>
                             <td><strong>{delta}</strong></td>
-                            <td><span class="badge badge-homogeneous">≥ {smallest}</span></td>
-                            <td><span class="badge badge-heterogeneous">≤ {largest}</span></td>
+                            <td><span class="badge badge-homogeneous">{smallest}</span></td>
                             <td>{violation_details}</td>
                             <td><span class="badge badge-oracle">{oracle} calls</span></td>
                             <td><span class="badge badge-runtime">{runtime:.2f}s</span></td>

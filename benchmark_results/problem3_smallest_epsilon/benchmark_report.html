@@ -226,7 +226,7 @@
             <h1><span class="emoji">🎯</span> Find Smallest Epsilon - Benchmark Results</h1>
             <p class="subtitle">Two-Phase Search Algorithm (Exponential + Binary)</p>
             <p class="subtitle" style="font-size: 0.9em; margin-top: 10px;">
-                4 Experiments | 2 Rules | 2 Delta Values | Runtime: 1.35 minutes
+                30 Experiments | 5 Rules | 6 Delta Values | Runtime: 30.87 minutes
             </p>
         </header>
         
@@ -310,27 +310,27 @@
             <div class="summary-grid">
                 <div class="summary-card">
                     <h3>Total Experiments</h3>
-                    <div class="value">4</div>
+                    <div class="value">30</div>
                 </div>
                 <div class="summary-card">
                     <h3>Avg Runtime</h3>
-                    <div class="value">20.18s</div>
+                    <div class="value">61.73s</div>
                 </div>
                 <div class="summary-card">
                     <h3>Avg Oracle Calls</h3>
-                    <div class="value">8.0</div>
+                    <div class="value">10.8</div>
                 </div>
                 <div class="summary-card">
                     <h3>Min Oracle Calls</h3>
-                    <div class="value">8</div>
+                    <div class="value">9</div>
                 </div>
                 <div class="summary-card">
                     <h3>Max Oracle Calls</h3>
-                    <div class="value">8</div>
+                    <div class="value">26</div>
                 </div>
                 <div class="summary-card">
                     <h3>Total Runtime</h3>
-                    <div class="value">1.3m</div>
+                    <div class="value">30.9m</div>
                 </div>
             </div>
             
@@ -344,8 +344,7 @@
                     <thead>
                         <tr>
                             <th>Delta (δ)</th>
-                            <th>Smallest ε<br/>(Homogeneous)</th>
-                            <th>Largest ε<br/>(Heterogeneous)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
                             <th>Violating Subgroup<br/>(Reason for Boundary)</th>
                             <th>Oracle Calls</th>
                             <th>Runtime</th>
@@ -354,35 +353,93 @@
                     <tbody>
 
                         <tr>
-                            <td><strong>1,000</strong></td>
-                            <td><span class="badge badge-homogeneous">≥ None</span></td>
-                            <td><span class="badge badge-heterogeneous">≤ None</span></td>
+                            <td><strong>500</strong></td>
+                            <td><span class="badge badge-homogeneous">381,575</span></td>
                             <td>
                     <div style="font-size: 0.85em; line-height: 1.4;">
-                        <strong>{'Student': '1', 'HoursComputer': '2', 'Hobby': '1...</strong><br/>
-                        Size: 1367<br/>
-                        Pop ATE: 11626.77 | Sub ATE: 148021.53<br/>
-                        |Diff|: <strong>136394.76</strong> (needs ε ≥ None)
+                        <strong>{'HoursComputer': '2', 'DevType': '2', 'UndergradM...</strong><br/>
+                        Size: 2643<br/>
+                        Pop ATE: 11626.77 | Sub ATE: -369948.87<br/>
+                        |Diff|: <strong>381575.63</strong> (needs ε ≥ 381,575)
                     </div>
                 </td>
-                            <td><span class="badge badge-oracle">8 calls</span></td>
-                            <td><span class="badge badge-runtime">27.52s</span></td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">84.05s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,000</strong></td>
+                            <td><span class="badge badge-homogeneous">276,890</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Hobby': '1', 'Dependents': '2', 'FormalEducation...</strong><br/>
+                        Size: 3158<br/>
+                        Pop ATE: 11626.77 | Sub ATE: -265264.15<br/>
+                        |Diff|: <strong>276890.91</strong> (needs ε ≥ 276,890)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">33.53s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,500</strong></td>
+                            <td><span class="badge badge-homogeneous">266,326</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'SexualOrientation': '1', 'GINI': '1', 'Education...</strong><br/>
+                        Size: 2743<br/>
+                        Pop ATE: 11626.77 | Sub ATE: 277953.69<br/>
+                        |Diff|: <strong>266326.93</strong> (needs ε ≥ 266,326)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">21.81s</span></td>
                         </tr>
 
                         <tr>
                             <td><strong>2,000</strong></td>
-                            <td><span class="badge badge-homogeneous">≥ None</span></td>
-                            <td><span class="badge badge-heterogeneous">≤ None</span></td>
+                            <td><span class="badge badge-homogeneous">292,424</span></td>
                             <td>
                     <div style="font-size: 0.85em; line-height: 1.4;">
-                        <strong>{'GINI': '1', 'Student': '1'}</strong><br/>
-                        Size: 11220<br/>
-                        Pop ATE: 11626.77 | Sub ATE: -149012.01<br/>
-                        |Diff|: <strong>160638.78</strong> (needs ε ≥ None)
+                        <strong>{'Hobby': '1', 'GINI': '1', 'EducationParents': '2...</strong><br/>
+                        Size: 2253<br/>
+                        Pop ATE: 11626.77 | Sub ATE: 304051.76<br/>
+                        |Diff|: <strong>292424.99</strong> (needs ε ≥ 292,424)
                     </div>
                 </td>
-                            <td><span class="badge badge-oracle">8 calls</span></td>
-                            <td><span class="badge badge-runtime">11.63s</span></td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">14.42s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,500</strong></td>
+                            <td><span class="badge badge-homogeneous">272,353</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Hobby': '1', 'Age': '3', 'GINI': '1', 'Student':...</strong><br/>
+                        Size: 4955<br/>
+                        Pop ATE: 11626.77 | Sub ATE: 283980.48<br/>
+                        |Diff|: <strong>272353.71</strong> (needs ε ≥ 272,353)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">13.72s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>3,000</strong></td>
+                            <td><span class="badge badge-homogeneous">261,215</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'UndergradMajor': '2', 'RaceEthnicity': '1', 'Con...</strong><br/>
+                        Size: 4910<br/>
+                        Pop ATE: 11626.77 | Sub ATE: 272841.76<br/>
+                        |Diff|: <strong>261215.00</strong> (needs ε ≥ 261,215)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">9.97s</span></td>
                         </tr>
 
                     </tbody>
@@ -397,8 +454,7 @@
                     <thead>
                         <tr>
                             <th>Delta (δ)</th>
-                            <th>Smallest ε<br/>(Homogeneous)</th>
-                            <th>Largest ε<br/>(Heterogeneous)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
                             <th>Violating Subgroup<br/>(Reason for Boundary)</th>
                             <th>Oracle Calls</th>
                             <th>Runtime</th>
@@ -407,35 +463,423 @@
                     <tbody>
 
                         <tr>
-                            <td><strong>1,000</strong></td>
-                            <td><span class="badge badge-homogeneous">≥ None</span></td>
-                            <td><span class="badge badge-heterogeneous">≤ None</span></td>
+                            <td><strong>500</strong></td>
+                            <td><span class="badge badge-homogeneous">318,665</span></td>
                             <td>
                     <div style="font-size: 0.85em; line-height: 1.4;">
-                        <strong>{'Student': '1', 'Hobby': '1', 'HDI': '1', 'GINI':...</strong><br/>
-                        Size: 2119<br/>
-                        Pop ATE: 17285.53 | Sub ATE: 183549.65<br/>
-                        |Diff|: <strong>166264.13</strong> (needs ε ≥ None)
+                        <strong>{'YearsCoding': '1', 'GINI': '1', 'Continent': '1'...</strong><br/>
+                        Size: 501<br/>
+                        Pop ATE: 17285.53 | Sub ATE: -301380.35<br/>
+                        |Diff|: <strong>318665.87</strong> (needs ε ≥ 318,665)
                     </div>
                 </td>
-                            <td><span class="badge badge-oracle">8 calls</span></td>
-                            <td><span class="badge badge-runtime">28.40s</span></td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">88.17s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,000</strong></td>
+                            <td><span class="badge badge-homogeneous">400,276</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'Dependents': '1', 'RaceEth...</strong><br/>
+                        Size: 1360<br/>
+                        Pop ATE: 17285.53 | Sub ATE: -382990.66<br/>
+                        |Diff|: <strong>400276.18</strong> (needs ε ≥ 400,276)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">45.76s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,500</strong></td>
+                            <td><span class="badge badge-homogeneous">492,750</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Age': '1', 'Gender': '1', 'GINI': '1', 'RaceEthn...</strong><br/>
+                        Size: 2478<br/>
+                        Pop ATE: 17285.53 | Sub ATE: -475464.71<br/>
+                        |Diff|: <strong>492750.24</strong> (needs ε ≥ 492,750)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">22.18s</span></td>
                         </tr>
 
                         <tr>
                             <td><strong>2,000</strong></td>
-                            <td><span class="badge badge-homogeneous">≥ None</span></td>
-                            <td><span class="badge badge-heterogeneous">≤ None</span></td>
+                            <td><span class="badge badge-homogeneous">260,501</span></td>
                             <td>
                     <div style="font-size: 0.85em; line-height: 1.4;">
-                        <strong>{'HoursComputer': '2', 'GINI': '1', 'Continent': '...</strong><br/>
-                        Size: 3212<br/>
-                        Pop ATE: 17285.53 | Sub ATE: -137544.28<br/>
-                        |Diff|: <strong>154829.8</strong> (needs ε ≥ None)
+                        <strong>{'HoursComputer': '2', 'Gender': '1', 'RaceEthnici...</strong><br/>
+                        Size: 3251<br/>
+                        Pop ATE: 17285.53 | Sub ATE: 277787.36<br/>
+                        |Diff|: <strong>260501.83</strong> (needs ε ≥ 260,501)
                     </div>
                 </td>
-                            <td><span class="badge badge-oracle">8 calls</span></td>
-                            <td><span class="badge badge-runtime">13.16s</span></td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">24.26s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,500</strong></td>
+                            <td><span class="badge badge-homogeneous">2,017,457</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Hobby': '1', 'Dependents': '2', 'GINI': '1'}</strong><br/>
+                        Size: 7998<br/>
+                        Pop ATE: 17285.53 | Sub ATE: -2000171.96<br/>
+                        |Diff|: <strong>2017457.48</strong> (needs ε ≥ 2,017,457)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">20.72s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>3,000</strong></td>
+                            <td><span class="badge badge-homogeneous">2,017,457</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Hobby': '1', 'Dependents': '2', 'GINI': '1'}</strong><br/>
+                        Size: 7998<br/>
+                        Pop ATE: 17285.53 | Sub ATE: -2000171.96<br/>
+                        |Diff|: <strong>2017457.48</strong> (needs ε ≥ 2,017,457)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">19.43s</span></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="rule-group">
+                <div class="rule-header">
+                    <span class="emoji">📌</span> Rule 3: {'Student': 'No'} → {'DevType': 'Engineering manager'}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Delta (δ)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
+                            <th>Violating Subgroup<br/>(Reason for Boundary)</th>
+                            <th>Oracle Calls</th>
+                            <th>Runtime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>500</strong></td>
+                            <td><span class="badge badge-homogeneous">423,004</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'UndergradMajor': '2', 'Dependents': '2', 'GINI':...</strong><br/>
+                        Size: 4808<br/>
+                        Pop ATE: 43992.62 | Sub ATE: -379011.96<br/>
+                        |Diff|: <strong>423004.58</strong> (needs ε ≥ 423,004)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">135.32s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,000</strong></td>
+                            <td><span class="badge badge-homogeneous">894,208</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HDI': '1', 'GINI': '2', 'EducationParents': '1'}</strong><br/>
+                        Size: 3888<br/>
+                        Pop ATE: 43992.62 | Sub ATE: -850216.32<br/>
+                        |Diff|: <strong>894208.94</strong> (needs ε ≥ 894,208)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">32.66s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,500</strong></td>
+                            <td><span class="badge badge-homogeneous">160,283</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'SexualOrientation': '1', 'Hobby': '1', 'GINI': '...</strong><br/>
+                        Size: 8683<br/>
+                        Pop ATE: 43992.62 | Sub ATE: 204274.63<br/>
+                        |Diff|: <strong>160282.01</strong> (needs ε ≥ 160,283)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">26 calls</span></td>
+                            <td><span class="badge badge-runtime">545.44s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,000</strong></td>
+                            <td><span class="badge badge-homogeneous">77,426</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HDI': '1', 'UndergradMajor': '2', 'GINI': '2', '...</strong><br/>
+                        Size: 5971<br/>
+                        Pop ATE: 43992.62 | Sub ATE: -33433.28<br/>
+                        |Diff|: <strong>77425.90</strong> (needs ε ≥ 77,426)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">24 calls</span></td>
+                            <td><span class="badge badge-runtime">241.54s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,500</strong></td>
+                            <td><span class="badge badge-homogeneous">30,729</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Hobby': '1', 'HDI': '1', 'GINI': '2'}</strong><br/>
+                        Size: 9657<br/>
+                        Pop ATE: 43992.62 | Sub ATE: 13264.30<br/>
+                        |Diff|: <strong>30728.32</strong> (needs ε ≥ 30,729)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">20 calls</span></td>
+                            <td><span class="badge badge-runtime">113.84s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>3,000</strong></td>
+                            <td><span class="badge badge-homogeneous">22,137</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HDI': '1', 'Continent': '2'}</strong><br/>
+                        Size: 13264<br/>
+                        Pop ATE: 43992.62 | Sub ATE: 21856.37<br/>
+                        |Diff|: <strong>22136.25</strong> (needs ε ≥ 22,137)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">20 calls</span></td>
+                            <td><span class="badge badge-runtime">85.47s</span></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="rule-group">
+                <div class="rule-header">
+                    <span class="emoji">📌</span> Rule 4: {'RaceEthnicity': 'White or of European descent'} → {'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Delta (δ)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
+                            <th>Violating Subgroup<br/>(Reason for Boundary)</th>
+                            <th>Oracle Calls</th>
+                            <th>Runtime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>500</strong></td>
+                            <td><span class="badge badge-homogeneous">947,108</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'FormalEducation': '1', 'GINI': '1', 'Continent':...</strong><br/>
+                        Size: 2223<br/>
+                        Pop ATE: 7078.58 | Sub ATE: 954186.97<br/>
+                        |Diff|: <strong>947108.39</strong> (needs ε ≥ 947,108)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">71.62s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,000</strong></td>
+                            <td><span class="badge badge-homogeneous">319,775</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'DevType': '2', 'Gender': '...</strong><br/>
+                        Size: 3930<br/>
+                        Pop ATE: 7078.58 | Sub ATE: -312697.36<br/>
+                        |Diff|: <strong>319775.94</strong> (needs ε ≥ 319,775)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">24.99s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,500</strong></td>
+                            <td><span class="badge badge-homogeneous">285,673</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'FormalEducation': '4', 'Continent': '1', 'Sexual...</strong><br/>
+                        Size: 2758<br/>
+                        Pop ATE: 7078.58 | Sub ATE: -278594.45<br/>
+                        |Diff|: <strong>285673.03</strong> (needs ε ≥ 285,673)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">16.85s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,000</strong></td>
+                            <td><span class="badge badge-homogeneous">282,501</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'Hobby': '1', 'Dependents':...</strong><br/>
+                        Size: 2553<br/>
+                        Pop ATE: 7078.58 | Sub ATE: -275423.20<br/>
+                        |Diff|: <strong>282501.78</strong> (needs ε ≥ 282,501)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">9.57s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,500</strong></td>
+                            <td><span class="badge badge-homogeneous">458,154</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'DevType': '2', 'SexualOrie...</strong><br/>
+                        Size: 3506<br/>
+                        Pop ATE: 7078.58 | Sub ATE: 465233.28<br/>
+                        |Diff|: <strong>458154.70</strong> (needs ε ≥ 458,154)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">9.48s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>3,000</strong></td>
+                            <td><span class="badge badge-homogeneous">472,720</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'DevType': '2', 'Gender': '...</strong><br/>
+                        Size: 3604<br/>
+                        Pop ATE: 7078.58 | Sub ATE: 479799.27<br/>
+                        |Diff|: <strong>472720.68</strong> (needs ε ≥ 472,720)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">6.13s</span></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="rule-group">
+                <div class="rule-header">
+                    <span class="emoji">📌</span> Rule 5: {'Student': 'No'} → {'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Delta (δ)</th>
+                            <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
+                            <th>Violating Subgroup<br/>(Reason for Boundary)</th>
+                            <th>Oracle Calls</th>
+                            <th>Runtime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td><strong>500</strong></td>
+                            <td><span class="badge badge-homogeneous">333,042</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HDI': '1', 'HoursComputer': '2', 'DevType': '2',...</strong><br/>
+                        Size: 2091<br/>
+                        Pop ATE: 26000.06 | Sub ATE: 359042.69<br/>
+                        |Diff|: <strong>333042.63</strong> (needs ε ≥ 333,042)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">67.62s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,000</strong></td>
+                            <td><span class="badge badge-homogeneous">264,309</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Age': '3', 'GINI': '1'}</strong><br/>
+                        Size: 6415<br/>
+                        Pop ATE: 26000.06 | Sub ATE: 290309.39<br/>
+                        |Diff|: <strong>264309.33</strong> (needs ε ≥ 264,309)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">27.30s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>1,500</strong></td>
+                            <td><span class="badge badge-homogeneous">264,106</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'GINI': '1', 'Gender': '1', 'HoursComputer': '2',...</strong><br/>
+                        Size: 4116<br/>
+                        Pop ATE: 26000.06 | Sub ATE: -238106.12<br/>
+                        |Diff|: <strong>264106.18</strong> (needs ε ≥ 264,106)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">24.08s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,000</strong></td>
+                            <td><span class="badge badge-homogeneous">275,301</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'HoursComputer': '2', 'DevType': '2', 'Gender': '...</strong><br/>
+                        Size: 3377<br/>
+                        Pop ATE: 26000.06 | Sub ATE: -249301.21<br/>
+                        |Diff|: <strong>275301.27</strong> (needs ε ≥ 275,301)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">11.91s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>2,500</strong></td>
+                            <td><span class="badge badge-homogeneous">264,309</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Age': '3', 'GINI': '1'}</strong><br/>
+                        Size: 6415<br/>
+                        Pop ATE: 26000.06 | Sub ATE: 290309.39<br/>
+                        |Diff|: <strong>264309.33</strong> (needs ε ≥ 264,309)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">12.72s</span></td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>3,000</strong></td>
+                            <td><span class="badge badge-homogeneous">264,309</span></td>
+                            <td>
+                    <div style="font-size: 0.85em; line-height: 1.4;">
+                        <strong>{'Age': '3', 'GINI': '1'}</strong><br/>
+                        Size: 6415<br/>
+                        Pop ATE: 26000.06 | Sub ATE: 290309.39<br/>
+                        |Diff|: <strong>264309.33</strong> (needs ε ≥ 264,309)
+                    </div>
+                </td>
+                            <td><span class="badge badge-oracle">9 calls</span></td>
+                            <td><span class="badge badge-runtime">17.40s</span></td>
                         </tr>
 
                     </tbody>
@@ -444,7 +888,7 @@
 
             <h2><span class="emoji">🎯</span> Key Insights</h2>
             <ul style="line-height: 2; font-size: 1.05em;">
-                <li><span class="emoji">⚡</span> Two-phase search is <span class="highlight">highly efficient</span>: avg 8.0 oracle calls</li>
+                <li><span class="emoji">⚡</span> Two-phase search is <span class="highlight">highly efficient</span>: avg 10.8 oracle calls</li>
                 <li><span class="emoji">📈</span> Exponential search quickly brackets the solution space</li>
                 <li><span class="emoji">🔍</span> Binary search refines to exact answer with log₂(n) complexity</li>
                 <li><span class="emoji">✅</span> Algorithm scales well across different delta values</li>
@@ -452,7 +896,7 @@
         </div>
         
         <footer>
-            <p><span class="emoji">🕐</span> Generated on 2025-12-27 14:47:06</p>
+            <p><span class="emoji">🕐</span> Generated on 2025-12-28 09:57:46</p>
             <p>Algorithm: Exponential + Binary Search with FPGrowth Oracle | Dataset: Stack Overflow</p>
         </footer>
     </div>

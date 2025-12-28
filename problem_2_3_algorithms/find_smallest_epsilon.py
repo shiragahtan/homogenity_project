@@ -96,17 +96,16 @@ def find_smallest_epsilon_achieving_homogeneity(
     verbose: bool = True
 ) -> Tuple[Optional[float], int, Optional[Dict], float]:
     """
-    Two-phase algorithm to find the smallest epsilon where rule is homogeneous.
+    Binary search algorithm to find the smallest epsilon where rule is homogeneous.
     
-    Phase 1: Exponential search to find upper bound
-    Phase 2: Binary search to refine the interval
+    Searches the range [0, epsilon_max] using standard binary search.
     
     Args:
         df: Input DataFrame
         treatment_col: Treatment column name
         outcome_col: Outcome column name  
         delta: Fixed minimum subgroup size
-        epsilon_start: Starting epsilon for exponential search
+        epsilon_start: (Unused - kept for compatibility)
         epsilon_max: Maximum epsilon to consider
         verbose: Print progress messages
         
@@ -119,9 +118,9 @@ def find_smallest_epsilon_achieving_homogeneity(
     """
     if verbose:
         print("="*70)
-        print(f"FINDING SMALLEST EPSILON ACHIEVING HOMOGENEITY")
+        print(f"FINDING SMALLEST EPSILON ACHIEVING HOMOGENEITY (Binary Search)")
         print(f"Fixed delta: {delta}")
-        print(f"Exponential search starting at: {epsilon_start}")
+        print(f"Search range: [0, {epsilon_max:,.0f}]")
         print("="*70)
     
     # Calculate overall ATE once
@@ -130,61 +129,34 @@ def find_smallest_epsilon_achieving_homogeneity(
     total_oracle_calls = 0
     last_violation_info = None  # Track the most recent violation
     
-    # ===== PHASE 1: EXPONENTIAL SEARCH (BRACKETING) =====
-    if verbose:
-        print("\n📍 PHASE 1: Exponential Search (Finding Upper Bound)")
-        print("-" * 70)
-    
+    # ===== BINARY SEARCH =====
     epsilon_low = 0
-    epsilon_high = epsilon_start
+    epsilon_high = int(epsilon_max)
     
-    # Exponentially grow epsilon_high until we find homogeneity
-    while epsilon_high <= epsilon_max:
-        total_oracle_calls += 1
-        
+    # First, check if even epsilon_max achieves homogeneity
+    total_oracle_calls += 1
+    is_homogeneous_at_max, _, _ = oracle_is_homogeneous(
+        df, treatment_col, outcome_col, delta, epsilon_high, utility_all
+    )
+    
+    if not is_homogeneous_at_max:
         if verbose:
-            print(f"  Testing epsilon = {epsilon_high:,.0f}")
-        
-        is_homogeneous, num_checked, violation_info = oracle_is_homogeneous(
-            df, treatment_col, outcome_col, delta, epsilon_high, utility_all
-        )
-        
-        if verbose:
-            status = "HOMOGENEOUS ✓" if is_homogeneous else "HETEROGENEOUS ✗"
-            print(f"    → {status} (checked {num_checked} subgroups)")
-        
-        if is_homogeneous:
-            # Found upper bound!
-            if verbose:
-                print(f"\n  ✓ Upper bound found: epsilon = {epsilon_high:,.0f}")
-            break
-        else:
-            # Track the violation info
-            last_violation_info = violation_info
-        
-        # Double epsilon and continue
-        epsilon_low = epsilon_high
-        epsilon_high *= 2
-    else:
-        # Didn't find homogeneity even at epsilon_max
-        if verbose:
-            print(f"\n  ⚠ No homogeneity found up to epsilon = {epsilon_max:,.0f}")
+            print(f"\n⚠ No homogeneity found even at epsilon_max = {epsilon_max:,.0f}")
         return None, total_oracle_calls, last_violation_info, utility_all
     
-    # ===== PHASE 2: BINARY SEARCH =====
     if verbose:
-        print(f"\n🔍 PHASE 2: Binary Search on [{epsilon_low:,.0f}, {epsilon_high:,.0f}]")
+        print(f"\n🔍 Binary Search on [0, {epsilon_high:,.0f}]")
         print("-" * 70)
     
-    phase2_calls = 0
+    iteration = 0
     
     while epsilon_low < epsilon_high:
         epsilon_mid = (epsilon_low + epsilon_high) // 2
-        phase2_calls += 1
+        iteration += 1
         total_oracle_calls += 1
         
         if verbose:
-            print(f"\n  Iteration {phase2_calls}:")
+            print(f"\n  Iteration {iteration}:")
             print(f"    Range: [{epsilon_low:,.0f}, {epsilon_high:,.0f}]")
             print(f"    Testing epsilon = {epsilon_mid:,.0f}")
         
@@ -222,8 +194,6 @@ def find_smallest_epsilon_achieving_homogeneity(
             print(f"    Population Utility: {utility_all:.2f}")
             print(f"    |Difference|: {last_violation_info['abs_diff']:.2f}")
         print(f"\nTotal oracle calls: {total_oracle_calls}")
-        print(f"  - Phase 1 (Exponential): {total_oracle_calls - phase2_calls}")
-        print(f"  - Phase 2 (Binary): {phase2_calls}")
         print("="*70)
     
     return smallest_epsilon, total_oracle_calls, last_violation_info, utility_all

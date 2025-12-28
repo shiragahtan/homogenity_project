@@ -4,8 +4,9 @@
 
 **Run both Problem 2 & 3:**
 ```bash
-cd algorithms
-source ../../.venv-py311/bin/activate
+cd problem_2_3_algorithms
+# Activate your venv (example):
+# source ../../.venv-py311/bin/activate
 python run_all_benchmarks.py --rules 5 --epsilons "10000,20000,30000" --deltas "500,1000,1500"
 ```
 
@@ -18,13 +19,13 @@ python benchmark_epsilon_comparison.py --rules 5 --deltas "500,1000,1500"
 
 ### 1. `run_all_benchmarks.py`
 Runs Problem 2 (largest δ) and Problem 3 (smallest ε) together.
-- **View results**: `../benchmark_results/summary_report.html`
+- **View results**: `benchmark_results/summary_report.html`
 
 ### 2. `benchmark_epsilon_comparison.py` 
 Compares two methods for finding smallest ε:
 - **Method 1**: Two-Phase Search (exponential + binary)
 - **Method 2**: Brute Force (FPGrowth all subgroups)
-- **View results**: `../benchmark_results_epsilon_comparison/epsilon_comparison_report.html`
+- **View results**: `benchmark_results_epsilon_comparison/epsilon_comparison_report.html`
 
 ## What They Do
 

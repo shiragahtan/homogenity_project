@@ -12,11 +12,29 @@ with open('../configs/config.json', 'r') as f:
 TREATMENT_COL = config['TREATMENT_COL']
 
 
-def calculate_ate_safe(df, treatment_col, outcome_col, delta, ret_obj=False):
+def calculate_ate_safe(df, treatment_col, outcome_col, delta=None, ret_obj=False):
+    """
+    Safely calculates ATE.
+
+    Args:
+        df: DataFrame containing the data
+        treatment_col: Name of treatment column
+        outcome_col: Name of outcome column
+        delta: (Optional) Threshold for sample size calculation.
+               If None or 0, strict size checks are relaxed.
+        ret_obj: Whether to return the ATE object instead of just the value.
+    """
     try:
         # 1. SAMPLE SIZE FILTER
         counts = df[treatment_col].value_counts()
-        min_samples_per_group = max(30, delta / 20.0)
+
+        # LOGIC CHANGE:
+        # If delta is provided (and > 0), use the strict project logic.
+        # If delta is None or 0, use a minimal safety floor (e.g. 5 samples) to allow execution.
+        if delta and delta > 0:
+            min_samples_per_group = max(30, delta / 20.0)
+        else:
+            min_samples_per_group = 5  # Minimal constant to ensure regression doesn't crash
 
         if len(counts) < 2 or counts.min() < min_samples_per_group:
             return np.nan

@@ -7,21 +7,13 @@ from collections import Counter, defaultdict
 # Load EPSILONS from config
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
-EPSILONS = config['EPSILONS']
+# EPSILONS = config['EPSILONS']
+EPSILONS = [76000]
+DIRECTORY = '../algorithms_results/'
+file_pattern = re.compile(r'FPGrowth_subgroups_results_delta_(\d+)_\d+\.xlsx')
 
-# Directory containing the xlsx files
-DIRECTORY = '../algorithms_results/attributes/Rule0'  # relative to this script
-
-# Regex to match the files and extract delta (ignore rule_num)
-file_pattern = re.compile(r'Apriori_subgroups_results_delta_(\d+)_\d+\.xlsx')
-
-# Prepare results: {delta: {epsilon: Counter}}
 results = defaultdict(lambda: defaultdict(Counter))
-
-# Prepare breaking groups: {delta: {epsilon: list of breaking groups}}
 breaking_groups = defaultdict(lambda: defaultdict(list))
-
-# Summary counter for epsilon 5000 across all rules and deltas
 summary_counter = Counter()
 
 for filename in os.listdir(DIRECTORY):
@@ -37,84 +29,62 @@ for filename in os.listdir(DIRECTORY):
     except Exception as e:
         print(f"Skipping {filename}: {e}")
         continue
-    # Ensure columns are as expected
+
     if not all(col in df.columns for col in ['AttributeValues', 'Size', 'Utility', 'UtilityDiff']):
-        print(f"Skipping {filename}: missing required columns.")
         continue
-    # Sort by abs(UtilityDiff)
+
     df = df.reindex(df['UtilityDiff'].abs().sort_values(ascending=False).index)
+
     for epsilon in EPSILONS:
         filtered = df[df['UtilityDiff'].abs() >= epsilon]
         for _, row in filtered.iterrows():
             attrval = row['AttributeValues']
-            utility = row['Utility']
-            utility_diff = row['UtilityDiff']
-            size = row['Size']
-            
-            # Parse the string dict (e.g., "{'Gender': '1', 'HDI': '1'}")
             try:
                 keys = list(eval(attrval).keys())
-                # Store the breaking group details
                 breaking_groups[delta][epsilon].append({
+                    'Epsilon': epsilon,
                     'AttributeValues': attrval,
-                    'Size': size,
-                    'ATE': utility,
-                    'ATE_diff': utility_diff,
-                    'Attributes': keys
+                    'Size': row['Size'],
+                    'ATE': row['Utility'],
+                    'ATE_diff': row['UtilityDiff'],
+                    'Attributes': ', '.join(keys)
                 })
-            except Exception:
+                for key in keys:
+                    results[delta][epsilon][key] += 1
+                    if epsilon == 5000:
+                        summary_counter[key] += 1
+            except:
                 continue
-            
-            for key in keys:
-                results[delta][epsilon][key] += 1
-                # Add to summary counter for epsilon 5000
-                if epsilon == 5000:
-                    summary_counter[key] += 1
 
-# Write results to Excel
-output_path = os.path.join(os.path.dirname(__file__), 'attribute_counts_by_delta_epsilon.xlsx')
-with pd.ExcelWriter(output_path) as writer:
-    # Write individual delta sheets
+# --- OUTPUT SECTION ---
+
+# 1. Write Counts and Summary to Excel (These are usually small)
+output_excel = os.path.join(os.path.dirname(__file__), 'attribute_counts_summary.xlsx')
+with pd.ExcelWriter(output_excel) as writer:
     for delta in sorted(results):
-        # Build a DataFrame: rows=epsilon, columns=attribute keys, values=counts
-        all_keys = set()
-        for epsilon in results[delta]:
-            all_keys.update(results[delta][epsilon].keys())
-        all_keys = sorted(all_keys)
-        data = []
-        for epsilon in sorted(results[delta]):
-            row = [results[delta][epsilon].get(key, 0) for key in all_keys]
-            data.append(row)
+        all_keys = sorted({k for eps in results[delta] for k in results[delta][eps].keys()})
+        data = [[results[delta][eps].get(k, 0) for k in all_keys] for eps in sorted(results[delta])]
         df_out = pd.DataFrame(data, columns=all_keys, index=sorted(results[delta]))
         df_out.index.name = 'Epsilon'
         df_out.to_excel(writer, sheet_name=f'delta_{delta}')
-    
-    # Write breaking groups sheets for each delta
-    for delta in sorted(breaking_groups):
-        all_breaking_groups = []
-        for epsilon in sorted(breaking_groups[delta]):
-            for group in breaking_groups[delta][epsilon]:
-                group_data = {
-                    'Epsilon': epsilon,
-                    'AttributeValues': group['AttributeValues'],
-                    'Size': group['Size'],
-                    'ATE': group['ATE'],
-                    'ATE_diff': group['ATE_diff'],
-                    'Attributes': ', '.join(group['Attributes'])
-                }
-                all_breaking_groups.append(group_data)
-        
-        if all_breaking_groups:
-            breaking_df = pd.DataFrame(all_breaking_groups)
-            breaking_df = breaking_df.sort_values(['Epsilon', 'ATE_diff'], ascending=[True, False])
-            breaking_df.to_excel(writer, sheet_name=f'breaking_groups_delta_{delta}', index=False)
-            print(f"Delta {delta}: Found {len(all_breaking_groups)} breaking groups across all epsilons")
-    
-    # Write summary sheet for epsilon 5000
-    if summary_counter:
-        summary_df = pd.DataFrame(list(summary_counter.items()), columns=['Attribute', 'Count'])
-        summary_df = summary_df.sort_values('Count', ascending=False)
-        summary_df.to_excel(writer, sheet_name='Summary_Epsilon_5000', index=False)
-        print(f"Summary: Found {len(summary_counter)} unique attributes with counts ranging from {min(summary_counter.values())} to {max(summary_counter.values())}")
 
-print(f"Done! Results saved to {output_path}") 
+    if summary_counter:
+        summary_df = pd.DataFrame(list(summary_counter.items()), columns=['Attribute', 'Count']).sort_values('Count',
+                                                                                                             ascending=False)
+        summary_df.to_excel(writer, sheet_name='Summary_Epsilon_5000', index=False)
+
+# 2. Write Breaking Groups to CSV (To handle 1M+ rows)
+for delta in breaking_groups:
+    all_delta_groups = []
+    for epsilon in sorted(breaking_groups[delta]):
+        all_delta_groups.extend(breaking_groups[delta][epsilon])
+
+    if all_delta_groups:
+        csv_path = os.path.join(os.path.dirname(__file__), f'breaking_groups_delta_{delta}.csv')
+        breaking_df = pd.DataFrame(all_delta_groups)
+        # Sort by Epsilon then highest difference
+        breaking_df = breaking_df.sort_values(['Epsilon', 'ATE_diff'], ascending=[True, False])
+        breaking_df.to_csv(csv_path, index=False)
+        print(f"Delta {delta}: Saved {len(all_delta_groups)} rows to {csv_path}")
+
+print(f"Done! Summary saved to {output_excel}")

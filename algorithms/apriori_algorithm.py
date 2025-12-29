@@ -13,10 +13,13 @@ from ATE_update import calculate_ate_safe
 from typing import Dict, List, Tuple, Any, Callable, Optional, Union
 from numpy.linalg import LinAlgError
 
-with open('../configs/config.json', 'r') as f:
-    config = json.load(f)
-
-BINARY_TREATMENT = config['TREATMENT_COL']
+# Load config safely
+try:
+    with open('../configs/config.json', 'r') as f:
+        config = json.load(f)
+    BINARY_TREATMENT = config.get('TREATMENT_COL', 'TempTreatment')
+except (FileNotFoundError, KeyError):
+    BINARY_TREATMENT = 'TempTreatment'
 
 
 def mine_subgroups(
@@ -37,10 +40,27 @@ def mine_subgroups(
     # one‑hot encode attribute=value pairs
     onehot_parts = []
     lookup: Dict[str, Tuple[str, object]] = {}
+
+    # FIX: Use a separator ('|') that is unlikely to be in column names.
+    # The default '_' causes issues with columns like "employment_duration".
+    sep = "|"
+
     for col in mining_df.columns:
-        d = pd.get_dummies(mining_df[col].fillna('⧫NA⧫'), prefix=col, dtype=bool)
+        # Use the safe separator
+        d = pd.get_dummies(mining_df[col].fillna('⧫NA⧫'), prefix=col, prefix_sep=sep, dtype=bool)
         onehot_parts.append(d)
-        lookup.update({c: (col, c.split('_', 1)[1]) for c in d.columns})
+
+        # Build lookup table using the safe split
+        for c in d.columns:
+            # Split exactly once on the separator
+            parts = c.split(sep, 1)
+            if len(parts) == 2:
+                original_col, original_val = parts[0], parts[1]
+                lookup[c] = (original_col, original_val)
+            else:
+                # Fallback safety (should not happen)
+                lookup[c] = (col, c)
+
     onehot = pd.concat(onehot_parts, axis=1)
 
     # Apriori algorithm for frequent itemsets
@@ -72,8 +92,24 @@ def filter_by_attribute(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     if not filters:
         return df
     mask = pd.Series(True, index=df.index)
+
     for a, v in filters.items():
-        mask &= df[a] == int(v)
+        if a not in df.columns:
+            continue
+
+        # FIX: Robust check to avoid 'invalid literal for int()'
+        if pd.api.types.is_numeric_dtype(df[a]):
+            try:
+                # Try converting the string value (from lookup) to an int
+                val = int(float(v))
+            except (ValueError, TypeError):
+                # If conversion fails, use the raw value
+                val = v
+            mask &= (df[a] == val)
+        else:
+            # For non-numeric columns, compare as-is
+            mask &= (df[a] == v)
+
     return df[mask]
 
 
@@ -122,8 +158,13 @@ def calc_utility_for_subgroups(
 
         try:
             cate = calculate_ate_safe(sub_df, treatment_col, tgtO, delta)
+
+            # Additional safety: check if ATE is NaN (sample size too small, etc.)
+            if pd.isna(cate):
+                continue
+
             cate_calc_count += 1
-        except LinAlgError:
+        except (LinAlgError, ValueError):
             continue
 
         # Check for violation (Mode 0)

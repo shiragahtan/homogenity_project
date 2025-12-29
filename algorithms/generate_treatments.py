@@ -9,31 +9,36 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import calculate_ate_safe
 
 # --- Configuration ---
-DATASET = '../stackoverflow/so_countries_col_new.csv'
+DATASET = '../german_credit/german_data_encoded.csv'
 
-OUTCOME_COL = 'ConvertedSalary'  # 'tgtO'
+OUTCOME_COL = 'credit_risk'  # 'tgtO'
 TREATMENT_COL = 'TempTreatment'  # This is the 'treatment_col' we will create
 
 # Attribute lists
 immutable_attributes = [
-    "Gender", "SexualOrientation", "EducationParents", "RaceEthnicity",
-    "Age", "YearsCoding", "Dependents", "Country", "GDP", "Student"
+    "age",
+    "gender",
+    "personal_status",
+    "foreign_worker",
+    "credit_history",
+    "employment_duration",
+    "property",
+    "installment_rate",
+    "purpose",
+    "people_liable",
+    "duration",
+    "amount"
 ]
 mutable_attrs = [
-    "Exercise", "HoursComputer", "DevType", "FormalEducation",
-    "UndergradMajor", "Hobby"
+    "status",
+    "savings",
+    "other_debtors",
+    "present_residence",
+    "other_installment_plans",
+    "housing",
+    "number_credits",
+    "job",
 ]
-
-# DATASET2 = '../stackoverflow/so_countries_treatment_2_encoded.csv'
-# df_encoded = pd.read_csv(DATASET2)
-#
-# import ipdb; ipdb.set_trace()
-# cate_value = calculate_ate_safe(
-#     df=df_encoded,
-#     treatment_col=TREATMENT_COL,
-#     outcome_col=OUTCOME_COL
-# )
-
 
 # --- Helper Functions ---
 
@@ -59,11 +64,10 @@ def encode_dataframe(df):
     categorical_columns = df_encoded.select_dtypes(include=['object']).columns.tolist()
 
     for column in categorical_columns:
-        # Get unique values (this will include NaN if present)
+        # Get unique values
         unique_values = df_encoded[column].unique()
 
         # Create your 1-based mapping: {value: 1, value2: 2, ...}
-        # This mirrors your original script's logic exactly.
         column_mapping = {value: idx + 1 for idx, value in enumerate(unique_values)}
 
         # Apply the mapping
@@ -125,7 +129,6 @@ results = []
 for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
 
     # --- a. Filter DataFrame based on condition ---
-    # Using @c_val is safer for .query() as it handles strings, numbers, etc.
     try:
         df_filtered = df_original.query(f"`{c_attr}` == @c_val").copy()
     except Exception as e:
@@ -135,24 +138,25 @@ for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
     # --- b. Calculate Coverage ---
     count = len(df_filtered)
     if count == 0:
-        # No need to print, just skip
         continue
 
     coverage_pct = (count / total_rows) * 100
+
+    # [CHANGE] Filter strict coverage > 70% here to avoid unnecessary computation
+    if coverage_pct <= 70:
+        continue
 
     # --- c. Apply Treatment ---
     # Create the binary 'TempTreatment' column
     df_filtered[TREATMENT_COL] = (df_filtered[t_attr] == t_val).astype(int)
 
     # --- d. Encode the filtered DataFrame ---
-    # This turns all 'object' and 'bool' columns into numbers
     df_encoded = encode_dataframe(df_filtered)
 
     # Ensure outcome column is numeric
     df_encoded[OUTCOME_COL] = pd.to_numeric(df_encoded[OUTCOME_COL], errors='coerce')
 
     # --- e. Calculate CATE using YOUR imported function ---
-    # The dataframe is now filtered, has the treatment, and is numerical.
     cate_value = calculate_ate_safe(
         df=df_encoded,
         treatment_col=TREATMENT_COL,
@@ -176,8 +180,20 @@ for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
     })
 
 # --- 5. Save all results ---
-results_df = pd.DataFrame(results)
-results_df.to_csv("all_combinations_cate_results.csv", index=False)
-print("-" * 60)
-print("All combinations processed.")
-print("Results saved to 'all_combinations_cate_results.csv'")
+if results:
+    results_df = pd.DataFrame(results)
+
+    # [CHANGE] Filter for positive utility (cate_value > 0)
+    results_df = results_df[results_df['cate_value'] > 0]
+
+    # [CHANGE] Sort by utility (cate_value) in decreasing order
+    results_df = results_df.sort_values(by='cate_value', ascending=False)
+
+    output_filename = "german_high_coverage_positive_utility.csv"
+    results_df.to_csv(output_filename, index=False)
+    print("-" * 60)
+    print("All combinations processed.")
+    print(f"Filtered (Cov > 70%, Utility > 0) and Sorted results saved to '{output_filename}'")
+else:
+    print("-" * 60)
+    print("No combinations met the > 70% coverage criteria.")

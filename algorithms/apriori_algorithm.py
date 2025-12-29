@@ -175,23 +175,49 @@ def calc_utility_for_subgroups(
 
                 # Stop timer immediately upon finding violation
                 iteration_time = time.time() - start_iter
-                return False, cate_calc_count, enumeration_time, iteration_time
+                
+                # Return violation info as dict
+                violation_info = {
+                    "subgroup": str(filt),
+                    "size": sz,
+                    "utility": cate,
+                    "utility_diff": cate - utility_all,
+                    "abs_diff": abs(utility_all - cate)
+                }
+                return False, cate_calc_count, enumeration_time, iteration_time, violation_info
         else:
             # Mode != 0: Collect all records
+            abs_diff = abs(utility_all - cate)
             subgroup_records.append({
                 "AttributeValues": str(filt),
                 "Size": sz,
                 "Utility": cate,
                 "UtilityDiff": cate - utility_all,
+                "AbsDiff": abs_diff,
             })
 
     # End timer if loop finishes without returning
     iteration_time = time.time() - start_iter
 
     if mode == 0:
-        # Returns: (Passed?, Count, Enum Time, Iter Time)
+        # Returns: (Passed?, Count, Enum Time, Iter Time, Violation Info)
         print(f"Total unique subgroups checked: {cate_calc_count}")
-        return True, cate_calc_count, enumeration_time, iteration_time
+        return True, cate_calc_count, enumeration_time, iteration_time, None
 
-    # Returns: (Records, Count, Enum Time, Iter Time)
-    return subgroup_records, cate_calc_count, enumeration_time, iteration_time
+    # Find max utility difference for mode != 0
+    max_abs_diff = 0
+    max_violation_subgroup = None
+    if subgroup_records:
+        for record in subgroup_records:
+            if record["AbsDiff"] > max_abs_diff:
+                max_abs_diff = record["AbsDiff"]
+                max_violation_subgroup = {
+                    "subgroup": record["AttributeValues"],
+                    "size": record["Size"],
+                    "utility": record["Utility"],
+                    "utility_diff": record["UtilityDiff"],
+                    "abs_diff": record["AbsDiff"]
+                }
+    
+    # Returns: (Records, Count, Enum Time, Iter Time, Max Abs Diff, Max Violation Info)
+    return subgroup_records, cate_calc_count, enumeration_time, iteration_time, max_abs_diff, max_violation_subgroup

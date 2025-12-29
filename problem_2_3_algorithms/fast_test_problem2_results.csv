@@ -1,3 +1,3 @@
 Rule_Number,Condition,Treatment,Fixed_Epsilon,Largest_Delta_Heterogeneous,Oracle_Calls,Runtime_Seconds,Population_ATE,Violating_Subgroup_Size,Abs_Difference
-1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},30000,1500,10,15.44,27113.43,2884,40326.71
-2,{'SexualOrientation': 'Straight or heterosexual'},"{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}",30000,1500,10,22.16,-4455.95,1705,31264.94
+1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},30000,1500,10,16.7,27113.43,1672,33305.42
+2,{'SexualOrientation': 'Straight or heterosexual'},"{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}",30000,1500,10,20.89,-4455.95,1859,54842.27

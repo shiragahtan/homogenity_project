@@ -1,3 +1,3 @@
-Rule_Number,Condition,Treatment,Fixed_Delta,Epsilon_Binary_Search,Epsilon_Brute_Force,Match,Oracle_Calls_Binary,Subgroups_Enumerated_Brute,Runtime_Binary_Seconds,Runtime_Brute_Seconds,Winner,Speedup_Factor,Population_ATE
-1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},1000,100000,1071373.99,No ✗,1,138397,2.65,143.42,Binary Search,54.19,27113.43
-2,{'SexualOrientation': 'Straight or heterosexual'},"{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}",1000,100000,1640244.21,No ✗,1,164589,3.62,161.47,Binary Search,44.64,-4455.95
+Rule_Number,Condition,Treatment,Fixed_Delta,Binary_Status,Epsilon_Binary_Search,Epsilon_Brute_Force,Match,Oracle_Calls_Binary,Oracle_Calls_Brute,Subgroups_Enumerated_Brute,Runtime_Binary_Seconds,Runtime_Brute_Seconds,Winner,Speedup_Factor,Population_ATE
+1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},1000,Found,1071374.0,1071374,Yes ✓,22,1,138397,2399.63,136.21,Brute Force,0.06,27113.43
+2,{'SexualOrientation': 'Straight or heterosexual'},"{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}",1000,Found,1640245.0,1640245,Yes ✓,22,1,164589,2422.89,158.6,Brute Force,0.07,-4455.95

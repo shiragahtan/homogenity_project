@@ -4,8 +4,12 @@ from pathlib import Path
 from numpy.linalg import LinAlgError
 import pandas as pd
 
+# Ensure project modules are importable when running this script from anywhere
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(PROJECT_ROOT / "algorithms"))
+sys.path.append(str(PROJECT_ROOT / "yarden_files"))
+
 from rw_unlearning import calc_utility_for_subgroups
-sys.path.append(str(Path(__file__).resolve().parent.parent / "yarden_files"))
 from ATE_update import calculate_ate_safe
 
 
@@ -105,7 +109,8 @@ def brute_force_find_positive_homogeneous_subgroup(
 
 
 if __name__ == "__main__":
-    data_path = Path(__file__).resolve().parent.parent / "stackoverflow" / "so.csv"
+    # Local copy of the SO dataset lives alongside this script (moved under shira_And_yarden_work/)
+    data_path = Path(__file__).resolve().parent / "so.csv"
     df = pd.read_csv(data_path)
 
     treatment_col = "FormalEducation"

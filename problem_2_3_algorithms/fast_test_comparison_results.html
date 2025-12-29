@@ -160,7 +160,7 @@
             • <strong>Problem 2 fixed epsilon (ε):</strong> 30,000<br>
             • <strong>Problem 2 delta range:</strong> [800, 1,500]<br>
             • <strong>Problem 3 fixed delta (δ):</strong> 1,000<br>
-            • <strong>Problem 3 epsilon range:</strong> [0, 100,000]<br>
+            • <strong>Problem 3 epsilon range:</strong> [0, 2,000,000]<br>
             • <strong>Purpose:</strong> Show row-by-row results for each rule with method comparison
         </div>
         
@@ -206,10 +206,10 @@
       <td>30000</td>
       <td>1500</td>
       <td>10</td>
-      <td>15.44</td>
+      <td>16.70</td>
       <td>27113.43</td>
-      <td>2884</td>
-      <td>40326.71</td>
+      <td>1672</td>
+      <td>33305.42</td>
     </tr>
     <tr>
       <td>2</td>
@@ -218,10 +218,10 @@
       <td>30000</td>
       <td>1500</td>
       <td>10</td>
-      <td>22.16</td>
+      <td>20.89</td>
       <td>-4455.95</td>
-      <td>1705</td>
-      <td>31264.94</td>
+      <td>1859</td>
+      <td>54842.27</td>
     </tr>
   </tbody>
 </table>
@@ -264,9 +264,9 @@
             <h3>📊 Results Table (Each Row = One Rule)</h3>
             <p><em>Green rows = Binary Search won | Orange rows = Brute Force won</em></p>
             <table class="results-table">
-<thead><tr><th>Rule Number</th><th>Condition</th><th>Treatment</th><th>Fixed Delta</th><th>Epsilon Binary Search</th><th>Epsilon Brute Force</th><th>Match</th><th>Oracle Calls Binary</th><th>Subgroups Enumerated Brute</th><th>Runtime Binary Seconds</th><th>Runtime Brute Seconds</th><th>Winner</th><th>Speedup Factor</th><th>Population ATE</th></tr></thead>
-<tbody><tr class="winner-row"><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>1000</td><td>100000</td><td>1071373.99</td><td>No ✗</td><td>1</td><td>138397</td><td>2.65</td><td>143.42</td><td>Binary Search</td><td>54.19</td><td>27113.43</td></tr>
-<tr class="winner-row"><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>1000</td><td>100000</td><td>1640244.21</td><td>No ✗</td><td>1</td><td>164589</td><td>3.62</td><td>161.47</td><td>Binary Search</td><td>44.64</td><td>-4455.95</td></tr></tbody>
+<thead><tr><th>Rule Number</th><th>Condition</th><th>Treatment</th><th>Fixed Delta</th><th>Binary Status</th><th>Epsilon Binary Search</th><th>Epsilon Brute Force</th><th>Match</th><th>Oracle Calls Binary</th><th>Oracle Calls Brute</th><th>Subgroups Enumerated Brute</th><th>Runtime Binary Seconds</th><th>Runtime Brute Seconds</th><th>Winner</th><th>Speedup Factor</th><th>Population ATE</th></tr></thead>
+<tbody><tr class="brute-winner-row"><td>1</td><td>{'Gender': 'Male'}</td><td>{'Exercise': 'Daily or almost every day'}</td><td>1000</td><td>Found</td><td>1071374.0</td><td>1071374</td><td>Yes ✓</td><td>22</td><td>1</td><td>138397</td><td>2399.63</td><td>136.21</td><td>Brute Force</td><td>0.06</td><td>27113.43</td></tr>
+<tr class="brute-winner-row"><td>2</td><td>{'SexualOrientation': 'Straight or heterosexual'}</td><td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td><td>1000</td><td>Found</td><td>1640245.0</td><td>1640245</td><td>Yes ✓</td><td>22</td><td>1</td><td>164589</td><td>2422.89</td><td>158.6</td><td>Brute Force</td><td>0.07</td><td>-4455.95</td></tr></tbody>
 </table>
             
             <div class="summary-box">
@@ -291,9 +291,9 @@
         <div class="section">
             <h3>🏆 Overall Method Comparison (Problem 3)</h3>
             <ul>
-                <li><strong>Binary Search wins:</strong> 2 / 2 rules</li>
-                <li><strong>Brute Force wins:</strong> 0 / 2 rules</li>
-                <li><strong>Average speedup (when Binary Search wins):</strong> 49.41x</li>
+                <li><strong>Binary Search wins:</strong> 0 / 2 rules</li>
+                <li><strong>Brute Force wins:</strong> 2 / 2 rules</li>
+                <li><strong>Average speedup (when Binary Search wins):</strong> 0.0x</li>
             </ul>
             
             <h3>📂 Generated Files</h3>

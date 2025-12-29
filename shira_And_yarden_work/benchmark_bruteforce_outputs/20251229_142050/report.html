@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brute Force Rule Mining Benchmark</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; }
+    h1, h2 { margin: 0 0 12px 0; }
+    .meta { color: #555; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 12px; background: #fff; }
+    img { width: 100%; height: auto; border-radius: 10px; border: 1px solid #eee; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: #fafafa; z-index: 1; }
+    .ok { color: #0a7; font-weight: 600; }
+    .bad { color: #b00; font-weight: 600; }
+    </style>
+</head>
+<body>
+  <h1>Brute Force Rule Mining Benchmark</h1>
+  <div class="meta">Generated: 2025-12-29 14:20:51</div>
+
+  <div class="grid">
+    <div class="card"><h2>Runtime</h2><div class='meta'>Plot not available (missing plotting dependencies).</div></div>
+    <div class="card"><h2>Evaluated candidates</h2><div class='meta'>Plot not available (missing plotting dependencies).</div></div>
+    <div class="card"><h2>Found size</h2><div class='meta'>Plot not available (missing plotting dependencies).</div></div>
+    <div class="card"><h2>Success rate</h2><div class='meta'>Plot not available (missing plotting dependencies).</div></div>
+  </div>
+
+  <h2 style="margin-top: 20px;">Results table</h2>
+  <div class="card" style="overflow:auto; max-height: 70vh;"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>treatment_col</th>
+      <th>outcome_col</th>
+      <th>epsilon</th>
+      <th>delta_percent</th>
+      <th>delta_count</th>
+      <th>sample_n</th>
+      <th>attrs</th>
+      <th>found</th>
+      <th>found_filters</th>
+      <th>found_size</th>
+      <th>found_ate</th>
+      <th>candidates_enumerated</th>
+      <th>candidates_evaluated</th>
+      <th>enum_seconds</th>
+      <th>eval_seconds</th>
+      <th>total_seconds</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>FormalEducation</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>100</td>
+      <td>2000</td>
+      <td>Hobby,Student,Continent,HDI</td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Student": 1, "Continent": 1, "HDI": 1}</td>
+      <td>580</td>
+      <td>22478.588207</td>
+      <td>55</td>
+      <td>18</td>
+      <td>0.006661</td>
+      <td>0.140872</td>
+      <td>0.147533</td>
+    </tr>
+    <tr>
+      <td>FormalEducation</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.10</td>
+      <td>200</td>
+      <td>2000</td>
+      <td>Hobby,Student,Continent,HDI</td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Student": 1, "Continent": 1, "HDI": 1}</td>
+      <td>580</td>
+      <td>22478.588207</td>
+      <td>36</td>
+      <td>18</td>
+      <td>0.004604</td>
+      <td>0.128057</td>
+      <td>0.132661</td>
+    </tr>
+    <tr>
+      <td>FormalEducation</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>100</td>
+      <td>2000</td>
+      <td>Hobby,Student,Continent,HDI</td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Student": 1, "Continent": 1, "HDI": 1}</td>
+      <td>580</td>
+      <td>22478.588207</td>
+      <td>55</td>
+      <td>18</td>
+      <td>0.006465</td>
+      <td>0.133596</td>
+      <td>0.140061</td>
+    </tr>
+    <tr>
+      <td>FormalEducation</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.10</td>
+      <td>200</td>
+      <td>2000</td>
+      <td>Hobby,Student,Continent,HDI</td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Student": 1, "Continent": 1, "HDI": 1}</td>
+      <td>580</td>
+      <td>22478.588207</td>
+      <td>36</td>
+      <td>18</td>
+      <td>0.005328</td>
+      <td>0.130374</td>
+      <td>0.135703</td>
+    </tr>
+  </tbody>
+</table></div>
+</body>
+</html>

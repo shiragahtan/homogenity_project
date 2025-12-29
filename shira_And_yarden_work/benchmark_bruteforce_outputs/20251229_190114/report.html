@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brute Force Rule Mining Benchmark</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; }
+    h1, h2 { margin: 0 0 12px 0; }
+    .meta { color: #555; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 12px; background: #fff; }
+    img { width: 100%; height: auto; border-radius: 10px; border: 1px solid #eee; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: #fafafa; z-index: 1; }
+    .ok { color: #0a7; font-weight: 600; }
+    .bad { color: #b00; font-weight: 600; }
+    </style>
+</head>
+<body>
+  <h1>Brute Force Rule Mining Benchmark</h1>
+  <div class="meta">Generated: 2025-12-29 19:01:59</div>
+
+  <div class="grid">
+    <div class="card"><h2>Mean runtime vs epsilon</h2><img src='plots/mean_runtime_vs_epsilon.png' alt='mean_runtime_vs_epsilon.png' /></div>
+    <div class="card"><h2>Mean evaluated vs epsilon</h2><img src='plots/mean_evaluated_vs_epsilon.png' alt='mean_evaluated_vs_epsilon.png' /></div>
+    <div class="card"><h2>Success rate heatmap</h2><img src='plots/success_rate_heatmap.png' alt='success_rate_heatmap.png' /></div>
+  </div>
+
+  <h2 style="margin-top: 20px;">Results table</h2>
+  <div class="card" style="overflow:auto; max-height: 70vh;"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>rule_id</th>
+      <th>condition</th>
+      <th>treatment_def</th>
+      <th>treatment_col</th>
+      <th>outcome_col</th>
+      <th>epsilon</th>
+      <th>delta_percent</th>
+      <th>delta_count</th>
+      <th>sample_n</th>
+      <th>attrs</th>
+      <th>n_condition_rows</th>
+      <th>treated_count</th>
+      <th>control_count</th>
+      <th>skipped_reason</th>
+      <th>found</th>
+      <th>found_filters</th>
+      <th>found_size</th>
+      <th>found_ate</th>
+      <th>candidates_enumerated</th>
+      <th>candidates_evaluated</th>
+      <th>enum_seconds</th>
+      <th>eval_seconds</th>
+      <th>total_seconds</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'Exercise': 'Daily or almost every day'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>332</td>
+      <td>2168</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 2}</td>
+      <td>642.0</td>
+      <td>80296.595739</td>
+      <td>289</td>
+      <td>70</td>
+      <td>0.050511</td>
+      <td>3.287894e-01</td>
+      <td>0.379301</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'Exercise': 'Daily or almost every day'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>332</td>
+      <td>2168</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 2}</td>
+      <td>642.0</td>
+      <td>80296.595739</td>
+      <td>289</td>
+      <td>70</td>
+      <td>0.030429</td>
+      <td>3.384188e-01</td>
+      <td>0.368848</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'Exercise': 'Daily or almost every day'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>332</td>
+      <td>2168</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 2}</td>
+      <td>642.0</td>
+      <td>80296.595739</td>
+      <td>289</td>
+      <td>70</td>
+      <td>0.030747</td>
+      <td>3.486016e-01</td>
+      <td>0.379349</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'Exercise': 'Daily or almost every day'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>332</td>
+      <td>2168</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 2}</td>
+      <td>642.0</td>
+      <td>80296.595739</td>
+      <td>289</td>
+      <td>70</td>
+      <td>0.030479</td>
+      <td>3.377885e-01</td>
+      <td>0.368268</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'Exercise': 'Daily or almost every day'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>332</td>
+      <td>2168</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 2}</td>
+      <td>642.0</td>
+      <td>80296.595739</td>
+      <td>289</td>
+      <td>70</td>
+      <td>0.030616</td>
+      <td>3.537555e-01</td>
+      <td>0.384372</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>667</td>
+      <td>1833</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>294</td>
+      <td>116</td>
+      <td>0.029580</td>
+      <td>2.001869e+00</td>
+      <td>2.031450</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>667</td>
+      <td>1833</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>294</td>
+      <td>119</td>
+      <td>0.030090</td>
+      <td>2.062826e+00</td>
+      <td>2.092916</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>667</td>
+      <td>1833</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>294</td>
+      <td>119</td>
+      <td>0.029857</td>
+      <td>2.019504e+00</td>
+      <td>2.049362</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>667</td>
+      <td>1833</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>294</td>
+      <td>119</td>
+      <td>0.029924</td>
+      <td>2.062750e+00</td>
+      <td>2.092674</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>667</td>
+      <td>1833</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>294</td>
+      <td>115</td>
+      <td>0.029487</td>
+      <td>2.042206e+00</td>
+      <td>2.071693</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>37</td>
+      <td>2463</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>13</td>
+      <td>0.032646</td>
+      <td>2.055275e+00</td>
+      <td>2.087922</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>37</td>
+      <td>2463</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>13</td>
+      <td>0.033245</td>
+      <td>2.005220e+00</td>
+      <td>2.038465</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>37</td>
+      <td>2463</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>11</td>
+      <td>0.033324</td>
+      <td>2.086226e+00</td>
+      <td>2.119551</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>37</td>
+      <td>2463</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>11</td>
+      <td>0.036873</td>
+      <td>2.075960e+00</td>
+      <td>2.112834</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>37</td>
+      <td>2463</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>13</td>
+      <td>0.033351</td>
+      <td>2.121466e+00</td>
+      <td>2.154817</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030263</td>
+      <td>3.329915e-07</td>
+      <td>0.030264</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030232</td>
+      <td>1.250010e-07</td>
+      <td>0.030232</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030254</td>
+      <td>0.000000e+00</td>
+      <td>0.030254</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030188</td>
+      <td>4.199683e-08</td>
+      <td>0.030189</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'UndergradMajor': 'A natural science (ex. biology, chemistry, physics)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030261</td>
+      <td>1.250010e-07</td>
+      <td>0.030261</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>614</td>
+      <td>1886</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>114</td>
+      <td>0.033155</td>
+      <td>2.053333e+00</td>
+      <td>2.086488</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>614</td>
+      <td>1886</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>114</td>
+      <td>0.032758</td>
+      <td>2.028195e+00</td>
+      <td>2.060953</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>614</td>
+      <td>1886</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>116</td>
+      <td>0.033166</td>
+      <td>2.032166e+00</td>
+      <td>2.065332</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>614</td>
+      <td>1886</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>114</td>
+      <td>0.033777</td>
+      <td>2.034862e+00</td>
+      <td>2.068639</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'FormalEducation': 'Other doctoral degree (Ph.D, Ed.D., etc.)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>614</td>
+      <td>1886</td>
+      <td></td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>306</td>
+      <td>115</td>
+      <td>0.033159</td>
+      <td>2.001150e+00</td>
+      <td>2.034309</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>23</td>
+      <td>2477</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030546</td>
+      <td>4.199683e-08</td>
+      <td>0.030546</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>23</td>
+      <td>2477</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030229</td>
+      <td>4.199683e-08</td>
+      <td>0.030229</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>23</td>
+      <td>2477</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030013</td>
+      <td>4.100730e-08</td>
+      <td>0.030014</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>23</td>
+      <td>2477</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030051</td>
+      <td>8.400821e-08</td>
+      <td>0.030052</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>{'RaceEthnicity': 'White or of European descent'}</td>
+      <td>{'DevType': 'Engineering manager'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>23</td>
+      <td>2477</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>295</td>
+      <td>0</td>
+      <td>0.030137</td>
+      <td>4.199683e-08</td>
+      <td>0.030138</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>502</td>
+      <td>1998</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 2, "GINI": 2, "RaceEthnicity": 1}</td>
+      <td>607.0</td>
+      <td>43079.025915</td>
+      <td>306</td>
+      <td>74</td>
+      <td>0.032956</td>
+      <td>3.195148e-01</td>
+      <td>0.352472</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>502</td>
+      <td>1998</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 2, "GINI": 2, "RaceEthnicity": 1}</td>
+      <td>607.0</td>
+      <td>43079.025915</td>
+      <td>306</td>
+      <td>74</td>
+      <td>0.033320</td>
+      <td>3.523182e-01</td>
+      <td>0.385638</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>502</td>
+      <td>1998</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 2, "GINI": 2, "RaceEthnicity": 1}</td>
+      <td>607.0</td>
+      <td>43079.025915</td>
+      <td>306</td>
+      <td>74</td>
+      <td>0.032901</td>
+      <td>3.083156e-01</td>
+      <td>0.341217</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>502</td>
+      <td>1998</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 2, "GINI": 2, "RaceEthnicity": 1}</td>
+      <td>607.0</td>
+      <td>43079.025915</td>
+      <td>306</td>
+      <td>74</td>
+      <td>0.032933</td>
+      <td>3.224894e-01</td>
+      <td>0.355422</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>{'Student': 'No'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,HDI,GDP,GINI,Dependents,RaceEthnicity</td>
+      <td>2500</td>
+      <td>502</td>
+      <td>1998</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 2, "GINI": 2, "RaceEthnicity": 1}</td>
+      <td>607.0</td>
+      <td>43079.025915</td>
+      <td>306</td>
+      <td>74</td>
+      <td>0.033113</td>
+      <td>3.083920e-01</td>
+      <td>0.341506</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>519</td>
+      <td>1981</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 1, "GINI": 1}</td>
+      <td>622.0</td>
+      <td>27109.642444</td>
+      <td>294</td>
+      <td>73</td>
+      <td>0.029775</td>
+      <td>6.122448e-01</td>
+      <td>0.642020</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>519</td>
+      <td>1981</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 1, "GINI": 1}</td>
+      <td>622.0</td>
+      <td>27109.642444</td>
+      <td>294</td>
+      <td>73</td>
+      <td>0.031031</td>
+      <td>6.680552e-01</td>
+      <td>0.699087</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>519</td>
+      <td>1981</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 1, "GINI": 1}</td>
+      <td>622.0</td>
+      <td>27109.642444</td>
+      <td>294</td>
+      <td>73</td>
+      <td>0.030138</td>
+      <td>6.193229e-01</td>
+      <td>0.649461</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>519</td>
+      <td>1981</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 1, "GINI": 1}</td>
+      <td>622.0</td>
+      <td>27109.642444</td>
+      <td>294</td>
+      <td>73</td>
+      <td>0.030607</td>
+      <td>6.317668e-01</td>
+      <td>0.662374</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>{'SexualOrientation': 'Straight or heterosexual'}</td>
+      <td>{'Exercise': '3 - 4 times per week'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>519</td>
+      <td>1981</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "Student": 1, "HDI": 1, "GDP": 1, "GINI": 1}</td>
+      <td>622.0</td>
+      <td>27109.642444</td>
+      <td>294</td>
+      <td>73</td>
+      <td>0.030450</td>
+      <td>5.912562e-01</td>
+      <td>0.621706</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>{'Dependents': 'No'}</td>
+      <td>{'HoursComputer': '5 - 8 hours'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,RaceEthnicity</td>
+      <td>2500</td>
+      <td>721</td>
+      <td>1779</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 1, "GINI": 1, "RaceEthnicity": 1}</td>
+      <td>665.0</td>
+      <td>9428.765357</td>
+      <td>283</td>
+      <td>66</td>
+      <td>0.032700</td>
+      <td>2.760547e-01</td>
+      <td>0.308755</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>{'Dependents': 'No'}</td>
+      <td>{'HoursComputer': '5 - 8 hours'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,RaceEthnicity</td>
+      <td>2500</td>
+      <td>721</td>
+      <td>1779</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 1, "GINI": 1, "RaceEthnicity": 1}</td>
+      <td>665.0</td>
+      <td>9428.765357</td>
+      <td>283</td>
+      <td>66</td>
+      <td>0.032620</td>
+      <td>2.781887e-01</td>
+      <td>0.310809</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>{'Dependents': 'No'}</td>
+      <td>{'HoursComputer': '5 - 8 hours'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,RaceEthnicity</td>
+      <td>2500</td>
+      <td>721</td>
+      <td>1779</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 1, "GINI": 1, "RaceEthnicity": 1}</td>
+      <td>665.0</td>
+      <td>9428.765357</td>
+      <td>283</td>
+      <td>66</td>
+      <td>0.032253</td>
+      <td>2.884265e-01</td>
+      <td>0.320680</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>{'Dependents': 'No'}</td>
+      <td>{'HoursComputer': '5 - 8 hours'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,RaceEthnicity</td>
+      <td>2500</td>
+      <td>721</td>
+      <td>1779</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 1, "GINI": 1, "RaceEthnicity": 1}</td>
+      <td>665.0</td>
+      <td>9428.765357</td>
+      <td>283</td>
+      <td>66</td>
+      <td>0.032196</td>
+      <td>3.029084e-01</td>
+      <td>0.335105</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>{'Dependents': 'No'}</td>
+      <td>{'HoursComputer': '5 - 8 hours'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,RaceEthnicity</td>
+      <td>2500</td>
+      <td>721</td>
+      <td>1779</td>
+      <td></td>
+      <td><span class='ok'>YES</span></td>
+      <td>{"Hobby": 1, "HDI": 1, "GDP": 1, "GINI": 1, "RaceEthnicity": 1}</td>
+      <td>665.0</td>
+      <td>9428.765357</td>
+      <td>283</td>
+      <td>66</td>
+      <td>0.032330</td>
+      <td>2.894678e-01</td>
+      <td>0.321798</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'UndergradMajor': 'A humanities discipline (ex. literature, history, philosophy)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>25.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>289</td>
+      <td>0</td>
+      <td>0.031524</td>
+      <td>4.199683e-08</td>
+      <td>0.031524</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'UndergradMajor': 'A humanities discipline (ex. literature, history, philosophy)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>50.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>289</td>
+      <td>0</td>
+      <td>0.030844</td>
+      <td>8.300412e-08</td>
+      <td>0.030844</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'UndergradMajor': 'A humanities discipline (ex. literature, history, philosophy)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>100.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>289</td>
+      <td>0</td>
+      <td>0.030910</td>
+      <td>4.199683e-08</td>
+      <td>0.030910</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'UndergradMajor': 'A humanities discipline (ex. literature, history, philosophy)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>200.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>289</td>
+      <td>0</td>
+      <td>0.031483</td>
+      <td>4.201138e-08</td>
+      <td>0.031483</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>{'Gender': 'Male'}</td>
+      <td>{'UndergradMajor': 'A humanities discipline (ex. literature, history, philosophy)'}</td>
+      <td>__TREATMENT__</td>
+      <td>ConvertedSalary</td>
+      <td>500.0</td>
+      <td>0.05</td>
+      <td>125</td>
+      <td>2500</td>
+      <td>Hobby,Student,HDI,GDP,GINI,Dependents</td>
+      <td>2500</td>
+      <td>0</td>
+      <td>2500</td>
+      <td>insufficient_treatment_split</td>
+      <td><span class='bad'>NO</span></td>
+      <td></td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>289</td>
+      <td>0</td>
+      <td>0.031207</td>
+      <td>8.298957e-08</td>
+      <td>0.031208</td>
+    </tr>
+  </tbody>
+</table></div>
+</body>
+</html>

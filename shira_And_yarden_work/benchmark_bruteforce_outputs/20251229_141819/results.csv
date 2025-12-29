@@ -1,5 +1,0 @@
-treatment_col,outcome_col,epsilon,delta_percent,delta_count,sample_n,attrs,found,found_filters,found_size,found_ate,candidates_enumerated,candidates_evaluated,enum_seconds,eval_seconds,total_seconds
-FormalEducation,ConvertedSalary,50.0,0.05,100,2000,"Hobby,Student,Continent,HDI",True,"{'Student': 1, 'Continent': 1, 'HDI': 1}",580,22478.588206574794,55,18,0.014372040997841395,0.14964741600851994,0.1640205839939881
-FormalEducation,ConvertedSalary,50.0,0.1,200,2000,"Hobby,Student,Continent,HDI",True,"{'Student': 1, 'Continent': 1, 'HDI': 1}",580,22478.588206574794,36,18,0.004608082992490381,0.12573191600677092,0.13034041700302623
-FormalEducation,ConvertedSalary,100.0,0.05,100,2000,"Hobby,Student,Continent,HDI",True,"{'Student': 1, 'Continent': 1, 'HDI': 1}",580,22478.588206574794,55,18,0.006368875008774921,0.14007804199354723,0.14644724999379832
-FormalEducation,ConvertedSalary,100.0,0.1,200,2000,"Hobby,Student,Continent,HDI",True,"{'Student': 1, 'Continent': 1, 'HDI': 1}",580,22478.588206574794,36,18,0.004653208001400344,0.12583841700688936,0.13049187501019333

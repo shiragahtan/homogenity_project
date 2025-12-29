@@ -9,7 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import calculate_ate_safe
 
 # --- Configuration ---
-DATASET = '../german_credit/german_data_encoded.csv'
+DATASET = '../german_credit/german_data_not_encoded.csv'
 
 OUTCOME_COL = 'credit_risk'  # 'tgtO'
 TREATMENT_COL = 'TempTreatment'  # This is the 'treatment_col' we will create

@@ -5,11 +5,14 @@ import matplotlib.pyplot as plt
 
 # --- Configuration ---
 # Path to your main full-numerical dataset
-DATASET_PATH = '../german_credit/german_data_encoded.csv'
+#DATASET_PATH = '../german_credit/german_data_encoded.csv'
+DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
 # Path to your rules JSON
-TREATMENT_FILE = "../algorithms/GermanChosen10Treatments.json"
+#TREATMENT_FILE = "../algorithms/GermanChosen10Treatments.json"
+TREATMENT_FILE = '../algorithms/Chosen10Treatments.json'
 
-DELTAS = [100]
+#DELTAS = [100]
+DELTAS = [1000]
 
 
 def plot_subgroups_graph(file_path, size_all, delta, rule, rule_data):
@@ -163,7 +166,7 @@ if __name__ == "__main__":
         # --- B. Process for each Delta ---
         for delta in DELTAS:
             # Adjust filename to match your exact output naming convention
-            results_path = f'../algorithms_results/FPGrowth_subgroups_results_delta_{delta}_{rule_idx}.xlsx'
+            results_path = f'../algorithms_results/MultiProcessing_subgroups_results_delta_{delta}_{rule_idx}.xlsx'
 
             if Path(results_path).exists():
                 result_data = plot_subgroups_graph(results_path, size_all, delta, rule_idx, rule_data)

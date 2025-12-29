@@ -25,20 +25,18 @@ from causalForest_algorithm import calc_utility_for_subgroups as causalForest_ca
 from algorithms.code.code.main import run_wte_homogeneity_baseline
 
 # --- Configuration ---
-# Load config
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
 # DATASET PATHS
-#FULL_DATASET_PATH = '../stackoverflow/so_countries_col_new_encoded.csv'
-FULL_DATASET_PATH = '../german_credit/german_data_encoded.csv'
-RULES_FILE = 'GermanChosen10Treatments.json'
+# CRITICAL: Use the STRING dataset, not the encoded one
+FULL_DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
+RULES_FILE = 'Chosen10Treatments.json'
 
-# DELTAS = config['DELTAS']
-DELTAS = [100]
+DELTAS = [1000]
 
 # --- ALGORITHM SETUP ---
-ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "Random", "CausalForest", "WTE"]
+ALGORITHM_NAMES = ["FPGrowth"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
@@ -57,26 +55,21 @@ ALGORITHM_DISPATCH_MAP = {
 }
 
 MODES = config['MODES']
-EPSILONS = [0.1]
-#EPSILONS = [76000]
+EPSILONS = [76000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']  # 'TempTreatment'
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
 """ Timing helper """
-
-
 @contextmanager
 def timer() -> callable:
     t0 = perf_counter()
     yield lambda: perf_counter() - t0
 
-
 def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=0):
     """Save subgroup analysis results to an Excel file."""
     subgroup_df = pd.DataFrame(subgroup_data)
     summary_df = pd.DataFrame([{"NumSubgroups": num_subgroups}])
-    # Convert dicts to string for Excel logging
     chosen_treatment_df = pd.DataFrame([{"Condition": str(condition), "Treatment": str(treatment)}])
 
     results_dir = Path("../algorithms_results")
@@ -91,9 +84,7 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
     print(f"✔  {len(subgroup_data):,} subgroups saved to {output_file}")
     return str(output_file)
 
-
 def _append_df_to_excel(excel_path: Path, new_row: dict):
-    """Append a new row to an Excel file."""
     if not excel_path.exists():
         df = pd.DataFrame([new_row])
         df.to_excel(excel_path, index=False)
@@ -102,12 +93,9 @@ def _append_df_to_excel(excel_path: Path, new_row: dict):
         updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
         updated_df.to_excel(excel_path, index=False)
 
-
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
-    """Append algorithm timing results to an Excel file."""
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-
     excel_path = results_dir / "algorithms_time.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -121,18 +109,14 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
         "run_time_seconds": runtime_seconds,
         "run_time_minutes": runtime_seconds / 60
     }
-
     _append_df_to_excel(excel_path, new_row)
     print(f"✅ Timing results appended to {excel_path}")
-
 
 def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
                                runtime_seconds, num_subgroups=None,
                                enumeration_time=None, iteration_time=None):
-    """Append homogeneity check results to an Excel file."""
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-
     excel_path = results_dir / "homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -150,87 +134,61 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "enumeration_time_sec": enumeration_time,
         "iteration_time_sec": iteration_time
     }
-
     _append_df_to_excel(excel_path, new_row)
     print(f"🧬 Homogeneity results appended to {excel_path}")
 
-
 def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
                          utility_time, attr_vals_time, index=0):
-    """
-    Helper function to run the actual algorithm logic, timing, and logging.
-    """
     with timer() as elapsed:
         res = algo_func()
     algorithm_time = elapsed()
-
-    # Add all timing components
     total_time = algorithm_time + utility_time + attr_vals_time
 
     if chosen_mode == 0:  # Homogeneity check
-        homogeneity_status = res
+        raw_result = res
         num_checked = None
         enum_time = None
         iter_time = None
 
         if isinstance(res, tuple):
             if len(res) == 2:
-                homogeneity_status = res[0]
+                raw_result = res[0]
                 num_checked = res[1]
             elif len(res) == 3:
-                homogeneity_status, enum_time, iter_time = res
+                raw_result, enum_time, iter_time = res
             elif len(res) == 4:
-                homogeneity_status, num_checked, enum_time, iter_time = res
+                raw_result, num_checked, enum_time, iter_time = res
+            elif len(res) == 5:
+                raw_result, num_checked, enum_time, iter_time, _ = res
 
-        status_str = "Homogeneous" if homogeneity_status else "NOT Homogeneous (Violation Found)"
-        color = "\033[92m" if homogeneity_status else "\033[91m"
+        is_homogeneous = bool(raw_result)
+        status_str = "Homogeneous" if is_homogeneous else "NOT Homogeneous (Violation Found)"
+        color = "\033[92m" if is_homogeneous else "\033[91m"
         print(f"{color}Result: {status_str}\033[0m")
         if num_checked is not None:
             print(f"Subgroups checked: {num_checked}")
 
-        append_homogeneity_results(
-            algorithm_name=algorithm_name,
-            treatment=treatment,
-            condition=condition,
-            delta=delta,
-            epsilon=epsilon,
-            homogeneity_status=homogeneity_status,
-            runtime_seconds=total_time,
-            num_subgroups=num_checked,
-            enumeration_time=enum_time,
-            iteration_time=iter_time
-        )
+        append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, is_homogeneous, total_time, num_checked, enum_time, iter_time)
         return res
     else:
-        # AllSubgroups mode
-        if isinstance(res, tuple) and len(res) == 4:
-            subgroup_data, num_subgroups, _, _ = res
-        elif isinstance(res, tuple) and len(res) == 2:
-            subgroup_data, num_subgroups = res
-        else:
-            subgroup_data, num_subgroups = res, len(res) if isinstance(res, list) else 0
+        subgroup_data = res
+        num_subgroups = 0
+        if isinstance(res, tuple):
+            subgroup_data = res[0]
+            if len(res) >= 2: num_subgroups = res[1]
 
-        save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition,
-                              treatment, delta, index=index)
-
-        append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta,
-                              total_time)
+        save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=index)
+        append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, total_time)
         return res
-
 
 def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
                     attr_vals_time=0, force_n_subgroups=None):
-    """
-    Main experiment runner.
-    """
     algorithm_name = chosen_algorithm_name
     print(f"Using algorithm: {algorithm_name}")
     epsilons = EPSILONS
     if chosen_mode != 0:
         epsilons = [epsilons[0]]
 
-    # Calculate utility
-    # Note: df here is already filtered and treated
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     with timer() as utility_timer:
         utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO, delta)
@@ -273,10 +231,8 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         }
 
         dispatch_key = algorithm_name
-        if algorithm_name == "Naive":
-            dispatch_key = "BruteForce"
-        elif algorithm_name == "RW":
-            dispatch_key = "RW_Direct"
+        if algorithm_name == "Naive": dispatch_key = "BruteForce"
+        elif algorithm_name == "RW": dispatch_key = "RW_Direct"
 
         try:
             result = run_single_execution(
@@ -290,34 +246,22 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                     if len(result) >= 2 and isinstance(result[1], int):
                         rw_count = result[1]
 
-                should_run_random = (
-                        rw_count > 0
-                        and RUN_RANDOM_BASELINE
-                        and "Random" in ALGORITHM_NAMES
-                        and "RW" in ALGORITHM_NAMES
-                )
-
+                should_run_random = (rw_count > 0 and RUN_RANDOM_BASELINE and "Random" in ALGORITHM_NAMES and "RW" in ALGORITHM_NAMES)
                 if should_run_random:
                     print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                    run_experiments(
-                        chosen_mode, "Random", delta, df, tgtO, attr_vals,
-                        condition, treatment, i, attr_vals_time,
-                        force_n_subgroups=rw_count
-                    )
+                    run_experiments(chosen_mode, "Random", delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time, force_n_subgroups=rw_count)
                 elif rw_count == 0:
                     print("RW checked 0 subgroups, skipping random baseline.")
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")
 
-
 def clean_results_files(mode):
-    """Delete results files."""
     skip_delete = '-d' in sys.argv
     results_dir_graphs = Path("../graphs")
     results_dir_graphs.mkdir(exist_ok=True)
-    time_xlsx = results_dir_graphs / "algorithms_time.xlsx"
     homog_xlsx = results_dir_graphs / "homogeneity_results.xlsx"
+    time_xlsx = results_dir_graphs / "algorithms_time.xlsx"
     files_to_delete = [homog_xlsx] if mode == 0 else [time_xlsx]
     if not skip_delete:
         for f in files_to_delete:
@@ -327,23 +271,38 @@ def clean_results_files(mode):
     else:
         print("⚠️  Results files NOT reset (append mode, -d flag given)")
 
+def encode_dataframe_local(df):
+    """
+    Replicates the exact logic of the old batch script:
+    Maps unique values in THIS SUBSET to 1..N based on appearance order.
+    """
+    df_encoded = df.copy()
+    categorical_columns = df_encoded.select_dtypes(include=['object']).columns.tolist()
+
+    for column in categorical_columns:
+        # Get unique values in this filtered subset
+        unique_values = df_encoded[column].unique()
+        # Map them to 1, 2, 3...
+        column_mapping = {val: idx + 1 for idx, val in enumerate(unique_values)}
+        df_encoded[column] = df_encoded[column].map(column_mapping)
+
+    # Handle booleans
+    bool_columns = df_encoded.select_dtypes(include=['bool']).columns
+    for col in bool_columns:
+        df_encoded[col] = df_encoded[col].astype(int)
+
+    return df_encoded
 
 def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name, tgtO):
-    """
-    Dynamically applies the rule to the full dataset in-memory.
-    Mimics the logic of the previous batch processing script.
-    """
-    # 1. Parse the rule (Keys and Values are now numeric due to previous step)
+    # 1. Parse string rule
     condition_dict = rule["condition"]
     condition_attr, condition_val = list(condition_dict.items())[0]
-
     treatment_dict = rule["treatment"]
     treatment_attr, treatment_val = list(treatment_dict.items())[0]
 
     print(f"--- Processing Rule #{i + 1}: {condition_attr}={condition_val} -> {treatment_attr}={treatment_val} ---")
 
-    # 2. Filter DataFrame based on condition
-    #    Since data is numeric, we do direct comparison
+    # 2. Filter (String comparison)
     try:
         sub_df = full_df[full_df[condition_attr] == condition_val].copy()
     except KeyError as e:
@@ -354,100 +313,97 @@ def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name
         print(f"No rows match condition {condition_attr}={condition_val}. Skipping.")
         return
 
-    # 3. Drop the invariant condition column
-    #    (Matches previous logic: remove the column we just filtered on)
+    # 3. Drop invariant
     sub_df = sub_df.drop(columns=[condition_attr])
 
-    # 4. Apply Treatment (Create TempTreatment)
+    # 4. Apply Treatment
     if treatment_attr not in sub_df.columns:
-        print(f"Treatment column {treatment_attr} not found (or was dropped). Skipping.")
+        print(f"Treatment column {treatment_attr} not found. Skipping.")
         return
 
-    # Create binary treatment column: 1 if matches value, 0 otherwise
     sub_df[TREATMENT_COL] = (sub_df[treatment_attr] == treatment_val).astype(int)
 
     if sub_df[TREATMENT_COL].sum() == 0:
         print(f"Warning: Treatment resulted in 0 treated individuals. Skipping.")
         return
 
-    # 5. Calculate Attribute Values (For BruteForce)
-    #    Exclude: The newly created TempTreatment, the Target Outcome, and the keys of the treatment
-    #    (Note: condition_attr is already dropped)
+    # 5. LOCAL ENCODING (Matches old batch script)
+    sub_df_encoded = encode_dataframe_local(sub_df)
+
+    # Ensure outcome is numeric
+    sub_df_encoded[tgtO] = pd.to_numeric(sub_df_encoded[tgtO], errors='coerce')
+
+    # 6. Calculate Attribute Values using local encoding
     with timer() as attr_timer:
         attr_vals = {
-            col: sorted(sub_df[col].dropna().unique())
-            for col in sub_df.columns
+            col: sorted(sub_df_encoded[col].dropna().unique())
+            for col in sub_df_encoded.columns
             if col not in [TREATMENT_COL, tgtO, *treatment_dict.keys()]
         }
     attr_vals_time = attr_timer()
 
-    # 6. Run Experiments for Deltas
+    # 7. Run Experiments
     for delta in DELTAS:
-        if len(sub_df) < delta:
-            print(f"Skipping delta {delta}: DataFrame too small ({len(sub_df)} rows).")
+        if len(sub_df_encoded) < delta:
+            print(f"Skipping delta {delta}: DataFrame too small.")
             continue
-
         print(f"Running for delta: {delta}")
         attr_time = attr_vals_time if chosen_algorithm_name == "BruteForce" else 0
-
+        
         if chosen_algorithm_name == "RW":
-            num_runs = NUM_RW_RUNS
-            print(f"Running {num_runs} times")
-            for run_num in range(num_runs):
+            for run_num in range(NUM_RW_RUNS):
                 print(f"--- Run number: {run_num} ---")
-                run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df, tgtO, attr_vals,
-                                condition_dict, treatment_dict, i, attr_time)
+                run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict, treatment_dict, i, attr_time)
         else:
-            run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df, tgtO, attr_vals,
-                            condition_dict, treatment_dict, i, attr_time)
-
+            run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict, treatment_dict, i, attr_time)
 
 def main():
-    # tgtO = "ConvertedSalary"
-    tgtO = "credit_risk"
+    tgtO = "ConvertedSalary"
 
-    # 1. Load the Rules (JSON with numeric values)
+    # 1. Load Rules
     print(f"Loading treatments from {RULES_FILE}...")
     try:
         with open(RULES_FILE, "r") as f:
-            # Each line is a JSON object
             rules_list = [json.loads(line) for line in f]
     except FileNotFoundError:
         print(f"Error: {RULES_FILE} not found.")
         return
 
-    # 2. Load the Full Numeric Dataset ONCE
+    # 2. Load & Clean Dataset (The exact steps from batch file)
     print(f"Loading full dataset from {FULL_DATASET_PATH}...")
     if not Path(FULL_DATASET_PATH).exists():
         print(f"Error: Dataset {FULL_DATASET_PATH} not found.")
         return
 
     full_df = pd.read_csv(FULL_DATASET_PATH)
-    print(f"Loaded dataset with {len(full_df)} rows and {len(full_df.columns)} columns.")
+    
+    # --- EXACT CLEANING LOGIC FROM OLD BATCH FILE ---
+    full_df = full_df.loc[:, ~full_df.columns.str.startswith('Unnamed')]
+    full_df = full_df[~full_df.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
+    # -----------------------------------------------
 
-    # 3. User Setup
+    print(f"Loaded and cleaned dataset with {len(full_df)} rows and {len(full_df.columns)} columns.")
+
+    # 3. Setup
     print(f"Available Algorithms: {ALGORITHM_NAMES}")
     try:
         chosen_mode = int(input(f"Choose mode {list(enumerate(MODES))}: \n"))
     except ValueError:
-        chosen_mode = 0  # Default
+        chosen_mode = 0
 
     clean_results_files(chosen_mode)
 
     algorithms_to_run = ALGORITHM_NAMES[:]
-
-    # Filter algorithms based on mode
-    if chosen_mode == 1 and "RW" in algorithms_to_run:
-        if "RW" in algorithms_to_run: algorithms_to_run.remove("RW")
+    if chosen_mode == 1:
+        for algo in ["RW", "Greedy", "Random", "CausalForest", "WTE"]:
+            if algo in algorithms_to_run: algorithms_to_run.remove(algo)
     if RUN_RANDOM_BASELINE and "Random" in algorithms_to_run:
         if "Random" in algorithms_to_run: algorithms_to_run.remove("Random")
 
-    # 4. Main Execution Loop
+    # 4. Execution
     for chosen_algorithm_name in reversed(algorithms_to_run):
         for i, rule in enumerate(rules_list):
-            # Call the new dynamic processor
             process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name, tgtO)
-
 
 if __name__ == "__main__":
     main()

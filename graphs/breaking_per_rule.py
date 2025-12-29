@@ -11,8 +11,8 @@ TARGET_DIRECTORY = '../algorithms_results'
 # Directory where the final summary Excel files will be saved
 OUTPUT_DIR = './breaking_subgroups_by_rule'
 # The range of epsilon values to iterate over
-EPSILON_RANGE = range(5000, 100001, 5000)
-#EPSILON_RANGE = [50000]
+#EPSILON_RANGE = range(5000, 100001, 5000)
+EPSILON_RANGE = [0.1]
 # Regex to match the files and extract delta and index (the rule number)
 # Captures: 1: delta value, 2: index value (Rule ID)
 FILE_PATTERN = re.compile(r'_delta_(\d+)_(\d+)\.xlsx$', re.IGNORECASE)

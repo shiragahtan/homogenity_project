@@ -1,34 +1,77 @@
 {
-  "DELTAS": [20000, 15000, 10000, 5000],
-  "ALGORITHM_NAMES": ["BruteForce", "Apriori", "FPGrowth", "MultiProcessing", "RW"],
-  "MODES": ["HomogeneityCheck", "AllSubgroups"],
-  "EPSILONS": [3000, 3500, 5000, 5500, 60000, 65000],
-  "TREATMENT_COL": "TempTreatment",
-  "OPTIMIZATION_MODES": ["direct", "hybrid"],
-  "ATTRIBUTES_FOR_APPRIORI": [
-    ["Continent","Gender", "Age", "FormalEducation", "UndergradMajor", "Country"],
-    ["Continent", "Dependents", "Age", "FormalEducation", "UndergradMajor", "Country"],
-    ["Continent", "Gender", "Age", "FormalEducation", "UndergradMajor", "Country"]
+  "DATASETS": {
+    "german_credit": {
+      "FULL_DATASET_PATH": "../german_credit/german_data_not_encoded.csv",
+      "RULES_FILE": "GermanChosen10Treatments.json",
+      "DELTAS": [50],
+      "EPSILONS": [0.1],
+      "TARGET_COLUMN": "credit_risk",
+      "ATTRIBUTE_WEIGHTS": {
+        "other_debtors": 4872,
+        "foreign_worker": 3920,
+        "other_installment_plans": 3670,
+        "gender": 3637,
+        "housing": 3559,
+        "number_credits": 3256,
+        "personal_status": 2688,
+        "credit_history": 2668,
+        "amount": 2663,
+        "people_liable": 2519,
+        "age": 2334,
+        "job": 2277,
+        "savings": 2192,
+        "installment_rate": 1943,
+        "duration": 1243,
+        "property": 810,
+        "status": 781,
+        "employment_duration": 528,
+        "present_residence": 483,
+        "purpose": 481
+      }
+    },
+    "stackoverflow": {
+      "FULL_DATASET_PATH": "../stackoverflow/so_countries_col_new.csv",
+      "RULES_FILE": "Chosen10Treatments.json",
+      "DELTAS": [1000],
+      "EPSILONS": [76000],
+      "TARGET_COLUMN": "ConvertedSalary",
+      "ATTRIBUTE_WEIGHTS": {
+        "GINI": 13462,
+        "Hobby": 12406,
+        "Student": 12472,
+        "RaceEthnicity": 11414,
+        "Gender": 10754,
+        "SexualOrientation": 10543,
+        "Continent": 10446,
+        "GDP": 8726,
+        "HDI": 8205,
+        "Dependents": 7415,
+        "Country": 7328,
+        "DevType": 5210,
+        "HoursComputer": 4927,
+        "UndergradMajor": 4925,
+        "Age": 3668,
+        "FormalEducation": 3273,
+        "Exercise": 860,
+        "EducationParents": 531,
+        "YearsCoding": 105
+      }
+    }
+  },
+  "MODES": [
+    "HomogeneityCheck",
+    "AllSubgroups"
   ],
-  "ATTRIBUTE_WEIGHTS": {
-    "GINI": 13462,
-    "Hobby": 12406,
-    "Student": 12472,
-    "RaceEthnicity": 11414,
-    "Gender": 10754,
-    "SexualOrientation": 10543,
-    "Continent": 10446,
-    "GDP": 8726,
-    "HDI": 8205,
-    "Dependents": 7415,
-    "Country": 7328,
-    "DevType": 5210,
-    "HoursComputer": 4927,
-    "UndergradMajor": 4925,
-    "Age": 3668,
-    "FormalEducation": 3273,
-    "Exercise": 860,
-    "EducationParents": 531,
-    "YearsCoding": 105
-  }
+  "TREATMENT_COL": "TempTreatment",
+  "OPTIMIZATION_MODES": [
+    "direct",
+    "hybrid"
+  ],
+  "ALGORITHM_NAMES": [
+    "BruteForce",
+    "Apriori",
+    "FPGrowth",
+    "MultiProcessing",
+    "RW"
+  ]
 }

@@ -23,18 +23,8 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
 with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
     _CFG = json.load(fp)
 
+# Still used for the global treatment col setting (fallback)
 BINARY_TREATMENT: str = _CFG["TREATMENT_COL"]
-ATTRIBUTE_WEIGHTS_RAW: Dict[str, float] = _CFG.get("ATTRIBUTE_WEIGHTS", {})
-
-# Normalize weights
-if ATTRIBUTE_WEIGHTS_RAW:
-    lo, hi = min(ATTRIBUTE_WEIGHTS_RAW.values()), max(ATTRIBUTE_WEIGHTS_RAW.values())
-    div = hi - lo if hi != lo else 1.0
-    ATTRIBUTE_WEIGHTS: Dict[str, float] = {
-        a: (w - lo) / div for a, w in ATTRIBUTE_WEIGHTS_RAW.items()
-    }
-else:
-    ATTRIBUTE_WEIGHTS = {}
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "yarden_files"))
 from ATE_update import calculate_ate_safe
@@ -58,8 +48,19 @@ def _homog_random_walks_direct(
     k_walks: int = 1_000,
     size_stop: float = 0.80,
     rng: Optional[random.Random] = None,
-) -> Tuple[bool, int]:  # <--- CHANGED RETURN TYPE
+    attribute_weights: Optional[Dict[str, float]] = None, # <--- NEW ARGUMENT
+) -> Tuple[bool, int]:
     rng = rng or random.Random()
+
+    # --- WEIGHT NORMALIZATION (Local) ---
+    raw_weights = attribute_weights or {}
+    normalized_weights = {}
+    if raw_weights:
+        lo, hi = min(raw_weights.values()), max(raw_weights.values())
+        div = hi - lo if hi != lo else 1.0
+        normalized_weights = {
+            a: (w - lo) / div for a, w in raw_weights.items()
+        }
 
     try:
         ate_all = calculate_ate_safe(df, treatment_col, outcome_col, delta)
@@ -85,7 +86,8 @@ def _homog_random_walks_direct(
     # Score Roots
     def _item_score(itemset: frozenset[str]) -> float:
         attrs = {lookup[c][0] for c in itemset}
-        weight = sum(ATTRIBUTE_WEIGHTS.get(a, 0.0) for a in attrs)
+        # Use locally normalized weights
+        weight = sum(normalized_weights.get(a, 0.0) for a in attrs)
         return weight + 1.0
 
     itemsets = list(freq["itemsets"])
@@ -112,7 +114,6 @@ def _homog_random_walks_direct(
 
         # Early Exit for Saturation
         if consecutive_stale_walks >= STALE_LIMIT:
-            # We aren't finding new subgroups, so we can't find new violations.
             print(f"Saturation reached after {len(visited)} subgroups. Exiting early.")
             break
 
@@ -128,13 +129,11 @@ def _homog_random_walks_direct(
         # Helper to check CATE
         def check_current(mask, itemset):
             nonlocal walk_discovered_new_node
-            # Frozenset handles order independence ({A,B} == {B,A})
             key = frozenset(itemset)
 
             if key in visited:
                 return None
 
-            # New Node Found!
             visited.add(key)
             walk_discovered_new_node = True
 
@@ -154,8 +153,8 @@ def _homog_random_walks_direct(
         if cate is not None and abs(cate - ate_all) > epsilon:
             pretty_dict = {lookup[root_col_name][0]: lookup[root_col_name][1]}
             print(f"Breaking Subgroup: {pretty_dict}")
-            print(f"Total unique subgroups checked: {len(visited)}") # <--- PRINT COUNT
-            return False, len(visited) # <--- RETURN COUNT
+            print(f"Total unique subgroups checked: {len(visited)}")
+            return False, len(visited)
 
         # DIVE LOOP
         while True:
@@ -177,7 +176,8 @@ def _homog_random_walks_direct(
                 temp_mask = current_mask & onehot[col_name]
                 if temp_mask.sum() >= delta:
                     candidates.append((col_name, temp_mask))
-                    candidate_weights.append(ATTRIBUTE_WEIGHTS.get(attr, 0.0) + 0.1)
+                    # Use locally normalized weights
+                    candidate_weights.append(normalized_weights.get(attr, 0.0) + 0.1)
 
             if not candidates:
                 break # Dead end
@@ -196,20 +196,19 @@ def _homog_random_walks_direct(
             if cate is not None and abs(cate - ate_all) > epsilon:
                 pretty_dict = {lookup[c][0]: lookup[c][1] for c in current_itemset}
                 print(f"Breaking Subgroup: {pretty_dict}")
-                print(f"Total unique subgroups checked: {len(visited)}") # <--- PRINT COUNT
-                return False, len(visited) # <--- RETURN COUNT
+                print(f"Total unique subgroups checked: {len(visited)}")
+                return False, len(visited)
 
             if rng.random() < 0.1:
                 break
 
-        # Update Saturation Tracker
         if walk_discovered_new_node:
             consecutive_stale_walks = 0
         else:
             consecutive_stale_walks += 1
 
-    print(f"Total unique subgroups checked: {len(visited)}") # <--- PRINT COUNT
-    return True, len(visited) # <--- RETURN COUNT
+    print(f"Total unique subgroups checked: {len(visited)}")
+    return True, len(visited)
 
 # Public API
 def calc_utility_for_subgroups(
@@ -225,8 +224,9 @@ def calc_utility_for_subgroups(
     k_walks: int = 1_000,
     size_stop: float = 0.8,
     rng: Optional[random.Random] = None,
+    attribute_weights: Optional[Dict[str, float]] = None, # <--- NEW ARGUMENT
     **kwargs: object,
-) -> Tuple[bool, int]: # <--- UPDATED SIGNATURE
+) -> Tuple[bool, int]:
     outcome_col = outcome_col or tgtO
     if outcome_col is None:
         raise ValueError("Need outcome_col / tgtO")
@@ -241,6 +241,7 @@ def calc_utility_for_subgroups(
             k_walks=k_walks,
             size_stop=size_stop,
             rng=rng,
+            attribute_weights=attribute_weights # <--- PASSING DOWN
         )
 
     return [], 0

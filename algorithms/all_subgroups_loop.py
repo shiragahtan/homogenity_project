@@ -28,15 +28,32 @@ from algorithms.code.code.main import run_wte_homogeneity_baseline
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
-# DATASET PATHS
-# CRITICAL: Use the STRING dataset, not the encoded one
-FULL_DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
-RULES_FILE = 'Chosen10Treatments.json'
+# ==========================================
+#      DATASET SELECTION
+# ==========================================
+# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
+CHOSEN_DS = "german_credit"
 
-DELTAS = [1000]
+if CHOSEN_DS not in config['DATASETS']:
+    raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")
 
-# --- ALGORITHM SETUP ---
-ALGORITHM_NAMES = ["FPGrowth"]
+ds_config = config['DATASETS'][CHOSEN_DS]
+
+FULL_DATASET_PATH = ds_config['FULL_DATASET_PATH']
+RULES_FILE = ds_config['RULES_FILE']
+DELTAS = ds_config['DELTAS']
+EPSILONS = ds_config['EPSILONS']
+TARGET_COLUMN_NAME = ds_config['TARGET_COLUMN']
+# LOAD WEIGHTS HERE TO PASS DOWN
+ATTRIBUTE_WEIGHTS = ds_config.get('ATTRIBUTE_WEIGHTS', {})
+
+print(f"🔹 Loaded Configuration for: {CHOSEN_DS}")
+print(f"   Dataset: {FULL_DATASET_PATH}")
+print(f"   Rules: {RULES_FILE}")
+print(f"   Target: {TARGET_COLUMN_NAME}")
+# ==========================================
+
+ALGORITHM_NAMES = ["MultiProcessing"]
 
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
@@ -55,16 +72,18 @@ ALGORITHM_DISPATCH_MAP = {
 }
 
 MODES = config['MODES']
-EPSILONS = [76000]
 NUM_RW_RUNS = 5
 TREATMENT_COL = config['TREATMENT_COL']  # 'TempTreatment'
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
 """ Timing helper """
+
+
 @contextmanager
 def timer() -> callable:
     t0 = perf_counter()
     yield lambda: perf_counter() - t0
+
 
 def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=0):
     """Save subgroup analysis results to an Excel file."""
@@ -84,6 +103,7 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
     print(f"✔  {len(subgroup_data):,} subgroups saved to {output_file}")
     return str(output_file)
 
+
 def _append_df_to_excel(excel_path: Path, new_row: dict):
     if not excel_path.exists():
         df = pd.DataFrame([new_row])
@@ -92,6 +112,7 @@ def _append_df_to_excel(excel_path: Path, new_row: dict):
         existing_df = pd.read_excel(excel_path)
         updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
         updated_df.to_excel(excel_path, index=False)
+
 
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
     results_dir = Path("../graphs")
@@ -111,6 +132,7 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
     }
     _append_df_to_excel(excel_path, new_row)
     print(f"✅ Timing results appended to {excel_path}")
+
 
 def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
                                runtime_seconds, num_subgroups=None,
@@ -136,6 +158,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
     }
     _append_df_to_excel(excel_path, new_row)
     print(f"🧬 Homogeneity results appended to {excel_path}")
+
 
 def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
                          utility_time, attr_vals_time, index=0):
@@ -168,7 +191,8 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
         if num_checked is not None:
             print(f"Subgroups checked: {num_checked}")
 
-        append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, is_homogeneous, total_time, num_checked, enum_time, iter_time)
+        append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, is_homogeneous, total_time,
+                                   num_checked, enum_time, iter_time)
         return res
     else:
         subgroup_data = res
@@ -181,10 +205,12 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
         append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, total_time)
         return res
 
+
 def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
                     attr_vals_time=0, force_n_subgroups=None):
     algorithm_name = chosen_algorithm_name
     print(f"Using algorithm: {algorithm_name}")
+    # Use global EPSILONS loaded from config
     epsilons = EPSILONS
     if chosen_mode != 0:
         epsilons = [epsilons[0]]
@@ -206,14 +232,19 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             epsilon=epsilon,
             mode=chosen_mode,
             utility_all=utility_all
+            # attribute_weights REMOVED from here to avoid TypeError in other algos
         )
 
         _naive_kw = dict(common, attr_vals=attr_vals)
         _apriori_kw = dict(common, algorithm=apriori)
         _fpgrowth_kw = dict(common, algorithm=fpgrowth)
         _opt_fp_kw = dict(common, n_jobs=mp.cpu_count())
+
+        # Add weights SPECIFICALLY for RW here
         _rw_unlearning_kw_direct = dict(common, algorithm=apriori, size_stop=0.8,
-                                        optimization_mode=OPTIMIZATION_MODES[0])
+                                        optimization_mode=OPTIMIZATION_MODES[0],
+                                        attribute_weights=ATTRIBUTE_WEIGHTS)
+
         _random_kw = dict(common, n_subgroups=force_n_subgroups if force_n_subgroups else 1000)
         _greedy_kw = dict(common)
         _causalForest_kw = dict(common)
@@ -231,8 +262,10 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         }
 
         dispatch_key = algorithm_name
-        if algorithm_name == "Naive": dispatch_key = "BruteForce"
-        elif algorithm_name == "RW": dispatch_key = "RW_Direct"
+        if algorithm_name == "Naive":
+            dispatch_key = "BruteForce"
+        elif algorithm_name == "RW":
+            dispatch_key = "RW_Direct"
 
         try:
             result = run_single_execution(
@@ -246,15 +279,18 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
                     if len(result) >= 2 and isinstance(result[1], int):
                         rw_count = result[1]
 
-                should_run_random = (rw_count > 0 and RUN_RANDOM_BASELINE and "Random" in ALGORITHM_NAMES and "RW" in ALGORITHM_NAMES)
+                should_run_random = (
+                        rw_count > 0 and RUN_RANDOM_BASELINE and "Random" in ALGORITHM_NAMES and "RW" in ALGORITHM_NAMES)
                 if should_run_random:
                     print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                    run_experiments(chosen_mode, "Random", delta, df, tgtO, attr_vals, condition, treatment, i, attr_vals_time, force_n_subgroups=rw_count)
+                    run_experiments(chosen_mode, "Random", delta, df, tgtO, attr_vals, condition, treatment, i,
+                                    attr_vals_time, force_n_subgroups=rw_count)
                 elif rw_count == 0:
                     print("RW checked 0 subgroups, skipping random baseline.")
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")
+
 
 def clean_results_files(mode):
     skip_delete = '-d' in sys.argv
@@ -270,6 +306,7 @@ def clean_results_files(mode):
         print("🧹 Results files reset.")
     else:
         print("⚠️  Results files NOT reset (append mode, -d flag given)")
+
 
 def encode_dataframe_local(df):
     """
@@ -292,6 +329,7 @@ def encode_dataframe_local(df):
         df_encoded[col] = df_encoded[col].astype(int)
 
     return df_encoded
+
 
 def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name, tgtO):
     # 1. Parse string rule
@@ -349,16 +387,20 @@ def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name
             continue
         print(f"Running for delta: {delta}")
         attr_time = attr_vals_time if chosen_algorithm_name == "BruteForce" else 0
-        
+
         if chosen_algorithm_name == "RW":
             for run_num in range(NUM_RW_RUNS):
                 print(f"--- Run number: {run_num} ---")
-                run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict, treatment_dict, i, attr_time)
+                run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals,
+                                condition_dict, treatment_dict, i, attr_time)
         else:
-            run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict, treatment_dict, i, attr_time)
+            run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict,
+                            treatment_dict, i, attr_time)
+
 
 def main():
-    tgtO = "ConvertedSalary"
+    # Use global TARGET_COLUMN_NAME loaded from config
+    tgtO = TARGET_COLUMN_NAME
 
     # 1. Load Rules
     print(f"Loading treatments from {RULES_FILE}...")
@@ -376,7 +418,7 @@ def main():
         return
 
     full_df = pd.read_csv(FULL_DATASET_PATH)
-    
+
     # --- EXACT CLEANING LOGIC FROM OLD BATCH FILE ---
     full_df = full_df.loc[:, ~full_df.columns.str.startswith('Unnamed')]
     full_df = full_df[~full_df.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
@@ -404,6 +446,7 @@ def main():
     for chosen_algorithm_name in reversed(algorithms_to_run):
         for i, rule in enumerate(rules_list):
             process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name, tgtO)
+
 
 if __name__ == "__main__":
     main()

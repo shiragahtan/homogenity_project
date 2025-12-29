@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 
 # --- Configuration ---
 # Path to your main full-numerical dataset
-#DATASET_PATH = '../german_credit/german_data_encoded.csv'
-DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
+DATASET_PATH = '../german_credit/german_data_encoded.csv'
+#DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
 # Path to your rules JSON
-#TREATMENT_FILE = "../algorithms/GermanChosen10Treatments.json"
-TREATMENT_FILE = '../algorithms/Chosen10Treatments.json'
+TREATMENT_FILE = "../algorithms/GermanChosen10Treatments.json"
+#TREATMENT_FILE = '../algorithms/Chosen10Treatments.json'
 
-#DELTAS = [100]
-DELTAS = [1000]
+DELTAS = [100]
+#DELTAS = [1000]
 
 
 def plot_subgroups_graph(file_path, size_all, delta, rule, rule_data):

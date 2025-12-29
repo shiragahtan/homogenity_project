@@ -44,6 +44,9 @@ import pandas as pd
 
 @dataclass
 class RunResult:
+    rule_id: Optional[int]
+    condition: Optional[Dict[str, Any]]
+    treatment_def: Optional[Dict[str, Any]]
     treatment_col: str
     outcome_col: str
     epsilon: float
@@ -51,6 +54,10 @@ class RunResult:
     delta_count: int
     sample_n: int
     attrs: str
+    n_condition_rows: int
+    treated_count: int
+    control_count: int
+    skipped_reason: str
     found: bool
     found_filters: Optional[Dict[str, Any]]
     found_size: Optional[int]
@@ -80,6 +87,111 @@ def _ensure_import_environment(project_root: Path) -> None:
     yarden_files = project_root / "yarden_files"
     if yarden_files.exists() and str(yarden_files) not in sys.path:
         sys.path.insert(0, str(yarden_files))
+
+
+def _normalize_label(x: str) -> str:
+    # normalize common typography differences (e.g., Bachelor’s vs Bachelor's)
+    return (
+        str(x)
+        .strip()
+        .replace("’", "'")
+        .replace("“", '"')
+        .replace("”", '"')
+        .replace("\u00a0", " ")
+    )
+
+
+def _build_value_maps(
+    *,
+    project_root: Path,
+    encoded_csv_path: Path,
+    decoded_csv_path: Optional[Path],
+    columns: List[str],
+) -> Dict[str, Dict[str, int]]:
+    """
+    Build mapping {col: {label_string: code_int}} for the given columns.
+    Prefer learning mapping from (decoded_csv, encoded_csv) if provided and aligned;
+    fall back to yarden_categorical_mappings.json for whatever is available there.
+    """
+    maps: Dict[str, Dict[str, int]] = {}
+
+    # 1) Try to learn mapping from decoded+encoded pair (best coverage, includes FormalEducation)
+    if decoded_csv_path and decoded_csv_path.exists():
+        usecols = [c for c in columns if c]  # keep order
+        try:
+            enc = pd.read_csv(encoded_csv_path, usecols=usecols)
+            dec = pd.read_csv(decoded_csv_path, usecols=usecols)
+            if len(enc) == len(dec):
+                for c in usecols:
+                    if c not in enc.columns or c not in dec.columns:
+                        continue
+                    # Build label->code from observed pairs
+                    m: Dict[str, int] = {}
+                    s_dec = dec[c].astype(str).map(_normalize_label)
+                    s_enc = enc[c]
+                    for lab, code in zip(s_dec, s_enc):
+                        try:
+                            icode = int(code)
+                        except Exception:
+                            continue
+                        if lab not in m:
+                            m[lab] = icode
+                    if m:
+                        maps[c] = m
+        except Exception:
+            # ignore; we'll still try json-based mapping below
+            pass
+
+    # 2) Supplement with json mapping file (if present)
+    mapping_path = project_root / "yarden_files" / "yarden_categorical_mappings.json"
+    if mapping_path.exists():
+        try:
+            raw = json.loads(mapping_path.read_text(encoding="utf-8"))
+            for c in columns:
+                if c in raw and isinstance(raw[c], dict):
+                    maps.setdefault(c, {})
+                    for k, v in raw[c].items():
+                        try:
+                            maps[c][_normalize_label(k)] = int(v)
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+
+    # Small manual aliasing to improve match rates for the provided Chosen10Treatments.json
+    # (these are semantically equivalent but use different wording)
+    if "RaceEthnicity" in maps:
+        aliases = {
+            "White or of European descent": "European Descent",
+            "White or of European descent ": "European Descent",
+        }
+        for src, dst in aliases.items():
+            if dst in maps["RaceEthnicity"] and src not in maps["RaceEthnicity"]:
+                maps["RaceEthnicity"][src] = maps["RaceEthnicity"][dst]
+
+    return maps
+
+
+def _encode_value(col: str, v: Any, value_maps: Dict[str, Dict[str, int]]) -> Optional[int]:
+    """Convert a label or code into an int code if possible; returns None if unknown."""
+    if v is None:
+        return None
+    # already numeric-like
+    try:
+        return int(v)
+    except Exception:
+        pass
+    s = _normalize_label(str(v))
+    m = value_maps.get(col) or {}
+    # exact
+    if s in m:
+        return int(m[s])
+    # case-insensitive fallback
+    s_low = s.lower()
+    for k, code in m.items():
+        if str(k).lower() == s_low:
+            return int(code)
+    return None
 
 
 def _dfs_candidates(
@@ -131,17 +243,30 @@ def run_one(
     epsilon: float,
     delta_percent: float,
     sample_n: int,
+    *,
+    rule_id: Optional[int] = None,
+    condition: Optional[Dict[str, Any]] = None,
+    treatment_def: Optional[Dict[str, Any]] = None,
+    # speed / robustness
+    min_samples_per_group: int = 30,
+    max_candidates_evaluated: int = 200,
+    timeout_seconds: float = 5.0,
 ) -> RunResult:
     from ATE_update import calculate_ate_safe
     from rw_unlearning import calc_utility_for_subgroups
 
     # sample for deterministic runtime
+    cols = [treatment_col, outcome_col, *attrs]
+    cols = [c for c in cols if c in df.columns]
     if sample_n > 0 and len(df) > sample_n:
-        df_use = df[[treatment_col, outcome_col, *attrs]].sample(n=sample_n, random_state=0).reset_index(drop=True)
+        df_use = df[cols].sample(n=sample_n, random_state=0).reset_index(drop=True)
     else:
-        df_use = df[[treatment_col, outcome_col, *attrs]].copy().reset_index(drop=True)
+        df_use = df[cols].copy().reset_index(drop=True)
 
     delta_count = max(1, int(len(df_use) * float(delta_percent)))
+    n_condition_rows = int(len(df_use))
+    treated_count = int((df_use[treatment_col] == 1).sum()) if treatment_col in df_use.columns else 0
+    control_count = int((df_use[treatment_col] == 0).sum()) if treatment_col in df_use.columns else 0
 
     t0 = time.perf_counter()
     t_enum0 = time.perf_counter()
@@ -154,7 +279,42 @@ def run_one(
     candidates_evaluated = 0
 
     t_eval0 = time.perf_counter()
+    # If treatment split is too small, don't waste time; ATE will be NaN anyway.
+    if treated_count < min_samples_per_group or control_count < min_samples_per_group:
+        eval_seconds = time.perf_counter() - t_eval0
+        total_seconds = time.perf_counter() - t0
+        return RunResult(
+            rule_id=rule_id,
+            condition=condition,
+            treatment_def=treatment_def,
+            treatment_col=treatment_col,
+            outcome_col=outcome_col,
+            epsilon=float(epsilon),
+            delta_percent=float(delta_percent),
+            delta_count=int(delta_count),
+            sample_n=int(len(df_use)),
+            attrs=",".join(attrs),
+            n_condition_rows=n_condition_rows,
+            treated_count=treated_count,
+            control_count=control_count,
+            skipped_reason="insufficient_treatment_split",
+            found=False,
+            found_filters=None,
+            found_size=None,
+            found_ate=None,
+            candidates_enumerated=int(len(candidates)),
+            candidates_evaluated=0,
+            enum_seconds=float(enum_seconds),
+            eval_seconds=float(eval_seconds),
+            total_seconds=float(total_seconds),
+        )
+
+    deadline = time.perf_counter() + float(timeout_seconds)
     for filt, _sz in candidates:
+        if candidates_evaluated >= int(max_candidates_evaluated):
+            break
+        if time.perf_counter() > deadline:
+            break
         candidates_evaluated += 1
         sub_df = df_use
         for a, v in filt.items():
@@ -192,6 +352,9 @@ def run_one(
     total_seconds = time.perf_counter() - t0
 
     return RunResult(
+        rule_id=rule_id,
+        condition=condition,
+        treatment_def=treatment_def,
         treatment_col=treatment_col,
         outcome_col=outcome_col,
         epsilon=float(epsilon),
@@ -199,6 +362,10 @@ def run_one(
         delta_count=int(delta_count),
         sample_n=int(len(df_use)),
         attrs=",".join(attrs),
+        n_condition_rows=n_condition_rows,
+        treated_count=treated_count,
+        control_count=control_count,
+        skipped_reason="",
         found=found_filters is not None,
         found_filters=found_filters,
         found_size=found_size,
@@ -216,48 +383,97 @@ def _save_report(results_df: pd.DataFrame, out_dir: Path, plots_dir: Path) -> No
     have_plots = True
     try:
         import matplotlib.pyplot as plt
-        import seaborn as sns
     except Exception:
         have_plots = False
 
     plots_dir.mkdir(parents=True, exist_ok=True)
 
+    if results_df.empty or "found" not in results_df.columns:
+        html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brute Force Rule Mining Benchmark</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; }}
+.meta {{ color: #555; margin-bottom: 16px; }}
+.card {{ border: 1px solid #e6e6e6; border-radius: 12px; padding: 12px; background: #fff; }}
+</style></head>
+<body>
+<h1>Brute Force Rule Mining Benchmark</h1>
+<div class="meta">Generated: {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
+<div class="card">No rows were produced (likely all rules had empty condition matches). Try different rules or disable condition filtering.</div>
+</body></html>"""
+        (out_dir / "report.html").write_text(html, encoding="utf-8")
+        return
+
     df = results_df.copy()
     df["found_int"] = df["found"].astype(int)
 
     if have_plots:
-        # Runtime vs delta_percent, colored by epsilon
-        plt.figure(figsize=(10, 5))
-        sns.lineplot(data=df, x="delta_percent", y="total_seconds", hue="epsilon", marker="o")
-        plt.title("Runtime vs delta_percent")
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        # Aggregate across rules if present
+        group_cols = [c for c in ["epsilon", "delta_percent"] if c in df.columns]
+        agg = (
+            df.groupby(group_cols, as_index=False)
+            .agg(
+                mean_runtime=("total_seconds", "mean"),
+                mean_evaluated=("candidates_evaluated", "mean"),
+                success_rate=("found_int", "mean"),
+                mean_found_size=("found_size", "mean"),
+            )
+            .sort_values(group_cols)
+        )
+
+        eps_vals = sorted(agg["epsilon"].unique())
+        del_vals = sorted(agg["delta_percent"].unique())
+
+        # Mean runtime vs epsilon (lines by delta)
+        plt.figure(figsize=(9, 5))
+        for dp in del_vals:
+            sub = agg[agg["delta_percent"] == dp]
+            plt.plot(sub["epsilon"], sub["mean_runtime"], marker="o", label=f"delta={dp}")
+        plt.xscale("log")
+        plt.xlabel("epsilon (log)")
+        plt.ylabel("mean runtime (s)")
+        plt.title("Mean runtime vs epsilon")
+        plt.legend()
         plt.tight_layout()
-        plt.savefig(plots_dir / "runtime_vs_delta.png", dpi=160)
+        plt.savefig(plots_dir / "mean_runtime_vs_epsilon.png", dpi=160)
         plt.close()
 
-        # Candidates evaluated until found
-        plt.figure(figsize=(10, 5))
-        sns.lineplot(data=df, x="delta_percent", y="candidates_evaluated", hue="epsilon", marker="o")
-        plt.title("Candidates evaluated until found (or exhausted)")
+        # Mean candidates evaluated vs epsilon
+        plt.figure(figsize=(9, 5))
+        for dp in del_vals:
+            sub = agg[agg["delta_percent"] == dp]
+            plt.plot(sub["epsilon"], sub["mean_evaluated"], marker="o", label=f"delta={dp}")
+        plt.xscale("log")
+        plt.xlabel("epsilon (log)")
+        plt.ylabel("mean candidates evaluated")
+        plt.title("Mean evaluated candidates vs epsilon")
+        plt.legend()
         plt.tight_layout()
-        plt.savefig(plots_dir / "evaluated_vs_delta.png", dpi=160)
+        plt.savefig(plots_dir / "mean_evaluated_vs_epsilon.png", dpi=160)
         plt.close()
 
-        # Found size
-        plt.figure(figsize=(10, 5))
-        sns.lineplot(data=df[df["found"]], x="delta_percent", y="found_size", hue="epsilon", marker="o")
-        plt.title("Found subgroup size vs delta_percent (only successes)")
+        # Success rate heatmap (delta x epsilon)
+        mat = np.full((len(del_vals), len(eps_vals)), np.nan, dtype=float)
+        for i, dp in enumerate(del_vals):
+            for j, ep in enumerate(eps_vals):
+                v = agg[(agg["delta_percent"] == dp) & (agg["epsilon"] == ep)]["success_rate"]
+                if not v.empty:
+                    mat[i, j] = float(v.iloc[0])
+        plt.figure(figsize=(9, 4.5))
+        im = plt.imshow(mat, aspect="auto", vmin=0, vmax=1)
+        plt.colorbar(im, label="success rate")
+        plt.yticks(range(len(del_vals)), [str(d) for d in del_vals])
+        plt.xticks(range(len(eps_vals)), [str(int(e)) if float(e).is_integer() else str(e) for e in eps_vals], rotation=45)
+        plt.xlabel("epsilon")
+        plt.ylabel("delta_percent")
+        plt.title("Success rate heatmap")
         plt.tight_layout()
-        plt.savefig(plots_dir / "found_size_vs_delta.png", dpi=160)
-        plt.close()
-
-        # Success rate
-        agg = df.groupby(["treatment_col", "epsilon", "delta_percent"], as_index=False)["found_int"].mean()
-        plt.figure(figsize=(10, 5))
-        sns.lineplot(data=agg, x="delta_percent", y="found_int", hue="epsilon", marker="o")
-        plt.ylim(-0.05, 1.05)
-        plt.title("Success rate vs delta_percent")
-        plt.tight_layout()
-        plt.savefig(plots_dir / "success_rate_vs_delta.png", dpi=160)
+        plt.savefig(plots_dir / "success_rate_heatmap.png", dpi=160)
         plt.close()
 
     # HTML report with embedded images + table
@@ -302,10 +518,9 @@ def _save_report(results_df: pd.DataFrame, out_dir: Path, plots_dir: Path) -> No
   <div class="meta">Generated: {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
 
   <div class="grid">
-    <div class="card"><h2>Runtime</h2>{img_tag("runtime_vs_delta.png")}</div>
-    <div class="card"><h2>Evaluated candidates</h2>{img_tag("evaluated_vs_delta.png")}</div>
-    <div class="card"><h2>Found size</h2>{img_tag("found_size_vs_delta.png")}</div>
-    <div class="card"><h2>Success rate</h2>{img_tag("success_rate_vs_delta.png")}</div>
+    <div class="card"><h2>Mean runtime vs epsilon</h2>{img_tag("mean_runtime_vs_epsilon.png")}</div>
+    <div class="card"><h2>Mean evaluated vs epsilon</h2>{img_tag("mean_evaluated_vs_epsilon.png")}</div>
+    <div class="card"><h2>Success rate heatmap</h2>{img_tag("success_rate_heatmap.png")}</div>
   </div>
 
   <h2 style="margin-top: 20px;">Results table</h2>
@@ -319,8 +534,20 @@ def _save_report(results_df: pd.DataFrame, out_dir: Path, plots_dir: Path) -> No
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark brute-force rule mining robustness.")
     parser.add_argument("--dataset", type=str, default="so.csv", help="Dataset CSV filename (relative to this folder)")
+    parser.add_argument(
+        "--decoded_dataset",
+        type=str,
+        default="yarden_files/yarden_so_decoded.csv",
+        help="Optional decoded CSV (relative to repo root) used to infer label->code mappings for so.csv.",
+    )
     parser.add_argument("--outcome", type=str, default="ConvertedSalary", help="Outcome column")
     parser.add_argument("--treatments", type=str, default="FormalEducation", help="Comma-separated treatment columns")
+    parser.add_argument(
+        "--treatments_file",
+        type=str,
+        default="",
+        help="Optional JSON-lines file with {'condition':{...}, 'treatment':{...}} entries (relative to repo root or absolute).",
+    )
     parser.add_argument("--epsilons", type=str, default="50,100,200,500", help="Comma-separated epsilons")
     parser.add_argument("--deltas", type=str, default="0.05,0.1,0.2", help="Comma-separated delta percents (0..1)")
     parser.add_argument(
@@ -330,6 +557,16 @@ def main() -> None:
         help="Comma-separated subgroup attribute columns to enumerate",
     )
     parser.add_argument("--sample_n", type=int, default=3000, help="Sample size per run (0 = full dataset)")
+    parser.add_argument("--min_cases", type=int, default=50, help="Warn if fewer than this many result rows are produced")
+    parser.add_argument("--max_rules", type=int, default=10, help="Max rules to read from treatments_file (for runtime)")
+    parser.add_argument("--max_candidates", type=int, default=200, help="Max candidates evaluated per case")
+    parser.add_argument("--timeout_seconds", type=float, default=5.0, help="Timeout per case (seconds)")
+    parser.add_argument(
+        "--auto_attrs_k",
+        type=int,
+        default=6,
+        help="If >0, pick K lowest-cardinality attributes from the provided --attrs list (per rule) for speed.",
+    )
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -351,36 +588,186 @@ def main() -> None:
     treatments = [t.strip() for t in args.treatments.split(",") if t.strip()]
     epsilons = [float(x.strip()) for x in args.epsilons.split(",") if x.strip()]
     deltas = [float(x.strip()) for x in args.deltas.split(",") if x.strip()]
-    attrs = [a.strip() for a in args.attrs.split(",") if a.strip()]
+    base_attrs = [a.strip() for a in args.attrs.split(",") if a.strip()]
 
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = this_dir / args.output_dir / stamp
     out_dir.mkdir(parents=True, exist_ok=True)
     plots_dir = out_dir / "plots"
 
-    results: List[RunResult] = []
-    total = len(treatments) * len(epsilons) * len(deltas)
-    i = 0
-    print(f"Running {total} experiments...")
+    # Build label->code mappings for columns we might see in rules
+    decoded_path = Path(args.decoded_dataset)
+    if not decoded_path.is_absolute():
+        decoded_path = project_root / decoded_path
 
-    for tcol in treatments:
-        if tcol not in df.columns:
-            print(f"⚠️  treatment '{tcol}' not in dataset. Skipping.")
-            continue
-        for eps in epsilons:
-            for dp in deltas:
-                i += 1
-                print(f"[{i}/{total}] treatment={tcol} epsilon={eps} delta_percent={dp}")
-                rr = run_one(
-                    df=df,
-                    treatment_col=tcol,
-                    outcome_col=args.outcome,
-                    attrs=attrs,
-                    epsilon=eps,
-                    delta_percent=dp,
-                    sample_n=args.sample_n,
-                )
-                results.append(rr)
+    def _collect_rule_columns(rules: List[Dict[str, Any]]) -> List[str]:
+        cols: List[str] = []
+        for r in rules:
+            cond = (r.get("condition") or {}) if isinstance(r, dict) else {}
+            tr = (r.get("treatment") or {}) if isinstance(r, dict) else {}
+            cols.extend(list(cond.keys()))
+            cols.extend(list(tr.keys()))
+        # also include subgroup attrs list (may need mapping too)
+        cols.extend(base_attrs)
+        # dedupe while preserving order
+        seen = set()
+        out = []
+        for c in cols:
+            if c and c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+    value_maps: Dict[str, Dict[str, int]] = {}
+
+    def _apply_filters(d: pd.DataFrame, filt: Dict[str, Any]) -> pd.DataFrame:
+        out = d
+        for k, v in filt.items():
+            if k not in out.columns:
+                return out.iloc[0:0]
+            v2 = _encode_value(k, v, value_maps)
+            if v2 is None:
+                return out.iloc[0:0]
+            out = out[out[k] == v2]
+        return out
+
+    results: List[RunResult] = []
+
+    # Mode A: Use condition+treatment rules from a JSON-lines file (Chosen10Treatments.json)
+    if args.treatments_file:
+        tf_path = Path(args.treatments_file)
+        if not tf_path.is_absolute():
+            tf_path = project_root / tf_path
+        if not tf_path.exists():
+            raise FileNotFoundError(f"treatments_file not found: {tf_path}")
+
+        rules: List[Dict[str, Any]] = []
+        for line in tf_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rules.append(json.loads(line))
+
+        # Now that we have rules, build value maps for relevant columns
+        value_maps = _build_value_maps(
+            project_root=project_root,
+            encoded_csv_path=dataset_path,
+            decoded_csv_path=decoded_path if decoded_path.exists() else None,
+            columns=_collect_rule_columns(rules),
+        )
+
+        rules = rules[: max(0, int(args.max_rules))]
+        total = len(rules) * len(epsilons) * len(deltas)
+        i = 0
+        print(f"Running {total} experiments (from treatments_file)...")
+
+        for ridx, rule in enumerate(rules, start=1):
+            cond = rule.get("condition") or {}
+            treat_def = rule.get("treatment") or {}
+
+            df_cond = _apply_filters(df, cond)
+            if df_cond.empty:
+                # Still emit rows (so the CSV has the requested number of cases),
+                # but mark as skipped.
+                for eps in epsilons:
+                    for dp in deltas:
+                        results.append(
+                            RunResult(
+                                rule_id=ridx,
+                                condition=cond,
+                                treatment_def=treat_def,
+                                treatment_col="__TREATMENT__",
+                                outcome_col=args.outcome,
+                                epsilon=float(eps),
+                                delta_percent=float(dp),
+                                delta_count=0,
+                                sample_n=0,
+                                attrs="",
+                                n_condition_rows=0,
+                                treated_count=0,
+                                control_count=0,
+                                skipped_reason="empty_condition",
+                                found=False,
+                                found_filters=None,
+                                found_size=None,
+                                found_ate=None,
+                                candidates_enumerated=0,
+                                candidates_evaluated=0,
+                                enum_seconds=0.0,
+                                eval_seconds=0.0,
+                                total_seconds=0.0,
+                            )
+                        )
+                continue
+
+            # Binary treatment indicator: 1 iff all treatment_def key/values match
+            treat_col_name = "__TREATMENT__"
+            df_rule = df_cond.copy()
+            treated_mask = pd.Series(True, index=df_rule.index)
+            for k, v in treat_def.items():
+                if k not in df_rule.columns:
+                    treated_mask &= False
+                    continue
+                v2 = _encode_value(k, v, value_maps)
+                if v2 is None:
+                    treated_mask &= False
+                    continue
+                treated_mask &= df_rule[k] == v2
+            df_rule[treat_col_name] = treated_mask.astype(int)
+
+            # Subgroup attrs: avoid using condition/treatment keys; optionally pick lowest-cardinality K
+            attrs = [a for a in base_attrs if a not in set(cond.keys()) | set(treat_def.keys())]
+            if int(args.auto_attrs_k) > 0 and attrs:
+                k = int(args.auto_attrs_k)
+                card = {a: int(df_rule[a].nunique(dropna=True)) if a in df_rule.columns else 10**9 for a in attrs}
+                attrs = [a for a, _ in sorted(card.items(), key=lambda kv: kv[1])[:k]]
+
+            for eps in epsilons:
+                for dp in deltas:
+                    i += 1
+                    print(f"[{i}/{total}] rule={ridx} eps={eps} delta={dp} cond={cond} treat={treat_def}")
+                    rr = run_one(
+                        df=df_rule,
+                        treatment_col=treat_col_name,
+                        outcome_col=args.outcome,
+                        attrs=attrs,
+                        epsilon=eps,
+                        delta_percent=dp,
+                        sample_n=args.sample_n,
+                        rule_id=ridx,
+                        condition=cond,
+                        treatment_def=treat_def,
+                        max_candidates_evaluated=int(args.max_candidates),
+                        timeout_seconds=float(args.timeout_seconds),
+                    )
+                    results.append(rr)
+    else:
+        # Mode B: treat a column as the treatment directly.
+        total = len(treatments) * len(epsilons) * len(deltas)
+        i = 0
+        print(f"Running {total} experiments...")
+
+        for tcol in treatments:
+            if tcol not in df.columns:
+                print(f"⚠️  treatment '{tcol}' not in dataset. Skipping.")
+                continue
+            attrs = [a for a in base_attrs if a != tcol]
+            for eps in epsilons:
+                for dp in deltas:
+                    i += 1
+                    print(f"[{i}/{total}] treatment={tcol} epsilon={eps} delta_percent={dp}")
+                    rr = run_one(
+                        df=df,
+                        treatment_col=tcol,
+                        outcome_col=args.outcome,
+                        attrs=attrs,
+                        epsilon=eps,
+                        delta_percent=dp,
+                        sample_n=args.sample_n,
+                        max_candidates_evaluated=int(args.max_candidates),
+                        timeout_seconds=float(args.timeout_seconds),
+                    )
+                    results.append(rr)
 
     results_df = pd.DataFrame([r.__dict__ for r in results])
     results_df.to_csv(out_dir / "results.csv", index=False)
@@ -391,6 +778,9 @@ def main() -> None:
         print("ℹ️  openpyxl not installed; skipping Excel output (results.xlsx). CSV/HTML will still be generated.")
 
     _save_report(results_df, out_dir=out_dir, plots_dir=plots_dir)
+
+    if len(results_df) < int(args.min_cases):
+        print(f"⚠️  Only produced {len(results_df)} rows (< min_cases={args.min_cases}). Consider expanding epsilons/deltas or max_rules.")
 
     print("\n✅ Done.")
     print(f"- CSV:  {out_dir / 'results.csv'}")

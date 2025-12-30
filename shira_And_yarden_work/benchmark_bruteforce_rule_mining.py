@@ -476,6 +476,39 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvet
         plt.savefig(plots_dir / "success_rate_heatmap.png", dpi=160)
         plt.close()
 
+        # Mean runtime vs delta (lines by epsilon)
+        plt.figure(figsize=(9, 5))
+        for ep in eps_vals:
+            sub = agg[agg["epsilon"] == ep]
+            plt.plot(sub["delta_percent"], sub["mean_runtime"], marker="o", label=f"ε={int(ep) if float(ep).is_integer() else ep}")
+        plt.xlabel("delta (minimum subgroup size %)")
+        plt.ylabel("mean runtime (s)")
+        plt.title("Mean runtime vs delta")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(plots_dir / "mean_runtime_vs_delta.png", dpi=160)
+        plt.close()
+
+        # Runtime heatmap (delta x epsilon)
+        mat_runtime = np.full((len(del_vals), len(eps_vals)), np.nan, dtype=float)
+        for i, dp in enumerate(del_vals):
+            for j, ep in enumerate(eps_vals):
+                v = agg[(agg["delta_percent"] == dp) & (agg["epsilon"] == ep)]["mean_runtime"]
+                if not v.empty:
+                    mat_runtime[i, j] = float(v.iloc[0])
+        plt.figure(figsize=(9, 4.5))
+        im = plt.imshow(mat_runtime, aspect="auto", cmap="YlOrRd")
+        plt.colorbar(im, label="mean runtime (s)")
+        plt.yticks(range(len(del_vals)), [str(d) for d in del_vals])
+        plt.xticks(range(len(eps_vals)), [str(int(e)) if float(e).is_integer() else str(e) for e in eps_vals], rotation=45)
+        plt.xlabel("epsilon")
+        plt.ylabel("delta_percent")
+        plt.title("Runtime heatmap (mean seconds)")
+        plt.tight_layout()
+        plt.savefig(plots_dir / "runtime_heatmap.png", dpi=160)
+        plt.close()
+
     # HTML report with embedded images + table
     css = """
     body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; }
@@ -519,8 +552,10 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvet
 
   <div class="grid">
     <div class="card"><h2>Mean runtime vs epsilon</h2>{img_tag("mean_runtime_vs_epsilon.png")}</div>
+    <div class="card"><h2>Mean runtime vs delta</h2>{img_tag("mean_runtime_vs_delta.png")}</div>
     <div class="card"><h2>Mean evaluated vs epsilon</h2>{img_tag("mean_evaluated_vs_epsilon.png")}</div>
     <div class="card"><h2>Success rate heatmap</h2>{img_tag("success_rate_heatmap.png")}</div>
+    <div class="card"><h2>Runtime heatmap</h2>{img_tag("runtime_heatmap.png")}</div>
   </div>
 
   <h2 style="margin-top: 20px;">Results table</h2>

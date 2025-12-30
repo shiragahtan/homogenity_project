@@ -18,8 +18,13 @@ from typing import List, Dict
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import math
+
+# seaborn is optional; we fall back to matplotlib-only plots if it's not installed.
+try:
+    import seaborn as sns  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    sns = None
 
 # Add project paths
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -49,7 +54,8 @@ def run_benchmark(
     delta_values: List[int] = None,
     epsilon_start: float = 1000.0,
     epsilon_max: float = 500000.0,
-    output_dir: str = "benchmark_results"
+    output_dir: str = "benchmark_results",
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and delta values.
@@ -206,7 +212,8 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str):
     if not output_path.is_absolute():
         output_path = Path(__file__).resolve().parent / output_path
     
-    sns.set_style("whitegrid")
+    if sns is not None:
+        sns.set_style("whitegrid")
     plt.rcParams['figure.figsize'] = (12, 8)
     
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -268,12 +275,26 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str):
     print(f"   ✓ Visualization saved: {plot_path}")
     plt.close()
     
-    # Heatmap
+    # Heatmap (seaborn if available; otherwise matplotlib imshow)
     pivot_oracle = results_df.pivot(index='Rule_ID', columns='Delta', values='Oracle_Calls')
-    
+
     plt.figure(figsize=(12, 6))
-    sns.heatmap(pivot_oracle, annot=True, fmt='g', cmap='YlOrRd', 
-                cbar_kws={'label': 'Oracle Calls'})
+    if sns is not None:
+        sns.heatmap(pivot_oracle, annot=True, fmt='g', cmap='YlOrRd', cbar_kws={'label': 'Oracle Calls'})
+    else:
+        import numpy as np
+        data = pivot_oracle.values.astype(float)
+        im = plt.imshow(data, aspect='auto')
+        plt.colorbar(im, label='Oracle Calls')
+        plt.xticks(range(len(pivot_oracle.columns)), [f"{int(x):,}" for x in pivot_oracle.columns], rotation=45)
+        plt.yticks(range(len(pivot_oracle.index)), [str(int(x)) for x in pivot_oracle.index])
+        # annotate values
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]):
+                val = data[i, j]
+                if np.isfinite(val):
+                    plt.text(j, i, f"{int(val)}", ha='center', va='center', fontsize=8, color='black')
+
     plt.title('Oracle Calls Heatmap: Rule vs Delta', fontsize=14, fontweight='bold')
     plt.xlabel('Delta (δ)', fontsize=12, fontweight='bold')
     plt.ylabel('Rule ID', fontsize=12, fontweight='bold')
@@ -692,7 +713,12 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                     </div>
                 """
             else:
-                violation_details = '<span style="color: #999;">No violation found</span>'
+                # Most common reason: epsilon_max was too low (algorithm returned None and has no subgroup info).
+                # Keep messaging accurate.
+                if smallest == 'N/A':
+                    violation_details = '<span style="color: #999;">Not found within ε_max (increase --epsilon_max)</span>'
+                else:
+                    violation_details = '<span style="color: #999;">No violation found</span>'
             
             html += f"""
                         <tr>
@@ -742,20 +768,24 @@ def save_results(results_df: pd.DataFrame, summary_df: pd.DataFrame, output_dir:
         output_path = Path(__file__).resolve().parent / output_path
     excel_path = output_path / 'find_epsilon_benchmark_results.xlsx'
     
-    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-        results_df.to_excel(writer, sheet_name='Detailed_Results', index=False)
-        summary_df.to_excel(writer, sheet_name='Summary_Statistics', index=False)
+    # Excel is optional (requires openpyxl)
+    try:
+        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+            results_df.to_excel(writer, sheet_name='Detailed_Results', index=False)
+            summary_df.to_excel(writer, sheet_name='Summary_Statistics', index=False)
+            
+            pivot_oracle = results_df.pivot(index='Rule_ID', columns='Delta', values='Oracle_Calls')
+            pivot_oracle.to_excel(writer, sheet_name='Oracle_Calls_by_Rule')
+            
+            pivot_runtime = results_df.pivot(index='Rule_ID', columns='Delta', values='Runtime_Seconds')
+            pivot_runtime.to_excel(writer, sheet_name='Runtime_by_Rule')
+            
+            pivot_epsilon = results_df.pivot(index='Rule_ID', columns='Delta', values='Smallest_Epsilon_Homogeneous')
+            pivot_epsilon.to_excel(writer, sheet_name='Found_Epsilon_by_Rule')
         
-        pivot_oracle = results_df.pivot(index='Rule_ID', columns='Delta', values='Oracle_Calls')
-        pivot_oracle.to_excel(writer, sheet_name='Oracle_Calls_by_Rule')
-        
-        pivot_runtime = results_df.pivot(index='Rule_ID', columns='Delta', values='Runtime_Seconds')
-        pivot_runtime.to_excel(writer, sheet_name='Runtime_by_Rule')
-        
-        pivot_epsilon = results_df.pivot(index='Rule_ID', columns='Delta', values='Smallest_Epsilon_Homogeneous')
-        pivot_epsilon.to_excel(writer, sheet_name='Found_Epsilon_by_Rule')
-    
-    print(f"   ✓ Results saved: {excel_path}")
+        print(f"   ✓ Results saved: {excel_path}")
+    except ModuleNotFoundError:
+        print("   ℹ️  openpyxl not installed; skipping Excel output (find_epsilon_benchmark_results.xlsx)")
     
     csv_path = output_path / 'find_epsilon_benchmark_results.csv'
     results_df.to_csv(csv_path, index=False)

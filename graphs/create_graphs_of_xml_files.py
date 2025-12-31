@@ -3,16 +3,32 @@ import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-# --- Configuration ---
-# Path to your main full-numerical dataset
-DATASET_PATH = '../german_credit/german_data_encoded.csv'
-#DATASET_PATH = '../stackoverflow/so_countries_col_new.csv'
-# Path to your rules JSON
-TREATMENT_FILE = "../algorithms/GermanChosen10Treatments.json"
-#TREATMENT_FILE = '../algorithms/Chosen10Treatments.json'
+# --- Configuration Load ---
+CONFIG_PATH = '../configs/config.json'
 
-DELTAS = [100]
-#DELTAS = [1000]
+# Load the configuration file
+with open(CONFIG_PATH, 'r') as f:
+    config = json.load(f)
+
+# Change this variable to switch datasets: "german_credit", "stackoverflow", or "acs"
+CHOSEN_DS = "acs"
+
+if CHOSEN_DS not in config['DATASETS']:
+    raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")
+
+ds_config = config['DATASETS'][CHOSEN_DS]
+
+# Dynamically assign values from config
+DATASET_PATH = ds_config['FULL_DATASET_PATH']
+# Note: The config usually contains just the filename, but your original script
+# looked in "../algorithms/". We construct the path to match your folder structure.
+TREATMENT_FILE = f"../algorithms/{ds_config['RULES_FILE']}"
+DELTAS = ds_config['DELTAS']
+
+print(f"🔹 Loaded Configuration for: {CHOSEN_DS}")
+print(f"   Dataset: {DATASET_PATH}")
+print(f"   Rules: {TREATMENT_FILE}")
+print(f"   Deltas: {DELTAS}")
 
 
 def plot_subgroups_graph(file_path, size_all, delta, rule, rule_data):

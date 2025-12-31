@@ -9,35 +9,55 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import calculate_ate_safe
 
 # --- Configuration ---
-DATASET = '../german_credit/german_data_not_encoded.csv'
+# Germany Credit Dataset
+# DATASET = '../german_credit/german_data_not_encoded.csv'
+# OUTCOME_COL = 'credit_risk'  # 'tgtO'
 
-OUTCOME_COL = 'credit_risk'  # 'tgtO'
+# ACS Dataset
+DATASET = '../acs/acs_encoded.csv'
+OUTCOME_COL = 'Wages or salary income past 12 months'  # 'tgtO'
+
 TREATMENT_COL = 'TempTreatment'  # This is the 'treatment_col' we will create
 
 # Attribute lists
+# German Credit Dataset Attributes
+# immutable_attributes = [
+#     "age",
+#     "gender",
+#     "personal_status",
+#     "foreign_worker",
+#     "credit_history",
+#     "employment_duration",
+#     "property",
+#     "installment_rate",
+#     "purpose",
+#     "people_liable",
+#     "duration",
+#     "amount"
+# ]
+# mutable_attrs = [
+#     "status",
+#     "savings",
+#     "other_debtors",
+#     "present_residence",
+#     "other_installment_plans",
+#     "housing",
+#     "number_credits",
+#     "job",
+# ]
+
+# ACS Dataset Attributes
 immutable_attributes = [
-    "age",
-    "gender",
-    "personal_status",
-    "foreign_worker",
-    "credit_history",
-    "employment_duration",
-    "property",
-    "installment_rate",
-    "purpose",
-    "people_liable",
-    "duration",
-    "amount"
+    "Sex",
+    "Age",
+    "With a disability"
 ]
 mutable_attrs = [
-    "status",
-    "savings",
-    "other_debtors",
-    "present_residence",
-    "other_installment_plans",
-    "housing",
-    "number_credits",
-    "job",
+    "Educational attainment",
+    "Public health coverage",
+    "Private health insurance coverage",
+    "Medicare, for people 65 and older, or people with certain disabilities",
+    "Insurance through a current or former employer or union"
 ]
 
 # --- Helper Functions ---
@@ -143,7 +163,10 @@ for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
     coverage_pct = (count / total_rows) * 100
 
     # [CHANGE] Filter strict coverage > 70% here to avoid unnecessary computation
-    if coverage_pct <= 70:
+    # German SO
+    #if coverage_pct <= 70:
+    # ACS
+    if coverage_pct <= 10:
         continue
 
     # --- c. Apply Treatment ---
@@ -151,7 +174,12 @@ for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
     df_filtered[TREATMENT_COL] = (df_filtered[t_attr] == t_val).astype(int)
 
     # --- d. Encode the filtered DataFrame ---
-    df_encoded = encode_dataframe(df_filtered)
+    # German, SO
+    #df_encoded = encode_dataframe(df_filtered)
+    # ACS
+    df_encoded = df_filtered.copy()
+    if t_attr in df_encoded.columns:
+        df_encoded = df_encoded.drop(columns=[t_attr])
 
     # Ensure outcome column is numeric
     df_encoded[OUTCOME_COL] = pd.to_numeric(df_encoded[OUTCOME_COL], errors='coerce')
@@ -189,7 +217,10 @@ if results:
     # [CHANGE] Sort by utility (cate_value) in decreasing order
     results_df = results_df.sort_values(by='cate_value', ascending=False)
 
-    output_filename = "german_high_coverage_positive_utility.csv"
+    # German Credit Dataset
+    # output_filename = "german_high_coverage_positive_utility.csv"
+    # ACS Dataset
+    output_filename = "acs_high_coverage_positive_utility.csv"
     results_df.to_csv(output_filename, index=False)
     print("-" * 60)
     print("All combinations processed.")

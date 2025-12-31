@@ -56,6 +56,23 @@
         "EducationParents": 531,
         "YearsCoding": 105
       }
+    },
+    "acs": {
+      "FULL_DATASET_PATH": "../acs/acs_encoded.csv",
+      "RULES_FILE": "ACSChosen10Treatments.json",
+      "DELTAS": [1000],
+      "EPSILONS": [10000],
+      "TARGET_COLUMN": "Wages or salary income past 12 months",
+      "ATTRIBUTE_WEIGHTS": {
+        "Age": 29300,
+        "Medicare, for people 65 and older, or people with certain disabilities": 16790,
+        "Educational attainment": 15870,
+        "Public health coverage": 15143,
+        "Private health insurance coverage": 12763,
+        "Insurance through a current or former employer or union": 10481,
+        "Sex": 8527,
+        "With a disability": 7986
+      }
     }
   },
   "MODES": [

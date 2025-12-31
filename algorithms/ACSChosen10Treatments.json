@@ -1,0 +1,10 @@
+{"condition": {"With a disability": 2}, "treatment": {"Insurance through a current or former employer or union": 1}, "utility": 21460.426675013867, "coverage": 84.04369910831198}
+{"condition": {"With a disability": 2}, "treatment": {"Educational attainment": 21}, "utility": 17041.249586237835, "coverage": 84.04369910831198}
+{"condition": {"Sex": 2}, "treatment": {"Insurance through a current or former employer or union": 1}, "utility": 16607.585360957546, "coverage": 51.53815340803899}
+{"condition": {"Sex": 1}, "treatment": {"Public health coverage": 2}, "utility": 15363.501239373772, "coverage": 48.461846591961006}
+{"condition": {"Sex": 2}, "treatment": {"Educational attainment": 21}, "utility": 11286.438580858776, "coverage": 51.53815340803899}
+{"condition": {"Sex": 2}, "treatment": {"Public health coverage": 2}, "utility": 10191.125816333735, "coverage": 51.53815340803899}
+{"condition": {"With a disability": 2}, "treatment": {"Public health coverage": 2}, "utility": 9222.547445985208, "coverage": 84.04369910831198}
+{"condition": {"Sex": 2}, "treatment": {"Private health insurance coverage": 2}, "utility": 3765.353775829206, "coverage": 51.53815340803899}
+{"condition": {"With a disability": 2}, "treatment": {"Private health insurance coverage": 2}, "utility": 1954.525937155204, "coverage": 84.04369910831198}
+{"condition": {"Sex": 1}, "treatment": {"Private health insurance coverage": 2}, "utility": 1420.0903655129969, "coverage": 48.461846591961006}

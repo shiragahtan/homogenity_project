@@ -1,3 +1,4 @@
+import re
 import sys
 import json
 import datetime
@@ -28,11 +29,8 @@ from algorithms.code.code.main import run_wte_homogeneity_baseline
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
-# ==========================================
-#      DATASET SELECTION
-# ==========================================
 # Change this variable to switch datasets: "german_credit" OR "stackoverflow"
-CHOSEN_DS = "german_credit"
+CHOSEN_DS = "acs"
 
 if CHOSEN_DS not in config['DATASETS']:
     raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")
@@ -51,10 +49,9 @@ print(f"🔹 Loaded Configuration for: {CHOSEN_DS}")
 print(f"   Dataset: {FULL_DATASET_PATH}")
 print(f"   Rules: {RULES_FILE}")
 print(f"   Target: {TARGET_COLUMN_NAME}")
-# ==========================================
 
-ALGORITHM_NAMES = ["MultiProcessing"]
-
+ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "CausalForest", "Random", "WTE"]
+#ALGORITHM_NAMES = ["MultiProcessing"]
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
 
@@ -361,13 +358,18 @@ def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name
 
     sub_df[TREATMENT_COL] = (sub_df[treatment_attr] == treatment_val).astype(int)
 
+    # Drop the original source column to prevent multicollinearity
+    # This prevents the algorithms from seeing two identical columns (Source & Treatment)
+    if treatment_attr in sub_df.columns:
+        sub_df = sub_df.drop(columns=[treatment_attr])
+
     if sub_df[TREATMENT_COL].sum() == 0:
         print(f"Warning: Treatment resulted in 0 treated individuals. Skipping.")
         return
 
     # 5. LOCAL ENCODING (Matches old batch script)
     sub_df_encoded = encode_dataframe_local(sub_df)
-
+    sub_df_encoded = sub_df_encoded.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
     # Ensure outcome is numeric
     sub_df_encoded[tgtO] = pd.to_numeric(sub_df_encoded[tgtO], errors='coerce')
 

@@ -286,3 +286,6 @@ print(f"  • Problem 3: Binary Search vs Brute Force")
 print(f"  • Brute Force won {sum(1 for r in problem3_results if r['Winner'] == 'Brute Force')}/{len(problem3_results)} times")
 
 
+
+
+

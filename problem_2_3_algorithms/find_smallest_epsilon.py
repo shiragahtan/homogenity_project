@@ -135,11 +135,14 @@ def find_smallest_epsilon_achieving_homogeneity(
     
     # First, check if even epsilon_max achieves homogeneity
     total_oracle_calls += 1
-    is_homogeneous_at_max, _, _ = oracle_is_homogeneous(
+    is_homogeneous_at_max, _, violation_info_at_max = oracle_is_homogeneous(
         df, treatment_col, outcome_col, delta, epsilon_high, utility_all
     )
     
     if not is_homogeneous_at_max:
+        # Important: propagate a concrete violating subgroup at epsilon_max, so callers can
+        # distinguish "epsilon_max too low" from "no violation found".
+        last_violation_info = violation_info_at_max
         if verbose:
             print(f"\n⚠ No homogeneity found even at epsilon_max = {epsilon_max:,.0f}")
         return None, total_oracle_calls, last_violation_info, utility_all

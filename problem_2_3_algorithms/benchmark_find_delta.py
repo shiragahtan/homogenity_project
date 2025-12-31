@@ -17,7 +17,12 @@ from typing import List, Dict, Tuple
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+
+# seaborn is optional; fall back to matplotlib-only plots if it's not installed.
+try:
+    import seaborn as sns  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    sns = None
 
 # Add project paths
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -213,7 +218,8 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str = "benchmark
         output_path = Path(__file__).resolve().parent / output_path
     
     # Set style
-    sns.set_style("whitegrid")
+    if sns is not None:
+        sns.set_style("whitegrid")
     plt.rcParams['figure.figsize'] = (12, 8)
     
     # 1. Oracle Calls vs Epsilon (grouped by rule)
@@ -282,8 +288,20 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: str = "benchmark
     pivot_oracle = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Oracle_Calls')
     
     plt.figure(figsize=(12, 6))
-    sns.heatmap(pivot_oracle, annot=True, fmt='g', cmap='YlOrRd', 
-                cbar_kws={'label': 'Oracle Calls'})
+    if sns is not None:
+        sns.heatmap(pivot_oracle, annot=True, fmt='g', cmap='YlOrRd', cbar_kws={'label': 'Oracle Calls'})
+    else:
+        import numpy as np
+        data = pivot_oracle.values.astype(float)
+        im = plt.imshow(data, aspect='auto')
+        plt.colorbar(im, label='Oracle Calls')
+        plt.xticks(range(len(pivot_oracle.columns)), [f"{int(x):,}" for x in pivot_oracle.columns], rotation=45)
+        plt.yticks(range(len(pivot_oracle.index)), [str(int(x)) for x in pivot_oracle.index])
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]):
+                val = data[i, j]
+                if np.isfinite(val):
+                    plt.text(j, i, f"{int(val)}", ha='center', va='center', fontsize=8, color='black')
     plt.title('Oracle Calls Heatmap: Rule vs Epsilon', fontsize=14, fontweight='bold')
     plt.xlabel('Epsilon (ε)', fontsize=12, fontweight='bold')
     plt.ylabel('Rule ID', fontsize=12, fontweight='bold')
@@ -535,24 +553,28 @@ def save_results(results_df: pd.DataFrame, summary_df: pd.DataFrame,
     output_path = Path(output_dir)
     excel_path = output_path / 'find_delta_benchmark_results.xlsx'
     
-    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-        # Main results
-        results_df.to_excel(writer, sheet_name='Detailed_Results', index=False)
+    # Excel is optional (requires openpyxl)
+    try:
+        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+            # Main results
+            results_df.to_excel(writer, sheet_name='Detailed_Results', index=False)
+            
+            # Summary statistics
+            summary_df.to_excel(writer, sheet_name='Summary_Statistics', index=False)
+            
+            # Pivot tables
+            pivot_oracle = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Oracle_Calls')
+            pivot_oracle.to_excel(writer, sheet_name='Oracle_Calls_by_Rule')
+            
+            pivot_runtime = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Runtime_Seconds')
+            pivot_runtime.to_excel(writer, sheet_name='Runtime_by_Rule')
+            
+            pivot_delta = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Largest_Delta_Heterogeneous')
+            pivot_delta.to_excel(writer, sheet_name='Found_Delta_by_Rule')
         
-        # Summary statistics
-        summary_df.to_excel(writer, sheet_name='Summary_Statistics', index=False)
-        
-        # Pivot tables
-        pivot_oracle = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Oracle_Calls')
-        pivot_oracle.to_excel(writer, sheet_name='Oracle_Calls_by_Rule')
-        
-        pivot_runtime = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Runtime_Seconds')
-        pivot_runtime.to_excel(writer, sheet_name='Runtime_by_Rule')
-        
-        pivot_delta = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Largest_Delta_Heterogeneous')
-        pivot_delta.to_excel(writer, sheet_name='Found_Delta_by_Rule')
-    
-    print(f"   ✓ Results saved: {excel_path}")
+        print(f"   ✓ Results saved: {excel_path}")
+    except ModuleNotFoundError:
+        print("   ℹ️  openpyxl not installed; skipping Excel output (find_delta_benchmark_results.xlsx)")
     
     # Also save as CSV for easy viewing
     csv_path = output_path / 'find_delta_benchmark_results.csv'

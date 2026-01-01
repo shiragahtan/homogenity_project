@@ -15,79 +15,58 @@ TREATMENT_COL = config['TREATMENT_COL']
 def calculate_ate_safe(df, treatment_col, outcome_col, delta=None, ret_obj=False):
     """
     Safely calculates ATE.
-
-    Args:
-        df: DataFrame containing the data
-        treatment_col: Name of treatment column
-        outcome_col: Name of outcome column
-        delta: (Optional) Threshold for sample size calculation.
-               If None or 0, strict size checks are relaxed.
-        ret_obj: Whether to return the ATE object instead of just the value.
     """
     try:
-        # 1. SAMPLE SIZE FILTER
         counts = df[treatment_col].value_counts()
-
-        # LOGIC CHANGE:
-        # If delta is provided (and > 0), use the strict project logic.
-        # If delta is None or 0, use a minimal safety floor (e.g. 5 samples) to allow execution.
         if delta and delta > 0:
-            min_samples_per_group = max(30, delta / 20.0)
+            # This allows groups as small as 50 (if delta=1000)
+            min_samples_abs = max(30, delta / 20.0)
         else:
-            min_samples_per_group = 5  # Minimal constant to ensure regression doesn't crash
+            min_samples_abs = 10
 
-        if len(counts) < 2 or counts.min() < min_samples_per_group:
+        if len(counts) < 2 or counts.min() < min_samples_abs:
             return np.nan
 
-        # Prepare covariates
+        # OUTLIER CLEANING (Crucial for small N)
+        # 50 samples is small; one billionaire ruins it. We clip 5%.
+        q_low = df[outcome_col].quantile(0.05)
+        q_high = df[outcome_col].quantile(0.95)
+        df_clean = df[(df[outcome_col] >= q_low) & (df[outcome_col] <= q_high)].copy()
+
+        counts_clean = df_clean[treatment_col].value_counts()
+        if len(counts_clean) < 2 or counts_clean.min() < min_samples_abs:
+            return np.nan
+
+        # FEATURE SELECTION
         exclude_cols = [treatment_col, TREATMENT_COL, outcome_col]
-        features_cols = [c for c in df.columns if c not in exclude_cols]
-        features_cols = [c for c in features_cols if df[c].nunique() > 1]
+        features_cols = [c for c in df_clean.columns if c not in exclude_cols]
+        features_cols = [c for c in features_cols if df_clean[c].nunique() > 1]
 
         if not features_cols:
             return np.nan
 
-        n_params = 2 + len(features_cols)
-        if len(df) <= n_params + 5:
+        n_features = len(features_cols)
+        n_minority = counts_clean.min()
+
+
+        if n_minority < (n_features * 5):
             return np.nan
 
         try:
             ate_obj = ATEUpdateLinear(
-                df[features_cols],
-                df[treatment_col],
-                df[outcome_col]
+                df_clean[features_cols],
+                df_clean[treatment_col],
+                df_clean[outcome_col]
             )
-
             cate_value = ate_obj.get_original_ate()
 
-            if not np.isfinite(cate_value):
-                return np.nan
+            if not np.isfinite(cate_value): return np.nan
 
-            # If ATE is > $10,000,000, it is a math error, not a real salary difference.
-            if abs(cate_value) > 10_000_000:
-                return np.nan
-            # -----------------------------------------------------
+            # MEDIAN CAP (Final Safety)
+            median_outcome = abs(df_clean[outcome_col].median())
+            if median_outcome == 0: median_outcome = df_clean[outcome_col].mean()
 
-            # 3. STANDARD ERROR FILTER
-            y_pred = ate_obj.X_matrix @ ate_obj.original_model.beta
-            residuals = ate_obj.Y_matrix - y_pred
-            rss = np.sum(residuals ** 2)
-            df_resid = ate_obj.n_samples - ate_obj.n_features
-            mse = rss / df_resid
-
-            xtx_inv = ate_obj.original_model.XTX_inv
-            var_beta_treatment = mse * xtx_inv[1, 1]
-
-            # If variance is negative, the matrix inversion failed numerically.
-            if var_beta_treatment <= 0:
-                return np.nan
-
-            se_beta_treatment = np.sqrt(var_beta_treatment)
-            # -------------------------------------------------------------
-
-            # THRESHOLD: Filter if SE is > 50% of the mean outcome
-            outcome_mean = abs(df[outcome_col].mean())
-            if outcome_mean > 0 and se_beta_treatment > (outcome_mean * 0.5):
+            if abs(cate_value) > (3.0 * median_outcome):
                 return np.nan
 
             return cate_value if not ret_obj else ate_obj

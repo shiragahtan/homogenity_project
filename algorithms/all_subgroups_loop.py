@@ -30,7 +30,7 @@ with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
 # Change this variable to switch datasets: "german_credit" OR "stackoverflow"
-CHOSEN_DS = "acs"
+CHOSEN_DS = config["CHOSEN_DATASET"]
 
 if CHOSEN_DS not in config['DATASETS']:
     raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")
@@ -50,8 +50,8 @@ print(f"   Dataset: {FULL_DATASET_PATH}")
 print(f"   Rules: {RULES_FILE}")
 print(f"   Target: {TARGET_COLUMN_NAME}")
 
-ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "CausalForest", "Random", "WTE"]
-#ALGORITHM_NAMES = ["MultiProcessing"]
+#ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "CausalForest", "Random", "WTE"]
+ALGORITHM_NAMES = ["MultiProcessing"]
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
 
@@ -424,7 +424,6 @@ def main():
     # --- EXACT CLEANING LOGIC FROM OLD BATCH FILE ---
     full_df = full_df.loc[:, ~full_df.columns.str.startswith('Unnamed')]
     full_df = full_df[~full_df.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
-    # -----------------------------------------------
 
     print(f"Loaded and cleaned dataset with {len(full_df)} rows and {len(full_df.columns)} columns.")
 

@@ -3,6 +3,7 @@ import re
 import os
 import glob
 import ast
+import json
 from collections import defaultdict, Counter
 
 # --- Configuration ---
@@ -12,8 +13,20 @@ TARGET_DIRECTORY = '../algorithms_results'
 OUTPUT_DIR = './breaking_subgroups_by_rule'
 # The range of epsilon values to iterate over
 #EPSILON_RANGE = range(5000, 100001, 5000)
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
+CHOSEN_DS = config["CHOSEN_DATASET"]
+
+if CHOSEN_DS not in config['DATASETS']:
+    raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")
+
+ds_config = config['DATASETS'][CHOSEN_DS]
+
+EPSILON_RANGE = ds_config['EPSILONS']
 #EPSILON_RANGE = [0.1]
-EPSILON_RANGE = [10000]
+#EPSILON_RANGE = [10000]
 # Regex to match the files and extract delta and index (the rule number)
 # Captures: 1: delta value, 2: index value (Rule ID)
 FILE_PATTERN = re.compile(r'_delta_(\d+)_(\d+)\.xlsx$', re.IGNORECASE)

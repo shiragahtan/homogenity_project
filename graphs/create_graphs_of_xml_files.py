@@ -11,7 +11,7 @@ with open(CONFIG_PATH, 'r') as f:
     config = json.load(f)
 
 # Change this variable to switch datasets: "german_credit", "stackoverflow", or "acs"
-CHOSEN_DS = "acs"
+CHOSEN_DS = config["CHOSEN_DATASET"]
 
 if CHOSEN_DS not in config['DATASETS']:
     raise ValueError(f"Dataset '{CHOSEN_DS}' not found in config.json")

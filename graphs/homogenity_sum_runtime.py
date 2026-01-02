@@ -1,7 +1,18 @@
 import os
+import json
 import pandas as pd
 
-def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homogeneity_runtime_summary.xlsx"):
+# --- Configuration ---
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
+CHOSEN_DS = config["CHOSEN_DATASET"]
+INPUT_FILE = f"{CHOSEN_DS}_homogeneity_results.xlsx"
+OUTPUT_FILE = f"{CHOSEN_DS}_homogeneity_runtime_summary.xlsx"
+
+
+def summarize_runtimes(input_file=INPUT_FILE, output_file=OUTPUT_FILE):
     print("--- Calculating Runtime Statistics (All Algos in One Sheet) ---")
 
     # 1. Check if input file exists
@@ -20,6 +31,17 @@ def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homog
         if not all(col in df.columns for col in required_columns):
             print(f"Error: Input file is missing one of the required columns: {required_columns}")
             return
+
+        # Clean algorithm names (strip whitespace)
+        if 'algorithm' in df.columns:
+            df['algorithm'] = df['algorithm'].astype(str).str.strip()
+
+        # --- RENAME STEP: Change FPGrowth to Brute Force ---
+        # This checks if "FPGrowth" is in the name (case-insensitive) and renames it
+        mask = df['algorithm'].str.contains('FPGrowth', case=False, na=False)
+        if mask.any():
+            print(f"  > Renaming {mask.sum()} rows from 'FPGrowth' to 'Brute Force'")
+            df.loc[mask, 'algorithm'] = 'Brute Force'
 
         # Handle Num Subgroups column
         # If it doesn't exist or is NaN, fill with 0
@@ -63,6 +85,7 @@ def summarize_runtimes(input_file="homogeneity_results.xlsx", output_file="homog
         print(f"An unexpected error occurred: {e}")
         import traceback
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     summarize_runtimes()

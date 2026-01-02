@@ -182,7 +182,7 @@ if __name__ == "__main__":
         # --- B. Process for each Delta ---
         for delta in DELTAS:
             # Adjust filename to match your exact output naming convention
-            results_path = f'../algorithms_results/MultiProcessing_subgroups_results_delta_{delta}_{rule_idx}.xlsx'
+            results_path = f'../algorithms_results/{CHOSEN_DS}_MultiProcessing_subgroups_results_delta_{delta}_{rule_idx}.xlsx'
 
             if Path(results_path).exists():
                 result_data = plot_subgroups_graph(results_path, size_all, delta, rule_idx, rule_data)
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         final_cols = [c for c in cols if c in summary_df.columns]
         summary_df = summary_df[final_cols]
 
-        output_summary_path = 'summary_utility_diff.xlsx'
+        output_summary_path = f'{CHOSEN_DS}_summary_utility_diff.xlsx'
         summary_df.to_excel(output_summary_path, index=False)
         print(f"\nSummary file created successfully: {output_summary_path}")
         print(summary_df)

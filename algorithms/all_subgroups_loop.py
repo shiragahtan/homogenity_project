@@ -52,6 +52,7 @@ print(f"   Target: {TARGET_COLUMN_NAME}")
 
 #ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "CausalForest", "Random", "WTE"]
 ALGORITHM_NAMES = ["MultiProcessing"]
+#ALGORITHM_NAMES = ["FPGrowth","CausalForest"]
 # If you want Random to act as a baseline dependent on RW's count, set this True
 RUN_RANDOM_BASELINE = True
 
@@ -69,10 +70,9 @@ ALGORITHM_DISPATCH_MAP = {
 }
 
 MODES = config['MODES']
-NUM_RW_RUNS = 5
+NUM_RW_RUNS = 3
 TREATMENT_COL = config['TREATMENT_COL']  # 'TempTreatment'
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
-
 """ Timing helper """
 
 
@@ -91,7 +91,7 @@ def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, conditio
     results_dir = Path("../algorithms_results")
     results_dir.mkdir(exist_ok=True)
 
-    output_file = results_dir / f"{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
+    output_file = results_dir / f"{CHOSEN_DS}_{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
     with pd.ExcelWriter(output_file) as writer:
         chosen_treatment_df.to_excel(writer, sheet_name="ChosenTreatment", index=False)
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
@@ -114,7 +114,7 @@ def _append_df_to_excel(excel_path: Path, new_row: dict):
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    excel_path = results_dir / "algorithms_time.xlsx"
+    excel_path = results_dir / f"{CHOSEN_DS}_algorithms_time.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     new_row = {
@@ -136,7 +136,7 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
                                enumeration_time=None, iteration_time=None):
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    excel_path = results_dir / "homogeneity_results.xlsx"
+    excel_path = results_dir / f"{CHOSEN_DS}_homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     new_row = {
@@ -293,8 +293,8 @@ def clean_results_files(mode):
     skip_delete = '-d' in sys.argv
     results_dir_graphs = Path("../graphs")
     results_dir_graphs.mkdir(exist_ok=True)
-    homog_xlsx = results_dir_graphs / "homogeneity_results.xlsx"
-    time_xlsx = results_dir_graphs / "algorithms_time.xlsx"
+    homog_xlsx = results_dir_graphs / f"{CHOSEN_DS}_homogeneity_results.xlsx"
+    time_xlsx = results_dir_graphs / f"{CHOSEN_DS}_algorithms_time.xlsx"
     files_to_delete = [homog_xlsx] if mode == 0 else [time_xlsx]
     if not skip_delete:
         for f in files_to_delete:
@@ -368,10 +368,15 @@ def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name
         return
 
     # 5. LOCAL ENCODING (Matches old batch script)
-    sub_df_encoded = encode_dataframe_local(sub_df)
-    sub_df_encoded = sub_df_encoded.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
-    # Ensure outcome is numeric
-    sub_df_encoded[tgtO] = pd.to_numeric(sub_df_encoded[tgtO], errors='coerce')
+    if CHOSEN_DS != "acs":
+        sub_df_encoded = encode_dataframe_local(sub_df)
+        sub_df_encoded = sub_df_encoded.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
+        # Ensure outcome is numeric
+        sub_df_encoded[tgtO] = pd.to_numeric(sub_df_encoded[tgtO], errors='coerce')
+
+    else:
+        sub_df_encoded = sub_df.copy()
+        sub_df_encoded = sub_df_encoded.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
 
     # 6. Calculate Attribute Values using local encoding
     with timer() as attr_timer:
@@ -424,6 +429,7 @@ def main():
     # --- EXACT CLEANING LOGIC FROM OLD BATCH FILE ---
     full_df = full_df.loc[:, ~full_df.columns.str.startswith('Unnamed')]
     full_df = full_df[~full_df.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
+    # -----------------------------------------------
 
     print(f"Loaded and cleaned dataset with {len(full_df)} rows and {len(full_df.columns)} columns.")
 

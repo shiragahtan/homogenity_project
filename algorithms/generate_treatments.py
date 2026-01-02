@@ -4,61 +4,59 @@ import json
 import pandas as pd
 from pathlib import Path
 from itertools import product
+
+# --- ANSI Colors for Console Output ---
+GREEN = '\033[92m'
+RESET = '\033[0m'
+
+# --- Path Setup ---
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
-from ATE_update import calculate_ate_safe
 
-# --- Configuration ---
-# Germany Credit Dataset
-# DATASET = '../german_credit/german_data_not_encoded.csv'
-# OUTCOME_COL = 'credit_risk'  # 'tgtO'
+# Try importing the ATE function
+try:
+    from ATE_update import calculate_ate_safe
+except ImportError:
+    print("Error: Could not import 'calculate_ate_safe'. Please check your directory structure and sys.path.")
+    sys.exit(1)
 
-# ACS Dataset
-DATASET = '../acs/acs_encoded.csv'
-OUTCOME_COL = 'Wages or salary income past 12 months'  # 'tgtO'
+# --- Configuration Load ---
+CONFIG_PATH = '../configs/config.json'
 
-TREATMENT_COL = 'TempTreatment'  # This is the 'treatment_col' we will create
+print(f"Loading configuration from {CONFIG_PATH}...")
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+except FileNotFoundError:
+    print(f"Error: Config file not found at {CONFIG_PATH}")
+    sys.exit(1)
 
-# Attribute lists
-# German Credit Dataset Attributes
-# immutable_attributes = [
-#     "age",
-#     "gender",
-#     "personal_status",
-#     "foreign_worker",
-#     "credit_history",
-#     "employment_duration",
-#     "property",
-#     "installment_rate",
-#     "purpose",
-#     "people_liable",
-#     "duration",
-#     "amount"
-# ]
-# mutable_attrs = [
-#     "status",
-#     "savings",
-#     "other_debtors",
-#     "present_residence",
-#     "other_installment_plans",
-#     "housing",
-#     "number_credits",
-#     "job",
-# ]
+# 1. Determine which dataset is active
+CHOSEN_DS = config.get("CHOSEN_DATASET")
+if not CHOSEN_DS or CHOSEN_DS not in config.get('DATASETS', {}):
+    print(f"Error: Dataset '{CHOSEN_DS}' not found in 'DATASETS' block of config.")
+    sys.exit(1)
 
-# ACS Dataset Attributes
-immutable_attributes = [
-    "Sex",
-    "Age",
-    "With a disability"
-]
-mutable_attrs = [
-    "Educational attainment",
-    "Public health coverage",
-    "Private health insurance coverage",
-    "Medicare, for people 65 and older, or people with certain disabilities",
-    "Insurance through a current or former employer or union"
-]
+ds_config = config['DATASETS'][CHOSEN_DS]
+
+# 2. Extract Variables
+DATASET_PATH = ds_config['FULL_DATASET_PATH']
+OUTCOME_COL = ds_config['OUTCOME_COL']
+IMMUTABLE_ATTRS = ds_config['IMMUTABLE_ATTRIBUTES']
+MUTABLE_ATTRS = ds_config['MUTABLE_ATTRIBUTES']
+
+# 3. Extract Logic Flags & Thresholds
+COVERAGE_THRESHOLD = ds_config.get('COVERAGE_THRESHOLD', 10)
+USE_ENCODING = ds_config.get('USE_ENCODING', False)
+TREATMENT_COL_NAME = config.get('TREATMENT_COL', 'TempTreatment')
+
+print(f"🔹 Running Treatment Generation for: {CHOSEN_DS}")
+print(f"   Input File: {DATASET_PATH}")
+print(f"   Outcome Column: {OUTCOME_COL}")
+print(f"   Coverage Threshold: {COVERAGE_THRESHOLD}%")
+print(f"   Encoding Enabled: {USE_ENCODING}")
+print("-" * 60)
+
 
 # --- Helper Functions ---
 
@@ -69,31 +67,25 @@ def get_unique_values(df, attributes):
     unique_values = {}
     for attr in attributes:
         if attr in df.columns:
+            # Dropna ensures we don't try to query NaNs
             unique_values[attr] = df[attr].dropna().unique().tolist()
+        else:
+            print(f"Warning: Attribute '{attr}' configured but not found in dataset columns.")
     return unique_values
 
 
 def encode_dataframe(df):
     """
-    Converts a DataFrame with categorical columns into a fully numerical one
-    using your project's consistent 1-based mapping.
+    Converts a DataFrame with categorical columns into a fully numerical one.
     """
     df_encoded = df.copy()
-
-    # Identify categorical columns
     categorical_columns = df_encoded.select_dtypes(include=['object']).columns.tolist()
 
     for column in categorical_columns:
-        # Get unique values
         unique_values = df_encoded[column].unique()
-
-        # Create your 1-based mapping: {value: 1, value2: 2, ...}
         column_mapping = {value: idx + 1 for idx, value in enumerate(unique_values)}
-
-        # Apply the mapping
         df_encoded[column] = df_encoded[column].map(column_mapping)
 
-    # Ensure boolean columns are 0/1
     bool_columns = df_encoded.select_dtypes(include=['bool']).columns
     for col in bool_columns:
         df_encoded[col] = df_encoded[col].astype(int)
@@ -101,130 +93,139 @@ def encode_dataframe(df):
     return df_encoded
 
 
-# --- 4. Main Execution ---
+# --- Main Execution ---
 
-# Load and Clean Main DataFrame ONCE
-print(f"Loading and cleaning dataset: {DATASET}")
+# 1. Load and Clean Data
+print(f"Reading dataset...")
 try:
-    df_original = pd.read_csv(DATASET)
+    df_original = pd.read_csv(DATASET_PATH)
     df_original = df_original.loc[:, ~df_original.columns.str.startswith('Unnamed')]
-    df_original = df_original[~df_original.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
+
+    obj_cols = df_original.select_dtypes(include=['object']).columns
+    if not obj_cols.empty:
+        df_original = df_original[~df_original[obj_cols].isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
+
 except FileNotFoundError:
-    print(f"Error: DATASET not found. Please make sure '{DATASET}' exists.")
-    exit(1)
+    print(f"Error: Dataset not found at {DATASET_PATH}")
+    sys.exit(1)
 except Exception as e:
-    print(f"Error loading or cleaning data: {e}")
-    exit(1)
+    print(f"Error loading data: {e}")
+    sys.exit(1)
 
 total_rows = len(df_original)
 if total_rows == 0:
     print("DataFrame is empty after cleaning. Exiting.")
-    exit(1)
+    sys.exit(1)
 
-# Ensure the outcome column exists
 if OUTCOME_COL not in df_original.columns:
-    print(f"Error: Outcome column '{OUTCOME_COL}' not found in the dataset.")
-    exit(1)
+    print(f"Error: Outcome column '{OUTCOME_COL}' not found in DataFrame.")
+    sys.exit(1)
 
 print(f"Loaded {total_rows} total clean rows.")
 
-# Get all possible condition and treatment values
-possible_conditions = get_unique_values(df_original, immutable_attributes)
-possible_treatments = get_unique_values(df_original, mutable_attrs)
+# 2. Prepare Combinations
+possible_conditions = get_unique_values(df_original, IMMUTABLE_ATTRS)
+possible_treatments = get_unique_values(df_original, MUTABLE_ATTRS)
 
-# Create flat lists of (attr, val) pairs for the Cartesian product
 cond_pairs = [(attr, val) for attr, vals in possible_conditions.items() for val in vals]
 treat_pairs = [(attr, val) for attr, vals in possible_treatments.items() for val in vals]
 
 if not cond_pairs or not treat_pairs:
-    print("Error: No condition or treatment pairs found. Check attributes and data.")
-    exit(1)
+    print("Error: No condition or treatment pairs found.")
+    sys.exit(1)
 
-print(f"Created {len(cond_pairs)} condition values and {len(treat_pairs)} treatment values.")
-print(f"Total combinations to test: {len(cond_pairs) * len(treat_pairs)}")
+total_combos = len(cond_pairs) * len(treat_pairs)
+print(f"Total Combinations to process: {total_combos}")
 print("-" * 60)
 
-# Iterate over the Cartesian Product
 results = []
-for (c_attr, c_val), (t_attr, t_val) in product(cond_pairs, treat_pairs):
+
+# 3. Iterate Cartesian Product
+for i, ((c_attr, c_val), (t_attr, t_val)) in enumerate(product(cond_pairs, treat_pairs)):
+
+    combo_str = f"[{c_attr}={c_val}] + [{t_attr}={t_val}]"
 
     # --- a. Filter DataFrame based on condition ---
     try:
         df_filtered = df_original.query(f"`{c_attr}` == @c_val").copy()
     except Exception as e:
-        print(f"Error querying: {c_attr} == {c_val}. Error: {e}. Skipping.")
+        print(f"ERROR: {combo_str} -> Query Failed: {e}")
         continue
 
     # --- b. Calculate Coverage ---
     count = len(df_filtered)
     if count == 0:
+        print(f"SKIPPED: {combo_str} -> Empty Subgroup (Size: 0)")
         continue
 
     coverage_pct = (count / total_rows) * 100
 
-    # [CHANGE] Filter strict coverage > 70% here to avoid unnecessary computation
-    # German SO
-    #if coverage_pct <= 70:
-    # ACS
-    if coverage_pct <= 10:
+    # Strict coverage check based on Config
+    if coverage_pct <= COVERAGE_THRESHOLD:
+        print(f"SKIPPED: {combo_str} -> Low Coverage ({coverage_pct:.2f}% <= {COVERAGE_THRESHOLD}%)")
         continue
 
     # --- c. Apply Treatment ---
-    # Create the binary 'TempTreatment' column
-    df_filtered[TREATMENT_COL] = (df_filtered[t_attr] == t_val).astype(int)
+    df_filtered[TREATMENT_COL_NAME] = (df_filtered[t_attr] == t_val).astype(int)
 
-    # --- d. Encode the filtered DataFrame ---
-    # German, SO
-    #df_encoded = encode_dataframe(df_filtered)
-    # ACS
-    df_encoded = df_filtered.copy()
-    if t_attr in df_encoded.columns:
-        df_encoded = df_encoded.drop(columns=[t_attr])
+    # --- d. Preprocessing ---
+    if USE_ENCODING:
+        df_encoded = encode_dataframe(df_filtered)
+    else:
+        df_encoded = df_filtered.copy()
+        if t_attr in df_encoded.columns:
+            df_encoded = df_encoded.drop(columns=[t_attr])
 
-    # Ensure outcome column is numeric
+    # Ensure outcome is numeric
     df_encoded[OUTCOME_COL] = pd.to_numeric(df_encoded[OUTCOME_COL], errors='coerce')
+    df_encoded = df_encoded.dropna(subset=[OUTCOME_COL])
 
-    # --- e. Calculate CATE using YOUR imported function ---
-    cate_value = calculate_ate_safe(
-        df=df_encoded,
-        treatment_col=TREATMENT_COL,
-        outcome_col=OUTCOME_COL
-    )
+    if df_encoded.empty:
+        print(f"SKIPPED: {combo_str} -> Empty after Outcome cleaning")
+        continue
 
-    # --- f. Print and store results ---
-    condition_str = f"{c_attr}:{repr(c_val)}"
-    treatment_str = f"{t_attr}:{repr(t_val)}"
-    print(f"Combo: {condition_str} + {treatment_str}")
-    print(f"  ...Coverage: {count}/{total_rows} ({coverage_pct:.2f}%)")
-    print(f"  ...CATE: {cate_value:.4f}")
+    # --- e. Calculate CATE ---
+    try:
+        cate_value = calculate_ate_safe(
+            df=df_encoded,
+            treatment_col=TREATMENT_COL_NAME,
+            outcome_col=OUTCOME_COL
+        )
 
+        # --- LOGGING ---
+        if cate_value > 0:
+            print(f"{GREEN}PROCESSED: {combo_str} -> Size: {count}, CATE: {cate_value:.4f}{RESET}")
+        else:
+            print(f"PROCESSED: {combo_str} -> Size: {count}, CATE: {cate_value:.4f}")
+
+    except Exception as e:
+        print(f"ERROR: {combo_str} -> ATE Calc Failed: {e}")
+        cate_value = 0
+
+    # --- f. Store Result ---
+    # Store everything initially, filter later for file
     results.append({
         "condition_attr": c_attr,
         "condition_val": c_val,
         "treatment_attr": t_attr,
         "treatment_val": t_val,
         "coverage_pct": coverage_pct,
+        "subgroup_size": count,
         "cate_value": cate_value
     })
 
-# --- 5. Save all results ---
+# --- 4. Save Results ---
+print("-" * 60)
 if results:
     results_df = pd.DataFrame(results)
 
-    # [CHANGE] Filter for positive utility (cate_value > 0)
-    results_df = results_df[results_df['cate_value'] > 0]
+    # Filter: ONLY Positive Utility for final file
+    final_df = results_df[results_df['cate_value'] > 0].sort_values(by='cate_value', ascending=False)
 
-    # [CHANGE] Sort by utility (cate_value) in decreasing order
-    results_df = results_df.sort_values(by='cate_value', ascending=False)
+    output_filename = f"{CHOSEN_DS}_high_coverage_positive_utility.csv"
+    final_df.to_csv(output_filename, index=False)
 
-    # German Credit Dataset
-    # output_filename = "german_high_coverage_positive_utility.csv"
-    # ACS Dataset
-    output_filename = "acs_high_coverage_positive_utility.csv"
-    results_df.to_csv(output_filename, index=False)
-    print("-" * 60)
-    print("All combinations processed.")
-    print(f"Filtered (Cov > 70%, Utility > 0) and Sorted results saved to '{output_filename}'")
+    print(f"DONE. Checked {len(results)} combinations.")
+    print(f"{GREEN}Saved {len(final_df)} Positive Utility combinations to '{output_filename}'.{RESET}")
 else:
-    print("-" * 60)
-    print("No combinations met the > 70% coverage criteria.")
+    print("No results generated.")

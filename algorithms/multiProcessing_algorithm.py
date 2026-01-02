@@ -305,8 +305,14 @@ def calc_utility_for_subgroups(
 
         final_records = []
         for r in records:
-            if r and pd.notna(r.get("Utility")):
-                r["UtilityDiff"] = r["Utility"] - utility_all
+            if r:
+                # If Utility is valid, calc diff. If NaN, keep it as NaN.
+                if pd.notna(r.get("Utility")):
+                    r["UtilityDiff"] = r["Utility"] - utility_all
+                else:
+                    r["UtilityDiff"] = np.nan
+
+                # Append regardless of validity
                 final_records.append(r)
 
         return final_records, len(final_records)

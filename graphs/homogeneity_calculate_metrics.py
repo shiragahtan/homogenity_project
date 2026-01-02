@@ -2,10 +2,17 @@ import pandas as pd
 import os
 import numpy as np
 import re
+import json
 
 # --- Configuration ---
-RESULTS_FILE = "homogeneity_results.xlsx"
-OUTPUT_FILE = "homogeneity_metrics_summary.xlsx"
+with open('../configs/config.json', 'r') as f:
+    config = json.load(f)
+
+# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
+CHOSEN_DS = config["CHOSEN_DATASET"]
+
+RESULTS_FILE = f"{CHOSEN_DS}_homogeneity_results.xlsx"
+OUTPUT_FILE = f"{CHOSEN_DS}_homogeneity_metrics_summary.xlsx"
 
 
 def to_boolean(val):
@@ -61,7 +68,18 @@ def calculate_summary_metrics():
             (df['epsilon'] == epsilon)
             ]
 
-        # Build GT Lookup
+        # --- ADDED: Explicitly add the Ground Truth row as "Brute Force" ---
+        if not gt_subset.empty:
+            final_rows.append({
+                "Algorithm": "Brute Force",  # Renaming as requested
+                "Delta": delta,
+                "Epsilon": epsilon,
+                "Precision (%)": 100.0,  # Hardcoded 100%
+                "Specificity (%)": 100.0,  # Hardcoded 100%
+                "Total Runs Checked": len(gt_subset)
+            })
+
+        # Build GT Lookup for comparison with other algorithms
         gt_lookup = {}
         for _, g_row in gt_subset.iterrows():
             k = (g_row['treatment'], g_row['condition'])
@@ -70,7 +88,7 @@ def calculate_summary_metrics():
         if not gt_lookup:
             continue
 
-        # Process each algorithm against this GT
+        # Process each test algorithm against this GT
         for algo_name in test_algorithms:
             algo_subset = df[
                 (df['algorithm'] == algo_name) &
@@ -130,8 +148,12 @@ def calculate_summary_metrics():
     # --- 3. Output ---
     if final_rows:
         summary_df = pd.DataFrame(final_rows)
-        # Sort for readability
-        summary_df = summary_df.sort_values(['Delta', 'Epsilon', 'Algorithm'])
+        # Sort: Delta -> Epsilon -> Put "Brute Force" first -> Then alphabetical
+        # We create a temp sorter column where Brute Force gets 0 and others get 1
+        summary_df['sorter'] = summary_df['Algorithm'].apply(lambda x: 0 if x == 'Brute Force' else 1)
+
+        summary_df = summary_df.sort_values(['Delta', 'Epsilon', 'sorter', 'Algorithm'])
+        summary_df = summary_df.drop(columns=['sorter'])
 
         print(f"Writing summary to {OUTPUT_FILE}...")
         summary_df.to_excel(OUTPUT_FILE, index=False)

@@ -29,9 +29,9 @@ sys.path.insert(0, str(PROJECT_ROOT / "algorithms"))
 from brute_force_search import brute_force_find_positive_homogeneous_subgroup
 
 
-def load_treatments(json_path: Path) -> List[str]:
-    """Load treatment column names from JSONL file (ignore conditions)"""
-    treatment_cols = []
+def load_treatments(json_path: Path) -> List[Tuple[str, str]]:
+    """Load treatment column names and their values from JSONL file (ignore conditions)"""
+    treatments = []
     
     with open(json_path) as f:
         for line in f:
@@ -40,19 +40,18 @@ def load_treatments(json_path: Path) -> List[str]:
                 continue
             entry = json.loads(line)
             if "treatment" in entry:
-                # Extract column name from treatment dict
-                # e.g., {"Exercise": "Daily..."} -> "Exercise"
-                for col_name in entry["treatment"].keys():
-                    if col_name not in treatment_cols:
-                        treatment_cols.append(col_name)
+                # Extract column name and value from treatment dict
+                # e.g., {"Exercise": "Daily..."} -> ("Exercise", "Daily...")
+                for col_name, value in entry["treatment"].items():
+                    treatments.append((col_name, value))
     
-    return treatment_cols
+    return treatments
 
 
 def run_benchmark(
     df: pd.DataFrame,
     outcome_col: str,
-    treatment_cols: List[str],
+    treatments: List[Tuple[str, str]],
     epsilons: List[float],
     deltas: List[float],
 ) -> pd.DataFrame:
@@ -60,34 +59,40 @@ def run_benchmark(
     Run the benchmark across all combinations.
     
     Returns DataFrame with columns:
-    - treatment_col, epsilon, delta_percent
+    - treatment_col, treatment_value, epsilon, delta_percent
     - found, found_filters, found_size, found_ate
     - candidates_enumerated, candidates_evaluated, runtime_seconds
     """
     results = []
-    total = len(treatment_cols) * len(epsilons) * len(deltas)
+    total = len(treatments) * len(epsilons) * len(deltas)
     count = 0
     
     print(f"\n🚀 Starting benchmark...")
-    print(f"   Treatments: {len(treatment_cols)}")
+    print(f"   Treatments: {len(treatments)}")
     print(f"   Epsilons: {len(epsilons)}")
     print(f"   Deltas: {len(deltas)}")
     print(f"   Total cases: {total}\n")
     
-    for treatment_col in treatment_cols:
+    for treatment_col, treatment_value in treatments:
         if treatment_col not in df.columns:
             print(f"⚠️  Skipping {treatment_col} (not in dataset)")
             continue
             
+        # Create binary treatment column
+        df_temp = df.copy()
+        df_temp['binary_treatment'] = (df_temp[treatment_col] == treatment_value).astype(int)
+        # Drop the original treatment column to avoid including it in subgrouping
+        df_temp = df_temp.drop(columns=[treatment_col])
+        
         for epsilon in epsilons:
             for delta_percent in deltas:
                 count += 1
-                print(f"[{count}/{total}] Treatment={treatment_col}, ε={epsilon}, δ={delta_percent*100:.1f}%")
+                print(f"[{count}/{total}] Treatment={treatment_col} ({treatment_value}), ε={epsilon}, δ={delta_percent*100:.1f}%")
                 
                 try:
                     result = brute_force_find_positive_homogeneous_subgroup(
-                        df=df,
-                        treatment_col=treatment_col,
+                        df=df_temp,
+                        treatment_col='binary_treatment',
                         outcome_col=outcome_col,
                         epsilon=epsilon,
                         delta_percent=delta_percent,
@@ -95,6 +100,7 @@ def run_benchmark(
                     
                     results.append({
                         "treatment_col": treatment_col,
+                        "treatment_value": treatment_value,
                         "epsilon": epsilon,
                         "delta_percent": delta_percent,
                         "found": result.found,
@@ -115,6 +121,7 @@ def run_benchmark(
                     print(f"   ⚠️  ERROR: {e}")
                     results.append({
                         "treatment_col": treatment_col,
+                        "treatment_value": treatment_value,
                         "epsilon": epsilon,
                         "delta_percent": delta_percent,
                         "found": False,
@@ -310,11 +317,11 @@ def main():
     parser = argparse.ArgumentParser(description="Benchmark brute force rule mining algorithm")
     parser.add_argument("--dataset", default="so.csv", help="Path to dataset CSV")
     parser.add_argument("--outcome", default="ConvertedSalary", help="Outcome column name")
-    parser.add_argument("--treatments_file", default="../algorithms/Chosen10Treatments.json", 
+    parser.add_argument("--treatments_file", default="Chosen10Treatments.json", 
                         help="Path to treatments JSON file")
     parser.add_argument("--epsilons", default="100,500,1000,5000,10000", 
                         help="Comma-separated epsilon values")
-    parser.add_argument("--deltas", default="0.02,0.05,0.10,0.15", 
+    parser.add_argument("--deltas", default="0.5,0.6,0.7,0.8", 
                         help="Comma-separated delta percentages")
     parser.add_argument("--output_dir", default="benchmark_outputs", 
                         help="Output directory name")
@@ -328,8 +335,8 @@ def main():
     
     # Load treatments
     treatments_path = script_dir / args.treatments_file
-    treatment_cols = load_treatments(treatments_path)
-    print(f"🎯 Loaded {len(treatment_cols)} treatments from {treatments_path.name}")
+    treatments = load_treatments(treatments_path)
+    print(f"🎯 Loaded {len(treatments)} treatments from {treatments_path.name}")
     
     # Parse parameters
     epsilons = [float(x.strip()) for x in args.epsilons.split(",")]
@@ -337,7 +344,7 @@ def main():
     
     # Run benchmark
     start_time = time.time()
-    results_df = run_benchmark(df, args.outcome, treatment_cols, epsilons, deltas)
+    results_df = run_benchmark(df, args.outcome, treatments, epsilons, deltas)
     total_time = time.time() - start_time
     
     print(f"\n⏱️  Total benchmark time: {total_time:.1f} seconds")

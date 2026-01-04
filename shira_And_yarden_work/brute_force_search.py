@@ -38,7 +38,7 @@ def brute_force_find_positive_homogeneous_subgroup(
     """
     Find the largest subgroup that satisfies:
     1. Homogeneous (no violations with epsilon threshold)
-    2. Minimum size (meets delta threshold)
+    2. Maximum size (meets delta threshold)
     3. Positive ATE (treatment effect > 0)
     
     Returns SearchResult with all metrics tracked.
@@ -138,7 +138,7 @@ def brute_force_find_positive_homogeneous_subgroup(
             cate = calculate_ate_safe(sub_df, treatment_col, outcome_col, delta_count)
         except LinAlgError:
             continue
-
+        print(f"  -> is_homogeneous: {is_homog}, ATE: {cate}")
         if is_homog and cate > 0:
             runtime_seconds = time.perf_counter() - t_start
             return SearchResult(

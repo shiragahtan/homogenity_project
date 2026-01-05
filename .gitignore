@@ -71,3 +71,5 @@ htmlcov/
 *.xlsx
 
 
+problem_2_3_algorithms/benchmark_results/summary_report.html
+yarden_files/__pycache__/ATE_update.cpython-311.pyc

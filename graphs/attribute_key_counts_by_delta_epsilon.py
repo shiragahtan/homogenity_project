@@ -31,7 +31,7 @@ print(f"   Summary Epsilon: {SUMMARY_EPSILON}")
 DIRECTORY = '../algorithms_results/'
 # Pattern matches filenames like: "Algorithm_subgroups_results_delta_100_0.xlsx"
 # It expects the format: ..._delta_{delta}_{index}.xlsx
-file_pattern = re.compile(r'_delta_(\d+)_(\d+)\.xlsx$', re.IGNORECASE)
+file_pattern = re.compile(rf"{re.escape(CHOSEN_DS)}.*_delta_(\d+)_(\d+)\.xlsx$", re.IGNORECASE)
 
 results = defaultdict(lambda: defaultdict(Counter))
 breaking_groups = defaultdict(lambda: defaultdict(list))

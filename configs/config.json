@@ -4,8 +4,12 @@
     "german": {
       "FULL_DATASET_PATH": "../german_credit/german_data_not_encoded.csv",
       "RULES_FILE": "GermanChosen10Treatments.json",
-      "DELTAS": [50],
-      "EPSILONS": [0.4],
+      "DELTAS": [
+        50
+      ],
+      "EPSILONS": [
+        0.48000000000000004
+      ],
       "TARGET_COLUMN": "credit_risk",
       "OUTCOME_COL": "credit_risk",
       "COVERAGE_THRESHOLD": 70,
@@ -35,33 +39,37 @@
         "job"
       ],
       "ATTRIBUTE_WEIGHTS": {
-        "age": 129,
-        "other_debtors": 115,
-        "housing": 94,
-        "savings": 86,
-        "job": 86,
-        "installment_rate": 83,
-        "people_liable": 80,
-        "gender": 73,
-        "amount": 71,
-        "credit_history": 58,
-        "other_installment_plans": 57,
-        "personal_status": 56,
-        "employment_duration": 55,
-        "property": 46,
-        "number_credits": 29,
-        "status": 28,
-        "present_residence": 25,
-        "foreign_worker": 20,
-        "duration": 19,
-        "purpose": 16
+        "age": 45,
+        "job": 36,
+        "installment_rate": 34,
+        "savings": 28,
+        "other_debtors": 28,
+        "gender": 19,
+        "amount": 17,
+        "people_liable": 17,
+        "property": 15,
+        "other_installment_plans": 13,
+        "housing": 13,
+        "personal_status": 12,
+        "present_residence": 10,
+        "credit_history": 10,
+        "employment_duration": 9,
+        "status": 8,
+        "duration": 7,
+        "foreign_worker": 6,
+        "purpose": 3,
+        "number_credits": 2
       }
     },
-    "stackoverflow": {
+    "so": {
       "FULL_DATASET_PATH": "../stackoverflow/so_countries_col_new.csv",
       "RULES_FILE": "Chosen10Treatments.json",
-      "DELTAS": [1000],
-      "EPSILONS": [12000],
+      "DELTAS": [
+        500
+      ],
+      "EPSILONS": [
+        200000.0
+      ],
       "TARGET_COLUMN": "ConvertedSalary",
       "OUTCOME_COL": "ConvertedSalary",
       "COVERAGE_THRESHOLD": 70,
@@ -87,32 +95,36 @@
         "Hobby"
       ],
       "ATTRIBUTE_WEIGHTS": {
-        "GINI": 16171,
-        "Hobby": 13162,
-        "Student": 8553,
-        "RaceEthnicity": 10678,
-        "Gender": 13280,
-        "SexualOrientation": 8399,
-        "Continent": 14339,
-        "GDP": 15052,
-        "HDI": 14113,
-        "Dependents": 9938,
-        "Country": 9264,
-        "DevType": 8749,
-        "HoursComputer": 8845,
-        "UndergradMajor": 4440,
-        "Age": 8045,
-        "FormalEducation": 2372,
-        "Exercise": 3979,
-        "EducationParents": 2651,
-        "YearsCoding": 520
+        "GINI": 103,
+        "Hobby": 255,
+        "Student": 199,
+        "RaceEthnicity": 325,
+        "Gender": 261,
+        "SexualOrientation": 213,
+        "Continent": 640,
+        "GDP": 0,
+        "HDI": 422,
+        "Dependents": 337,
+        "Country": 0,
+        "DevType": 202,
+        "HoursComputer": 291,
+        "UndergradMajor": 164,
+        "Age": 253,
+        "FormalEducation": 104,
+        "Exercise": 203,
+        "EducationParents": 105,
+        "YearsCoding": 300
       }
     },
     "acs": {
       "FULL_DATASET_PATH": "../acs/acs_encoded.csv",
       "RULES_FILE": "ACSChosen10Treatments.json",
-      "DELTAS": [1000],
-      "EPSILONS": [12000],
+      "DELTAS": [
+        500
+      ],
+      "EPSILONS": [
+        12000
+      ],
       "TARGET_COLUMN": "Wages or salary income past 12 months",
       "OUTCOME_COL": "Wages or salary income past 12 months",
       "COVERAGE_THRESHOLD": 10,
@@ -130,14 +142,14 @@
         "Insurance through a current or former employer or union"
       ],
       "ATTRIBUTE_WEIGHTS": {
-          "Age": 7748,
-          "Medicare, for people 65 and older, or people with certain disabilities": 4387,
-          "Public health coverage": 4222,
-          "Private health insurance coverage": 3692,
-          "Educational attainment": 3409,
-          "Sex": 2934,
-          "Insurance through a current or former employer or union": 2364,
-          "With a disability": 1479
+        "Age": 7748,
+        "Medicare, for people 65 and older, or people with certain disabilities": 4387,
+        "Public health coverage": 4222,
+        "Private health insurance coverage": 3692,
+        "Educational attainment": 3409,
+        "Sex": 2934,
+        "Insurance through a current or former employer or union": 2364,
+        "With a disability": 1479
       }
     }
   },

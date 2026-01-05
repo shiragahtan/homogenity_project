@@ -11,7 +11,6 @@ CHOSEN_DS = config["CHOSEN_DATASET"]
 INPUT_FILE = f"{CHOSEN_DS}_homogeneity_results.xlsx"
 OUTPUT_FILE = f"{CHOSEN_DS}_homogeneity_runtime_summary.xlsx"
 
-
 def summarize_runtimes(input_file=INPUT_FILE, output_file=OUTPUT_FILE):
     print("--- Calculating Runtime Statistics (All Algos in One Sheet) ---")
 
@@ -31,7 +30,7 @@ def summarize_runtimes(input_file=INPUT_FILE, output_file=OUTPUT_FILE):
         if not all(col in df.columns for col in required_columns):
             print(f"Error: Input file is missing one of the required columns: {required_columns}")
             return
-
+        
         # Clean algorithm names (strip whitespace)
         if 'algorithm' in df.columns:
             df['algorithm'] = df['algorithm'].astype(str).str.strip()
@@ -78,14 +77,15 @@ def summarize_runtimes(input_file=INPUT_FILE, output_file=OUTPUT_FILE):
         summary_df.to_excel(output_file, index=False, sheet_name="Runtime_Summary")
 
         print("Done! Summary file created successfully.")
-        print("\nPreview of Results:")
-        print(summary_df.head(10))
+        print(f"\nTotal unique epsilon values: {summary_df['epsilon'].nunique()}")
+        print(f"Epsilon values: {sorted(summary_df['epsilon'].unique())}")
+        print("\nPreview of Results (grouped by algorithm, delta, epsilon):")
+        print(summary_df.head(20))
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         import traceback
         traceback.print_exc()
-
 
 if __name__ == "__main__":
     summarize_runtimes()

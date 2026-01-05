@@ -158,6 +158,9 @@ def calculate_summary_metrics():
         print(f"Writing summary to {OUTPUT_FILE}...")
         summary_df.to_excel(OUTPUT_FILE, index=False)
         print("Done.")
+        print(f"\nTotal unique epsilon values: {summary_df['Epsilon'].nunique()}")
+        print(f"Epsilon values: {sorted(summary_df['Epsilon'].unique())}")
+        print("\nResults (grouped by algorithm, delta, epsilon):")
         print(summary_df)
     else:
         print("No results found.")

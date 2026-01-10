@@ -71,5 +71,7 @@ htmlcov/
 *.xlsx
 
 
-problem_2_3_algorithms/benchmark_results/summary_report.html
 yarden_files/__pycache__/ATE_update.cpython-311.pyc
+problem_2_3_algorithms/benchmark_results/summary_report.html
+problem_2_3_algorithms/benchmark_results/problem2_largest_delta/benchmark_report.html
+problem_2_3_algorithms/benchmark_results/problem3_smallest_epsilon/benchmark_report.html

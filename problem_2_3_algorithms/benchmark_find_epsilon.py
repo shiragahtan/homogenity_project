@@ -351,6 +351,17 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
         h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
         .subtitle {{ font-size: 1.2em; opacity: 0.9; }}
         .content {{ padding: 40px; }}
+        .table-scroll {{
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 15px 0;
+        }}
+        .table-scroll table {{
+            width: max-content;
+            min-width: 100%;
+            margin: 0;
+        }}
         
         .insight-box {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -413,7 +424,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
             margin: 20px 0;
             box-shadow: 0 2px 15px rgba(0,0,0,0.1);
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
             font-size: 0.9em;
         }}
         thead {{
@@ -566,6 +577,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
             
             <div class="glossary">
                 <h3><span class="emoji">📖</span> Metrics Glossary - How Each Column is Calculated</h3>
+                <div class="table-scroll">
                 <table class="glossary-table">
                     <tr>
                         <td class="metric-name">Delta (δ)</td>
@@ -625,6 +637,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                         </td>
                     </tr>
                 </table>
+                </div>
             </div>
             
             <h2><span class="emoji">📊</span> Performance Summary</h2>
@@ -669,6 +682,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                 <div class="rule-header">
                     <span class="emoji">📌</span> Rule {rule_id}: {condition} → {treatment}
                 </div>
+                <div class="table-scroll">
                 <table>
                     <thead>
                         <tr>
@@ -733,6 +747,7 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
         html += """
                     </tbody>
                 </table>
+                </div>
             </div>
 """
     

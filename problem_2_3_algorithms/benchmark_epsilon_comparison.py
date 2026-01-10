@@ -239,6 +239,17 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
         h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
         .subtitle {{ font-size: 1.2em; opacity: 0.9; }}
         .content {{ padding: 40px; }}
+        .table-scroll {{
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 20px 0;
+        }}
+        .table-scroll table {{
+            width: max-content;
+            min-width: 100%;
+            margin: 0;
+        }}
         
         .method-box {{
             display: inline-block;
@@ -354,6 +365,7 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
             </div>
             
             <h2 style="margin-top: 40px;"><span class="emoji">📊</span> Detailed Results</h2>
+            <div class="table-scroll">
             <table>
                 <thead>
                     <tr>
@@ -400,6 +412,7 @@ def generate_comparison_html(results_df: pd.DataFrame, output_dir: str):
     html += f"""
                 </tbody>
             </table>
+            </div>
             
             <h2><span class="emoji">📈</span> Key Insights</h2>
             <ul style="line-height: 2; font-size: 1.05em; margin: 20px 0;">

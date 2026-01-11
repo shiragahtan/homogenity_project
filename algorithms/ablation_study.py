@@ -548,6 +548,30 @@ def generate_visualizations(results_df, results_dir):
         'dataset_size': 'Subset Size'
     }).to_html(index=False, classes='summary-table')
     
+    # Separate agreement and algorithm summaries
+    agreement_df = summary_df[summary_df['algorithm'] == 'RW_Agreement'][['experiment', 'epsilon', 'delta_pct', 'agreement_rate']].copy()
+    agreement_df['epsilon'] = agreement_df['epsilon'].fillna('')
+    agreement_df['delta_pct'] = agreement_df['delta_pct'].fillna('')
+    agreement_summary_html = agreement_df.rename(columns={
+        'experiment': 'Experiment',
+        'epsilon': 'Epsilon',
+        'delta_pct': 'Delta (%)',
+        'agreement_rate': 'Agreement Rate (%)'
+    }).to_html(index=False, classes='summary-table')
+    
+    algo_df = summary_df[summary_df['algorithm'].isin(['FPGrowth', 'RW_Direct'])][['algorithm', 'experiment', 'epsilon', 'delta_pct', 'homogeneity_rate', 'num_subgroups_checked_mean', 'runtime_seconds_mean']].copy()
+    algo_df['epsilon'] = algo_df['epsilon'].fillna('')
+    algo_df['delta_pct'] = algo_df['delta_pct'].fillna('')
+    algo_summary_html = algo_df.rename(columns={
+        'algorithm': 'Algorithm',
+        'experiment': 'Experiment',
+        'epsilon': 'Epsilon',
+        'delta_pct': 'Delta (%)',
+        'homogeneity_rate': 'Homogeneity Rate (%)',
+        'num_subgroups_checked_mean': 'Avg Subgroups Checked',
+        'runtime_seconds_mean': 'Avg Runtime (s)'
+    }).to_html(index=False, classes='summary-table')
+    
     html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -696,8 +720,15 @@ def generate_visualizations(results_df, results_dir):
     </div>
 
     <h2>📈 Aggregated Summary Statistics</h2>
+    
+    <h3>✅ RW Correctness (Agreement with FPGrowth Ground Truth)</h3>
     <div class="info-box">
-        {summary_df.to_html(index=False, classes='summary-table')}
+        {agreement_summary_html}
+    </div>
+    
+    <h3>⚡ Algorithm Performance Metrics</h3>
+    <div class="info-box">
+        {algo_summary_html}
     </div>
 
     <h2>📋 Detailed Results by Rule</h2>

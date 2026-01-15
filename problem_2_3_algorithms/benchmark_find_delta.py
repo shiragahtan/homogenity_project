@@ -359,13 +359,24 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
                 padding-bottom: 10px;
                 margin: 30px 0 20px 0;
             }}
+            .table-scroll {{
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 20px 0;
+            }}
+            .table-scroll table {{
+                width: max-content;
+                min-width: 100%;
+                margin: 0;
+            }}
             table {{
                 width: 100%;
                 border-collapse: collapse;
                 margin: 20px 0;
                 box-shadow: 0 2px 15px rgba(0,0,0,0.1);
                 border-radius: 8px;
-                overflow: hidden;
+                overflow: visible;
             }}
             thead {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -383,7 +394,8 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
             tbody tr:nth-child(even) {{ background: #f8f9fa; }}
             tbody tr:hover {{
                 background: #e3f2fd;
-                transform: scale(1.01);
+                /* Avoid clipping wide tables on hover */
+                transform: none;
             }}
             td {{
                 padding: 12px 15px;
@@ -500,8 +512,8 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
         </div>
         """
     
-    # Generate detailed table HTML
-    detailed_html = "<table><thead><tr>"
+    # Generate detailed table HTML (wrapped for horizontal scrolling)
+    detailed_html = "<div class='table-scroll'><table><thead><tr>"
     for col in results_df.columns:
         detailed_html += f"<th>{col.replace('_', ' ')}</th>"
     detailed_html += "</tr></thead><tbody>"
@@ -520,16 +532,16 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame,
             else:
                 detailed_html += f"<td>{value}</td>"
         detailed_html += "</tr>"
-    detailed_html += "</tbody></table>"
+    detailed_html += "</tbody></table></div>"
     
     # Generate pivot tables
     pivot_html = "<h3>Oracle Calls by Rule × Epsilon</h3>"
     pivot_oracle = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Oracle_Calls')
-    pivot_html += pivot_oracle.to_html(classes='', border=0)
+    pivot_html += "<div class='table-scroll'>" + pivot_oracle.to_html(classes='', border=0) + "</div>"
     
     pivot_html += "<h3 style='margin-top: 30px;'>Runtime (seconds) by Rule × Epsilon</h3>"
     pivot_runtime = results_df.pivot(index='Rule_ID', columns='Epsilon', values='Runtime_Seconds')
-    pivot_html += pivot_runtime.to_html(classes='', border=0)
+    pivot_html += "<div class='table-scroll'>" + pivot_runtime.to_html(classes='', border=0) + "</div>"
     
     # Fill template
     import datetime

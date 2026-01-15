@@ -92,7 +92,7 @@ def find_smallest_epsilon_achieving_homogeneity(
     outcome_col: str,
     delta: int,
     epsilon_start: float = 1000.0,
-    epsilon_max: float = 1000000.0,
+    epsilon_max: float = 3000000.0,
     verbose: bool = True
 ) -> Tuple[Optional[float], int, Optional[Dict], float]:
     """
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('--outcome', type=str, default='ConvertedSalary', help='Outcome column')
     parser.add_argument('--delta', type=int, required=True, help='Fixed delta threshold')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon')
-    parser.add_argument('--epsilon_max', type=float, default=1000000.0, help='Maximum epsilon')
+    parser.add_argument('--epsilon_max', type=float, default=3000000.0, help='Maximum epsilon')
     
     args = parser.parse_args()
     

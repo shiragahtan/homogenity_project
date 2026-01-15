@@ -28,9 +28,6 @@ colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
 # ================== GRAPH 1: Runtime vs Epsilon (Fixed Delta) ==================
 print("\n📈 Creating Graph 1: Runtime vs Epsilon for each Delta...")
 
-# Get unique delta values
-delta_values = sorted(df_delta['Epsilon'].unique())
-
 fig1 = go.Figure()
 
 # Plot each rule with a different color
@@ -38,6 +35,7 @@ for rule_id, rule_group in df_delta.groupby('Rule_ID'):
     color_idx = (rule_id - 1) % len(colors)
     rule_label = rule_group['Rule_Label'].iloc[0]
     
+    # Add delta information to hover text
     fig1.add_trace(go.Scatter(
         x=rule_group['Epsilon'],
         y=rule_group['Runtime_Seconds'],
@@ -45,15 +43,21 @@ for rule_id, rule_group in df_delta.groupby('Rule_ID'):
         name=rule_label,
         line=dict(width=3, color=colors[color_idx]),
         marker=dict(size=10),
+        customdata=rule_group['Largest_Delta_Heterogeneous'],
         hovertemplate='<b>%{fullData.name}</b><br>' +
                       'Epsilon: %{x:,.0f}<br>' +
+                      'Found Delta: %{customdata}<br>' +
                       'Runtime: %{y:.2f}s<br>' +
                       '<extra></extra>'
     ))
 
+# Get the search range info
+delta_min = df_delta['Largest_Delta_Heterogeneous'].min()
+delta_max = df_delta['Largest_Delta_Heterogeneous'].max()
+
 fig1.update_layout(
-    title="Problem 2: Runtime vs Epsilon (Finding Largest Delta)<br><sub>How runtime changes with different epsilon values</sub>",
-    xaxis_title="Epsilon (Homogeneity Threshold)",
+    title=f"Problem 2: Runtime vs Epsilon (Finding Largest Delta)<br><sub>Searching for delta in range [{delta_min:,.0f}, {delta_max:,.0f}] for each epsilon</sub>",
+    xaxis_title="Epsilon (Homogeneity Threshold) - Fixed for each test",
     yaxis_title="Runtime (seconds)",
     template="plotly_white",
     font=dict(size=14),
@@ -78,6 +82,7 @@ for rule_id, rule_group in df_epsilon.groupby('Rule_ID'):
     color_idx = (rule_id - 1) % len(colors)
     rule_label = rule_group['Rule_Label'].iloc[0]
     
+    # Add epsilon information to hover text
     fig2.add_trace(go.Scatter(
         x=rule_group['Delta'],
         y=rule_group['Runtime_Seconds'],
@@ -85,15 +90,21 @@ for rule_id, rule_group in df_epsilon.groupby('Rule_ID'):
         name=rule_label,
         line=dict(width=3, color=colors[color_idx]),
         marker=dict(size=10),
+        customdata=rule_group['Smallest_Epsilon_Homogeneous'],
         hovertemplate='<b>%{fullData.name}</b><br>' +
-                      'Delta: %{x}<br>' +
+                      'Delta (Fixed): %{x}<br>' +
+                      'Found Epsilon: %{customdata:,.2f}<br>' +
                       'Runtime: %{y:.2f}s<br>' +
                       '<extra></extra>'
     ))
 
+# Get the epsilon search range info
+epsilon_min = df_epsilon['Smallest_Epsilon_Homogeneous'].min()
+epsilon_max = df_epsilon['Smallest_Epsilon_Homogeneous'].max()
+
 fig2.update_layout(
-    title="Problem 3: Runtime vs Delta (Finding Smallest Epsilon)<br><sub>How runtime changes with different delta values</sub>",
-    xaxis_title="Delta (Minimum Subgroup Size)",
+    title=f"Problem 3: Runtime vs Delta (Finding Smallest Epsilon)<br><sub>Searching for epsilon (found range: [{epsilon_min:,.0f}, {epsilon_max:,.0f}]) for each fixed delta</sub>",
+    xaxis_title="Delta (Minimum Subgroup Size) - Fixed for each test",
     yaxis_title="Runtime (seconds)",
     template="plotly_white",
     font=dict(size=14),

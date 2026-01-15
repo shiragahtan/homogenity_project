@@ -38,8 +38,12 @@ with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
 TREATMENT_COL = config['TREATMENT_COL']
 
 
-def load_treatments(treatment_file: str = "Chosen10Treatments.json") -> List[Dict]:
+def load_treatments(treatment_file: str = None) -> List[Dict]:
     """Load treatment-condition pairs from JSON file."""
+    if treatment_file is None:
+        # Use the canonical treatments file from algorithms folder
+        treatment_file = Path(__file__).resolve().parent.parent / "algorithms" / "Chosen10Treatments.json"
+    
     treatments = []
     with open(treatment_file, "r") as f:
         for line in f:

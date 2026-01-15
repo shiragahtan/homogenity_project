@@ -8,6 +8,7 @@ import multiprocessing as mp
 from time import perf_counter
 from contextlib import contextmanager
 import os
+import queue # Import queue for Empty check
 
 # Add project root to sys.path for module resolution
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -26,10 +27,12 @@ from causalForest_algorithm import calc_utility_for_subgroups as causalForest_ca
 from algorithms.code.code.main import run_wte_homogeneity_baseline
 
 # --- Configuration ---
+TIMEOUT_SECONDS = 3600  # 1 Hour Cutoff
+#TIMEOUT_SECONDS = 8000  # 1 Hour Cutoff
+
 with open('../configs/config.json', 'r') as f:
     config = json.load(f)
 
-# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
 CHOSEN_DS = config["CHOSEN_DATASET"]
 
 if CHOSEN_DS not in config['DATASETS']:
@@ -42,7 +45,6 @@ RULES_FILE = ds_config['RULES_FILE']
 DELTAS = ds_config['DELTAS']
 EPSILONS = ds_config['EPSILONS']
 TARGET_COLUMN_NAME = ds_config['TARGET_COLUMN']
-# LOAD WEIGHTS HERE TO PASS DOWN
 ATTRIBUTE_WEIGHTS = ds_config.get('ATTRIBUTE_WEIGHTS', {})
 
 print(f"🔹 Loaded Configuration for: {CHOSEN_DS}")
@@ -50,10 +52,18 @@ print(f"   Dataset: {FULL_DATASET_PATH}")
 print(f"   Rules: {RULES_FILE}")
 print(f"   Target: {TARGET_COLUMN_NAME}")
 
+# --- ENABLED ALL ALGORITHMS AS REQUESTED ---
 #ALGORITHM_NAMES = ["FPGrowth", "RW", "Greedy", "CausalForest", "Random", "WTE"]
-ALGORITHM_NAMES = ["MultiProcessing"]
-#ALGORITHM_NAMES = ["FPGrowth","CausalForest"]
-# If you want Random to act as a baseline dependent on RW's count, set this True
+#ALGORITHM_NAMES = ["FPGrowth", "RW", "CausalForest", "Random", "WTE"]
+#ALGORITHM_NAMES = ["FPGrowth", "RW", "CausalForest", "Random"]
+#ALGORITHM_NAMES = ["Greedy", "WTE"]
+#ALGORITHM_NAMES = ["Greedy"]
+#ALGORITHM_NAMES = ["WTE"]
+#ALGORITHM_NAMES = ["FPGrowth", "RW"]
+#ALGORITHM_NAMES = ["RW"]
+#ALGORITHM_NAMES = ["FPGrowth"]
+#ALGORITHM_NAMES = ["MultiProcessing"]
+ALGORITHM_NAMES = ["RW", "Random"]
 RUN_RANDOM_BASELINE = True
 
 ALGORITHM_DISPATCH_MAP = {
@@ -71,50 +81,85 @@ ALGORITHM_DISPATCH_MAP = {
 
 MODES = config['MODES']
 NUM_RW_RUNS = 3
-TREATMENT_COL = config['TREATMENT_COL']  # 'TempTreatment'
+TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
+
 """ Timing helper """
-
-
 @contextmanager
 def timer() -> callable:
     t0 = perf_counter()
     yield lambda: perf_counter() - t0
 
+def worker_wrapper(func, kwargs, result_queue):
+    """
+    Wrapper function to run the algorithm in a separate process.
+    Puts the result into the queue upon completion.
+    """
+    try:
+        res = func(**kwargs)
+        result_queue.put(("success", res))
+    except Exception as e:
+        # Send error string or object back to main process
+        result_queue.put(("error", str(e)))
 
-def save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=0):
-    """Save subgroup analysis results to an Excel file."""
+def save_results_to_csv(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=0):
+    """Save subgroup analysis results to a CSV file (Metadata in JSON)."""
     subgroup_df = pd.DataFrame(subgroup_data)
-    summary_df = pd.DataFrame([{"NumSubgroups": num_subgroups}])
-    chosen_treatment_df = pd.DataFrame([{"Condition": str(condition), "Treatment": str(treatment)}])
+    
+    # Metadata dict since CSV has no sheets
+    metadata = {
+        "NumSubgroups": num_subgroups,
+        "Condition": str(condition),
+        "Treatment": str(treatment)
+    }
 
     results_dir = Path("../algorithms_results")
     results_dir.mkdir(exist_ok=True)
 
-    output_file = results_dir / f"{CHOSEN_DS}_{algorithm_name}_subgroups_results_delta_{delta}_{index}.xlsx"
-    with pd.ExcelWriter(output_file) as writer:
-        chosen_treatment_df.to_excel(writer, sheet_name="ChosenTreatment", index=False)
-        summary_df.to_excel(writer, sheet_name="Summary", index=False)
-        subgroup_df.to_excel(writer, sheet_name="Subgroups", index=False)
-
-    print(f"✔  {len(subgroup_data):,} subgroups saved to {output_file}")
+    # Main Data File
+    output_file = results_dir / f"{CHOSEN_DS}_{algorithm_name}_subgroups_results_delta_{delta}_{index}.csv"
+    # Metadata File
+    meta_file = results_dir / f"{CHOSEN_DS}_{algorithm_name}_subgroups_results_delta_{delta}_{index}_metadata.json"
+    
+    try:
+        subgroup_df.to_csv(output_file, index=False)
+        with open(meta_file, "w") as f:
+            json.dump(metadata, f, indent=4)
+        print(f"✔  {len(subgroup_data):,} subgroups saved to {output_file}")
+    except Exception as e:
+        print(f"❌ Error saving CSV: {e}")
+        
     return str(output_file)
 
 
-def _append_df_to_excel(excel_path: Path, new_row: dict):
-    if not excel_path.exists():
-        df = pd.DataFrame([new_row])
-        df.to_excel(excel_path, index=False)
+def _append_dict_to_csv(csv_path: Path, new_row_dict: dict):
+    df_new = pd.DataFrame([new_row_dict])
+    if not csv_path.exists():
+        df_new.to_csv(csv_path, index=False, mode='w')
     else:
-        existing_df = pd.read_excel(excel_path)
-        updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
-        updated_df.to_excel(excel_path, index=False)
+        df_new.to_csv(csv_path, index=False, mode='a', header=False)
+
+
+def _append_dict_to_excel(excel_path: Path, new_row_dict: dict):
+    """Helper to append a dictionary row to an Excel file."""
+    df_new = pd.DataFrame([new_row_dict])
+    if not excel_path.exists():
+        df_new.to_excel(excel_path, index=False)
+    else:
+        try:
+            # Read existing file, concat new data, and save back
+            df_existing = pd.read_excel(excel_path)
+            df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+            df_combined.to_excel(excel_path, index=False)
+        except Exception as e:
+            print(f"❌ Error appending to Excel: {e}")
 
 
 def append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, runtime_seconds):
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    excel_path = results_dir / f"{CHOSEN_DS}_algorithms_time.xlsx"
+    # Changed extension to .csv
+    csv_path = results_dir / f"{CHOSEN_DS}_algorithms_time.csv"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     new_row = {
@@ -127,8 +172,8 @@ def append_timing_results(algorithm_name, condition, treatment, num_subgroups, d
         "run_time_seconds": runtime_seconds,
         "run_time_minutes": runtime_seconds / 60
     }
-    _append_df_to_excel(excel_path, new_row)
-    print(f"✅ Timing results appended to {excel_path}")
+    _append_dict_to_csv(csv_path, new_row)
+    print(f"✅ Timing results appended to {csv_path}")
 
 
 def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, homogeneity_status,
@@ -136,7 +181,9 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
                                enumeration_time=None, iteration_time=None):
     results_dir = Path("../graphs")
     results_dir.mkdir(exist_ok=True)
-    excel_path = results_dir / f"{CHOSEN_DS}_homogeneity_results.xlsx"
+    
+    # Changed extension to .xlsx for Mode 0
+    xlsx_path = results_dir / f"{CHOSEN_DS}_homogeneity_results.xlsx"
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     new_row = {
@@ -153,16 +200,63 @@ def append_homogeneity_results(algorithm_name, treatment, condition, delta, epsi
         "enumeration_time_sec": enumeration_time,
         "iteration_time_sec": iteration_time
     }
-    _append_df_to_excel(excel_path, new_row)
-    print(f"🧬 Homogeneity results appended to {excel_path}")
+    
+    _append_dict_to_excel(xlsx_path, new_row)
+    print(f"🧬 Homogeneity results appended to {xlsx_path}")
 
 
-def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
+def run_single_execution(target_func, target_kwargs, algorithm_name, chosen_mode, condition, treatment, delta, epsilon,
                          utility_time, attr_vals_time, index=0):
+    
+    result_queue = mp.Queue()
+    # Create the process
+    p = mp.Process(target=worker_wrapper, args=(target_func, target_kwargs, result_queue))
+
+    print(f"▶️  [{algorithm_name}] Starting execution with {TIMEOUT_SECONDS}s timeout...")
+    
     with timer() as elapsed:
-        res = algo_func()
+        p.start()
+        # Wait for the process to finish or timeout
+        p.join(timeout=TIMEOUT_SECONDS)
+        
+        timed_out = False
+        if p.is_alive():
+            print(f"⏳ [{algorithm_name}] Timed out after {TIMEOUT_SECONDS}s! Killing process...")
+            p.terminate()
+            p.join() # Ensure it's dead
+            timed_out = True
+            res = "TIMEOUT"
+        else:
+            # Process finished, check queue
+            if not result_queue.empty():
+                status, payload = result_queue.get()
+                if status == "success":
+                    res = payload
+                else:
+                    print(f"❌ [{algorithm_name}] Worker raised error: {payload}")
+                    res = None # Or raise
+            else:
+                print(f"❌ [{algorithm_name}] Worker finished but returned no result (Crash?).")
+                res = None
+
     algorithm_time = elapsed()
     total_time = algorithm_time + utility_time + attr_vals_time
+
+    # --- SHOW RUNTIME FOR BOTH MODES HERE ---
+    print(f"⏱️  [{algorithm_name}] Finished. Total Time: {total_time:.4f}s (Algo: {algorithm_time:.4f}s + Overhead: {utility_time + attr_vals_time:.4f}s)")
+    # ----------------------------------------
+
+    # Handle Timeout Case Specifics
+    if timed_out or res == "TIMEOUT":
+        if chosen_mode == 0:
+            print(f"\033[93mResult: TIMED OUT\033[0m")
+            append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, 
+                                       "Timed Out", total_time, None, None, None)
+            return "TIMEOUT", 0
+        else:
+            print(f"\033[93mResult: TIMED OUT - No subgroups saved.\033[0m")
+            append_timing_results(algorithm_name, condition, treatment, "Timed Out", delta, total_time)
+            return "TIMEOUT"
 
     if chosen_mode == 0:  # Homogeneity check
         raw_result = res
@@ -190,7 +284,9 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
 
         append_homogeneity_results(algorithm_name, treatment, condition, delta, epsilon, is_homogeneous, total_time,
                                    num_checked, enum_time, iter_time)
-        return res
+        
+        # Return result with num_checked for potential use in main loop
+        return raw_result, num_checked
     else:
         subgroup_data = res
         num_subgroups = 0
@@ -198,24 +294,31 @@ def run_single_execution(algo_func, algorithm_name, chosen_mode, condition, trea
             subgroup_data = res[0]
             if len(res) >= 2: num_subgroups = res[1]
 
-        save_results_to_excel(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=index)
+        save_results_to_csv(algorithm_name, subgroup_data, num_subgroups, condition, treatment, delta, index=index)
         append_timing_results(algorithm_name, condition, treatment, num_subgroups, delta, total_time)
         return res
 
 
 def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_vals, condition, treatment, i,
-                    attr_vals_time=0, force_n_subgroups=None):
+                    attr_vals_time=0, force_n_subgroups=None, override_epsilons=None):
     algorithm_name = chosen_algorithm_name
     print(f"Using algorithm: {algorithm_name}")
-    # Use global EPSILONS loaded from config
-    epsilons = EPSILONS
-    if chosen_mode != 0:
-        epsilons = [epsilons[0]]
+    
+    # Allow overriding epsilons for specific random baseline runs
+    if override_epsilons is not None:
+        epsilons = override_epsilons
+    else:
+        # Use global EPSILONS loaded from config
+        epsilons = EPSILONS
+        if chosen_mode != 0:
+            epsilons = [epsilons[0]]
 
     print(f"\033[94mrunning for condition: {condition} treatment: {treatment}\033[0m")
     with timer() as utility_timer:
         utility_all = calculate_ate_safe(df, TREATMENT_COL, tgtO, delta)
     utility_time = utility_timer()
+
+    execution_results = [] # Store (epsilon, num_checked) for each run
 
     for epsilon in epsilons:
         if chosen_mode == 0:
@@ -229,7 +332,6 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             epsilon=epsilon,
             mode=chosen_mode,
             utility_all=utility_all
-            # attribute_weights REMOVED from here to avoid TypeError in other algos
         )
 
         _naive_kw = dict(common, attr_vals=attr_vals)
@@ -246,16 +348,18 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         _greedy_kw = dict(common)
         _causalForest_kw = dict(common)
 
+        # UPDATED: Use Tuples of (Function, Kwargs) instead of Lambdas
+        # This is required for mp.Process to pickle the target correctly
         algo_dispatch = {
-            "BruteForce": lambda: naive_calc_utility_for_subgroups(**_naive_kw),
-            "Apriori": lambda: apriori_calc_utility_for_subgroups(**_apriori_kw),
-            "FPGrowth": lambda: apriori_calc_utility_for_subgroups(**_fpgrowth_kw),
-            "MultiProcessing": lambda: multiProcessing_calc_utility_for_subgroups(**_opt_fp_kw),
-            "RW_Direct": lambda: rw_unlearning_calc_utility_for_subgroups(**_rw_unlearning_kw_direct),
-            "Greedy": lambda: greedy_calc_utility_for_subgroups(**_greedy_kw),
-            "Random": lambda: random_calc_utility_for_subgroups(**_random_kw),
-            "CausalForest": lambda: causalForest_calc_utility_for_subgroups(**_causalForest_kw),
-            "WTE": lambda: run_wte_homogeneity_baseline(**common),
+            "BruteForce": (naive_calc_utility_for_subgroups, _naive_kw),
+            "Apriori": (apriori_calc_utility_for_subgroups, _apriori_kw),
+            "FPGrowth": (apriori_calc_utility_for_subgroups, _fpgrowth_kw),
+            "MultiProcessing": (multiProcessing_calc_utility_for_subgroups, _opt_fp_kw),
+            "RW_Direct": (rw_unlearning_calc_utility_for_subgroups, _rw_unlearning_kw_direct),
+            "Greedy": (greedy_calc_utility_for_subgroups, _greedy_kw),
+            "Random": (random_calc_utility_for_subgroups, _random_kw),
+            "CausalForest": (causalForest_calc_utility_for_subgroups, _causalForest_kw),
+            "WTE": (run_wte_homogeneity_baseline, common),
         }
 
         dispatch_key = algorithm_name
@@ -265,37 +369,40 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
             dispatch_key = "RW_Direct"
 
         try:
+            target_func, target_kw = algo_dispatch[dispatch_key]
+            
             result = run_single_execution(
-                algo_dispatch[dispatch_key], algorithm_name, chosen_mode,
+                target_func, target_kw, algorithm_name, chosen_mode,
                 condition, treatment, delta, epsilon, utility_time, attr_vals_time, index=i
             )
-
-            if algorithm_name == "RW" and chosen_mode == 0:
-                rw_count = 0
-                if isinstance(result, tuple):
-                    if len(result) >= 2 and isinstance(result[1], int):
-                        rw_count = result[1]
-
-                should_run_random = (
-                        rw_count > 0 and RUN_RANDOM_BASELINE and "Random" in ALGORITHM_NAMES and "RW" in ALGORITHM_NAMES)
-                if should_run_random:
-                    print(f"\n\033[95m>>> Triggering Random Baseline with n={rw_count} (matched to RW) <<<\033[0m")
-                    run_experiments(chosen_mode, "Random", delta, df, tgtO, attr_vals, condition, treatment, i,
-                                    attr_vals_time, force_n_subgroups=rw_count)
-                elif rw_count == 0:
-                    print("RW checked 0 subgroups, skipping random baseline.")
+            
+            # Capture num_checked for return
+            num_checked = 0
+            if result == "TIMEOUT":
+                 num_checked = 0
+            elif chosen_mode == 0 and isinstance(result, tuple) and len(result) >= 2:
+                # run_single_execution returns (raw_res, num_checked)
+                num_checked = result[1]
+            
+            execution_results.append((epsilon, num_checked))
 
         except KeyError:
             raise ValueError(f"Unknown algorithm name: {algorithm_name}")
+            
+    return execution_results
 
 
 def clean_results_files(mode):
     skip_delete = '-d' in sys.argv
     results_dir_graphs = Path("../graphs")
     results_dir_graphs.mkdir(exist_ok=True)
+    
+    # Changed to .xlsx for Homogeneity Results (Mode 0)
     homog_xlsx = results_dir_graphs / f"{CHOSEN_DS}_homogeneity_results.xlsx"
-    time_xlsx = results_dir_graphs / f"{CHOSEN_DS}_algorithms_time.xlsx"
-    files_to_delete = [homog_xlsx] if mode == 0 else [time_xlsx]
+    # Kept as .csv for Mode 1 Results
+    time_csv = results_dir_graphs / f"{CHOSEN_DS}_algorithms_time.csv"
+    
+    files_to_delete = [homog_xlsx] if mode == 0 else [time_csv]
     if not skip_delete:
         for f in files_to_delete:
             if f.exists():
@@ -396,11 +503,44 @@ def process_dataset_dynamic(i, rule, full_df, chosen_mode, chosen_algorithm_name
         attr_time = attr_vals_time if chosen_algorithm_name == "BruteForce" else 0
 
         if chosen_algorithm_name == "RW":
+            # --- MODIFIED FLOW: RUN ALL RW FIRST, THEN ALL RANDOM ---
+            rw_runs_data = [] # To store list of [(eps, count), ...] per run
+
+            # Step 1: Run RW 3 times (or NUM_RW_RUNS)
             for run_num in range(NUM_RW_RUNS):
                 print(f"--- Run number: {run_num} ---")
-                run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals,
-                                condition_dict, treatment_dict, i, attr_time)
+                
+                # run_experiments now returns list of (eps, count)
+                run_results = run_experiments(
+                    chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals,
+                    condition_dict, treatment_dict, i, attr_time
+                )
+                rw_runs_data.append(run_results)
+
+            # Step 2: Run Random Baseline if needed
+            if RUN_RANDOM_BASELINE and "Random" in ALGORITHM_NAMES:
+                print(f"\n\033[95m>>> Starting Random Baseline Sequence (Matching {NUM_RW_RUNS} RW runs) <<<\033[0m")
+                
+                # Iterate exactly in the order RW ran
+                for run_idx, run_results in enumerate(rw_runs_data):
+                    print(f"--- Matching Random Run #{run_idx} ---")
+                    
+                    # For each epsilon that was checked in this run
+                    for (eps, count) in run_results:
+                        if count == 0:
+                            print(f"Skipping Random for epsilon {eps} (RW checked 0 subgroups).")
+                            continue
+                            
+                        print(f"Triggering Random for epsilon {eps} with n={count}")
+                        # We force specific epsilon to keep strict alignment
+                        run_experiments(
+                            chosen_mode, "Random", delta, sub_df_encoded, tgtO, attr_vals, 
+                            condition_dict, treatment_dict, i, attr_time, 
+                            force_n_subgroups=count, override_epsilons=[eps]
+                        )
+
         else:
+            # Standard single run for other algorithms
             run_experiments(chosen_mode, chosen_algorithm_name, delta, sub_df_encoded, tgtO, attr_vals, condition_dict,
                             treatment_dict, i, attr_time)
 

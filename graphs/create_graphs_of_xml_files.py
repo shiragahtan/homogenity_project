@@ -20,8 +20,6 @@ ds_config = config['DATASETS'][CHOSEN_DS]
 
 # Dynamically assign values from config
 DATASET_PATH = ds_config['FULL_DATASET_PATH']
-# Note: The config usually contains just the filename, but your original script
-# looked in "../algorithms/". We construct the path to match your folder structure.
 TREATMENT_FILE = f"../algorithms/{ds_config['RULES_FILE']}"
 DELTAS = ds_config['DELTAS']
 
@@ -34,22 +32,51 @@ print(f"   Deltas: {DELTAS}")
 def plot_subgroups_graph(file_path, size_all, delta, rule, rule_data):
     """
     Plots a scatter graph and returns a dictionary containing summary stats.
+    Reads data from CSV and metadata from companion JSON.
 
     Args:
-        file_path: Path to the Excel results file.
+        file_path: Path to the CSV results file.
         size_all: The total count of rows in the population (filtered by condition).
         delta: The delta parameter used.
         rule: The index of the rule.
         rule_data: The dictionary object of the rule from JSON (for fallback titles).
     """
-    excel_data = pd.ExcelFile(file_path)
-    subgroups_data = pd.read_excel(excel_data, sheet_name='Subgroups')
-    chosen_treatment = pd.read_excel(excel_data, sheet_name='ChosenTreatment')
+    # 1. Read the CSV Data
+    try:
+        subgroups_data = pd.read_csv(file_path)
+    except pd.errors.EmptyDataError:
+        print(f"Warning: CSV file is empty: {file_path}")
+        return None
+
+    # 2. Try to load metadata (Condition/Treatment) from companion JSON file
+    # Pattern: filename.csv -> filename_metadata.json
+    meta_path = str(file_path).replace('.csv', '_metadata.json')
+    
+    condition_str = "Unknown"
+    treatment_str = "Unknown"
+
+    if Path(meta_path).exists():
+        try:
+            with open(meta_path, 'r') as f:
+                meta = json.load(f)
+                condition_str = str(meta.get('Condition', rule_data.get('condition')))
+                treatment_str = str(meta.get('Treatment', rule_data.get('treatment')))
+        except Exception as e:
+            print(f"Warning: Could not read metadata {meta_path}: {e}")
+            # Fallback
+            condition_str = str(rule_data.get('condition', 'Unknown'))
+            treatment_str = str(rule_data.get('treatment', 'Unknown'))
+    else:
+        # Fallback to JSON rule data if metadata file doesn't exist
+        condition_str = str(rule_data.get('condition', 'Unknown'))
+        treatment_str = str(rule_data.get('treatment', 'Unknown'))
 
     # Clean and coerce numeric columns
     for col in ['Utility', 'UtilityDiff', 'Size']:
         if col in subgroups_data.columns:
-            subgroups_data[col] = subgroups_data[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
+            # Check if column is object type (string) before using .str accessor
+            if subgroups_data[col].dtype == 'object':
+                 subgroups_data[col] = subgroups_data[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
             subgroups_data[col] = pd.to_numeric(subgroups_data[col], errors='coerce')
 
     # Compute utility_all from the first valid row
@@ -57,16 +84,9 @@ def plot_subgroups_graph(file_path, size_all, delta, rule, rule_data):
     if first_valid.empty:
         print(f"Warning: No valid 'Utility'/'UtilityDiff' rows for rule {rule}, delta {delta}. Skipping plot.")
         return None
+    
+    # Calculate utility_all based on the difference
     utility_all = first_valid.iloc[0]['Utility'] - first_valid.iloc[0]['UtilityDiff']
-
-    # Get Condition/Treatment strings for the Title
-    if not chosen_treatment.empty:
-        condition_str = str(chosen_treatment.loc[0, 'Condition'])
-        treatment_str = str(chosen_treatment.loc[0, 'Treatment'])
-    else:
-        # Fallback to JSON data if Excel sheet is empty
-        condition_str = str(rule_data.get('condition', 'Unknown'))
-        treatment_str = str(rule_data.get('treatment', 'Unknown'))
 
     # Keep only rows where both Utility and Size are numeric
     valid_subgroups = subgroups_data.dropna(subset=['Utility', 'Size']).copy()
@@ -131,9 +151,6 @@ if __name__ == "__main__":
     print(f"Loading treatments from {TREATMENT_FILE}...")
     try:
         with open(TREATMENT_FILE, "r") as f:
-            # Read line by line as it seems to be JSON lines based on your description
-            # If it's a standard JSON list, use json.load(f).
-            # Based on your prompt "{"condition"...} \n {"condition"...}", it implies JSON Lines.
             good_treatments = []
             for line in f:
                 if line.strip():
@@ -143,7 +160,6 @@ if __name__ == "__main__":
         exit(1)
     except json.JSONDecodeError:
         print("Error: JSON format issue. Checking if file is a standard JSON list...")
-        # Fallback if the file is actually a list [ {}, {} ]
         with open(TREATMENT_FILE, "r") as f:
             good_treatments = json.load(f)
 
@@ -154,9 +170,6 @@ if __name__ == "__main__":
 
     # 3. Iterate over Rules
     for i, rule_data in enumerate(good_treatments):
-        # Your indices likely start at 0, but your file naming convention seemed to check for `so_countries_treatment_{i+1}` previously.
-        # If your Excel results are 0-indexed (rule0), use `i`. If 1-indexed (rule1), use `i+1`.
-        # Assuming 0-indexed based on "rule{rule}_delta..." pattern in your code.
         rule_idx = i
 
         # --- A. Calculate Size (Filter Main DF) ---
@@ -181,8 +194,10 @@ if __name__ == "__main__":
 
         # --- B. Process for each Delta ---
         for delta in DELTAS:
-            # Adjust filename to match your exact output naming convention
-            results_path = f'../algorithms_results/{CHOSEN_DS}_MultiProcessing_subgroups_results_delta_{delta}_{rule_idx}.xlsx'
+            # Changed to look for .csv files
+            # Note: Ensure "MultiProcessing" is the correct algorithm name used in your output filenames
+            # If you are using RW, change this string to "RW"
+            results_path = f'../algorithms_results/{CHOSEN_DS}_MultiProcessing_subgroups_results_delta_{delta}_{rule_idx}.csv'
 
             if Path(results_path).exists():
                 result_data = plot_subgroups_graph(results_path, size_all, delta, rule_idx, rule_data)
@@ -195,7 +210,6 @@ if __name__ == "__main__":
     if summary_results:
         summary_df = pd.DataFrame(summary_results)
         cols = ['Rule', 'Delta', 'MaxAbsUtilityDiff', 'Condition', 'Treatment']
-        # Reorder if cols exist
         final_cols = [c for c in cols if c in summary_df.columns]
         summary_df = summary_df[final_cols]
 

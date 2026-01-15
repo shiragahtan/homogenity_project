@@ -9,18 +9,22 @@ import re
 from pathlib import Path
 from mlxtend.frequent_patterns import fpgrowth
 
-# --- USER IMPORTS ---
-# Ensure these are in the same folder or python path
+# --- 1. USER-DEFINED IMPORTS (Fixed Path) ---
+# Add project root to sys.path for module resolution
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+
+# Import Algorithms
 import rw_unlearning as rw_algo
 import apriori_algorithm as bf_algo
-from yarden_files.ATE_update import calculate_ate_safe
+from ATE_update import calculate_ate_safe
 
 # --- LOGGING SETUP ---
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger()
 
 # ==========================================
-# 1. CONFIGURATION & SETUP
+# 2. CONFIGURATION
 # ==========================================
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.json"
 
@@ -37,205 +41,197 @@ ds_config = config['DATASETS'][CHOSEN_DS]
 # Paths
 raw_path = ds_config['FULL_DATASET_PATH']
 FULL_DATASET_PATH = (CONFIG_PATH.parent / raw_path).resolve()
+RULES_FILE = ds_config['RULES_FILE']
 
-# Columns
+# Columns & Params
 TREATMENT_COL = config['TREATMENT_COL']
 OUTCOME_COL = ds_config.get('OUTCOME_COL', ds_config['TARGET_COLUMN'])
-
-# Parameters
 BASE_DELTA = ds_config['DELTAS'][0]
 EPSILON = ds_config['EPSILONS'][0]
 ATTRIBUTE_WEIGHTS = ds_config.get('ATTRIBUTE_WEIGHTS', {})
-MAX_ATTRS_FROM_CONFIG = ds_config.get("MAX_SCALABILITY_ATTRIBUTES", 20)
+MAX_ATTRS = ds_config.get("MAX_SCALABILITY_ATTRIBUTES", 20)
+USE_ENCODING = ds_config.get("USE_ENCODING", True)
 
 # --- EXPERIMENT CONSTANTS ---
-ROW_STEP_PERCENT = 10  # Jumps of 10% (10, 20, 30...)
+ROW_STEP_PERCENT = 10  # 10, 20... 100
 ATTR_START = 3  # Start with 3 attributes
-ATTR_STEP = 2  # Add 2 attributes per step
-REPEATS = 3  # Runs per configuration
+ATTR_STEP = 2  # Step by 2
+REPEATS = 3  # Average over 3 runs
 
 
 # ==========================================
-# 2. DATA PRE-PROCESSING (From your main.py)
+# 3. PRE-PROCESSING
 # ==========================================
-def load_and_clean_data():
+def encode_dataframe_local(df):
+    """Maps unique values to integers (1..N)."""
+    df_encoded = df.copy()
+
+    # Map Categoricals
+    categorical_columns = df_encoded.select_dtypes(include=['object']).columns.tolist()
+    for column in categorical_columns:
+        if column == OUTCOME_COL: continue
+        unique_values = df_encoded[column].unique()
+        column_mapping = {val: idx + 1 for idx, val in enumerate(unique_values)}
+        df_encoded[column] = df_encoded[column].map(column_mapping)
+
+    # Handle Booleans
+    bool_columns = df_encoded.select_dtypes(include=['bool']).columns
+    for col in bool_columns:
+        df_encoded[col] = df_encoded[col].astype(int)
+
+    return df_encoded
+
+
+def load_and_prep_data():
     logger.info(f"Loading dataset: {FULL_DATASET_PATH}")
-    if not FULL_DATASET_PATH.exists():
-        logger.error("Dataset file not found!")
-        sys.exit(1)
-
     df = pd.read_csv(FULL_DATASET_PATH)
 
-    # 1. Remove Unnamed columns
+    # Standard Cleaning
     df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
-
-    # 2. Remove rows with "UNKNOWN"
     df = df[~df.isin(["UNKNOWN"]).any(axis=1)].reset_index(drop=True)
-
-    # 3. Rename columns to avoid regex issues (standardize)
     df = df.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
 
-    # 4. Ensure Outcome is numeric
+    # Filter by First Rule (to match your study context)
+    try:
+        with open(RULES_FILE, 'r') as f:
+            first_rule = json.loads(f.readline())
+            cond_dict = first_rule.get("condition", {})
+            if cond_dict:
+                attr, val = list(cond_dict.items())[0]
+                if attr in df.columns:
+                    logger.info(f"🔹 Filtering by Rule: {attr} == {val}")
+                    df = df[df[attr] == val].copy()
+                    df = df.drop(columns=[attr])
+    except Exception as e:
+        logger.warning(f"⚠️ Rule filter skipped: {e}")
+
+    # Ensure Treatment/Outcome
+    if TREATMENT_COL not in df.columns:
+        df[TREATMENT_COL] = np.random.randint(0, 2, df.shape[0])
     df[OUTCOME_COL] = pd.to_numeric(df[OUTCOME_COL], errors='coerce')
     df = df.dropna(subset=[OUTCOME_COL])
 
-    # 5. Ensure Treatment is binary (if not already)
-    # (Assuming the dataset usually comes with a pre-set treatment col,
-    # otherwise we might need to create it like in your main.py.
-    # For scalability, we assume T exists.)
-    if TREATMENT_COL not in df.columns:
-        logger.warning(f"⚠️ Treatment col '{TREATMENT_COL}' missing. Creating dummy random treatment for testing.")
-        df[TREATMENT_COL] = np.random.randint(0, 2, df.shape[0])
-
-    logger.info(f"✅ Data Loaded & Cleaned: {len(df)} rows, {len(df.columns)} cols")
     return df
 
 
 # ==========================================
-# 3. EXPERIMENT LOOP
+# 4. EXPERIMENT ENGINE
 # ==========================================
-def get_base_ate(df):
-    try:
-        return calculate_ate_safe(df, TREATMENT_COL, OUTCOME_COL, 0)
-    except Exception:
-        return 0.0
-
-
-def run_experiment_loop(df, current_delta, weights, exp_type, x_val):
+def run_experiment_batch(df, current_delta, weights, exp_type, x_value_for_plot):
     results = []
 
-    # Calculate ATE for *this specific sample*
-    utility_all = get_base_ate(df)
+    # 1. Encode Locally if needed
+    if USE_ENCODING and CHOSEN_DS != "acs":
+        df_ready = encode_dataframe_local(df)
+    else:
+        df_ready = df.copy()
 
-    logger.info(f"   [Context] Rows: {len(df)} | Delta: {current_delta} | Global ATE: {utility_all:.4f}")
+    # 2. Calculate ATE
+    try:
+        utility_all = calculate_ate_safe(df_ready, TREATMENT_COL, OUTCOME_COL, 0)
+    except:
+        utility_all = 0.0
+
+    logger.info(f"   ► Rows: {len(df_ready)} | Delta: {current_delta} | ATE: {utility_all:.2f}")
 
     for i in range(REPEATS):
-        logger.info(f"   ► Iteration {i + 1}/{REPEATS}...")
-
-        # --- 1. RUN FPGrowth (Brute Force / Ground Truth) ---
-        bf_start = time.time()
+        # --- A. FPGrowth ---
+        t0 = time.time()
         try:
-            # Note: Using mode=0 (Homogeneity Check)
             bf_verdict, bf_count, _, _, _ = bf_algo.calc_utility_for_subgroups(
-                0, fpgrowth, df, TREATMENT_COL, OUTCOME_COL, current_delta, EPSILON, utility_all
+                0, fpgrowth, df_ready, TREATMENT_COL, OUTCOME_COL, current_delta, EPSILON, utility_all
             )
-        except Exception as e:
-            logger.error(f"      ❌ BF Failed: {e}")
+        except Exception:
             bf_verdict, bf_count = True, 0
+        bf_time = time.time() - t0
 
-        bf_time = time.time() - bf_start
-
-        # --- 2. RUN Random Walk (Your Algo) ---
-        rw_start = time.time()
+        # --- B. Random Walk ---
+        t0 = time.time()
         try:
             rw_verdict, rw_count = rw_algo.calc_utility_for_subgroups(
-                0, None, df, TREATMENT_COL, current_delta, EPSILON,
-                outcome_col=OUTCOME_COL,
-                utility_all=utility_all,
-                k_walks=1500,
-                attribute_weights=weights
+                0, None, df_ready, TREATMENT_COL, current_delta, EPSILON,
+                outcome_col=OUTCOME_COL, utility_all=utility_all,
+                k_walks=1500, attribute_weights=weights
             )
-        except Exception as e:
-            logger.error(f"      ❌ RW Failed: {e}")
+        except Exception:
             rw_verdict, rw_count = True, 0
+        rw_time = time.time() - t0
 
-        rw_time = time.time() - rw_start
+        # --- C. Store Results ---
+        # Accuracy: 1 if verdicts match, 0 if not
+        match = 1.0 if (bf_verdict == rw_verdict) else 0.0
 
-        # Log Summary for this run
-        logger.info(f"      [BF] {bf_time:.2f}s, {bf_count} checked | [RW] {rw_time:.2f}s, {rw_count} checked")
-
-        # --- Metrics ---
-        match = (bf_verdict == rw_verdict)
         results.append({
             "Experiment": exp_type,
-            "X_Value": x_val,
+            "X_Value": x_value_for_plot,  # <--- This will now be 0.1, 0.2, etc.
             "Iteration": i + 1,
-            "BF_Time": bf_time,
-            "RW_Time": rw_time,
-            "BF_Checked": bf_count,
-            "RW_Checked": rw_count,
-            "Accuracy": 1.0 if match else 0.0
+            "BF_Time": bf_time, "RW_Time": rw_time,
+            "BF_Checked": bf_count, "RW_Checked": rw_count,
+            "Accuracy": match
         })
 
     return results
 
 
 # ==========================================
-# 4. SCALABILITY TESTS
+# 5. SCALABILITY TESTS
 # ==========================================
 def run_row_scalability(full_df, all_results):
-    logger.info("\n" + "=" * 60)
-    logger.info("🚀 STARTING ROW SCALABILITY (Data Size)")
-    logger.info("=" * 60)
+    logger.info("\n🚀 STARTING ROW SCALABILITY")
 
+    # 10, 20, ... 100
     fractions = [x / 100.0 for x in range(ROW_STEP_PERCENT, 101, ROW_STEP_PERCENT)]
 
     for frac in fractions:
-        # 1. Sample Rows
+        # Sample
         if frac == 1.0:
             df_sample = full_df.copy()
         else:
             df_sample = full_df.sample(frac=frac, random_state=42)
 
-        # 2. Scale Delta (Proportional to data size)
-        # If full data (100%) uses Delta=500, then 10% data uses Delta=50
+        # Scale Delta
         scaled_delta = int(BASE_DELTA * frac)
-        scaled_delta = max(5, scaled_delta)  # Safety floor
+        scaled_delta = max(5, scaled_delta)
 
-        logger.info(f"\n🔹 Testing {frac * 100:.0f}% Data ({len(df_sample)} rows)")
-
-        res = run_experiment_loop(
-            df_sample, scaled_delta, ATTRIBUTE_WEIGHTS, "Row_Scalability", len(df_sample)
+        # Pass 'frac' as the X_Value so the graph shows 0.1, 0.2...
+        logger.info(f"\n🔹 Testing {frac * 100:.0f}% Data")
+        res = run_experiment_batch(
+            df_sample, scaled_delta, ATTRIBUTE_WEIGHTS, "Row_Scalability", frac
         )
         all_results.extend(res)
 
 
 def run_col_scalability(full_df, all_results):
-    logger.info("\n" + "=" * 60)
-    logger.info("🚀 STARTING COLUMN SCALABILITY (Attributes)")
-    logger.info("=" * 60)
+    logger.info("\n🚀 STARTING COLUMN SCALABILITY")
 
     feature_pool = [c for c in full_df.columns if c not in [TREATMENT_COL, OUTCOME_COL]]
-
-    # Limit attributes based on Config Max
-    limit = min(len(feature_pool), MAX_ATTRS_FROM_CONFIG)
+    limit = min(len(feature_pool), MAX_ATTRS)
     attr_counts = list(range(ATTR_START, limit + 1, ATTR_STEP))
 
-    # Use full dataset (or fixed sample)
     df_fixed = full_df.copy()
 
     for count in attr_counts:
-        logger.info(f"\n🔹 Testing {count} Attributes")
-
-        # 1. Sample Attributes
         random.seed(42)
-        selected_feats = random.sample(feature_pool, count)
-        cols_to_use = selected_feats + [TREATMENT_COL, OUTCOME_COL]
+        selected = random.sample(feature_pool, count)
+        cols = selected + [TREATMENT_COL, OUTCOME_COL]
 
-        df_subset = df_fixed[cols_to_use]
+        df_subset = df_fixed[cols]
+        relevant_weights = {k: v for k, v in ATTRIBUTE_WEIGHTS.items() if k in selected}
 
-        # 2. Filter Weights
-        relevant_weights = {k: v for k, v in ATTRIBUTE_WEIGHTS.items() if k in selected_feats}
-
-        # Use Base Delta (fixed rows -> fixed delta)
-        res = run_experiment_loop(
+        logger.info(f"\n🔹 Testing {count} Attributes")
+        # Pass 'count' as X_Value (3, 5, 7...)
+        res = run_experiment_batch(
             df_subset, BASE_DELTA, relevant_weights, "Col_Scalability", count
         )
         all_results.extend(res)
 
 
-# ==========================================
-# 5. MAIN EXECUTION
-# ==========================================
 if __name__ == "__main__":
-    df = load_and_clean_data()
+    df = load_and_prep_data()
+    results = []
+    run_row_scalability(df, results)
+    run_col_scalability(df, results)
 
-    all_data = []
-    run_row_scalability(df, all_data)
-    run_col_scalability(df, all_data)
-
-    # Save Results
-    out_df = pd.DataFrame(all_data)
-    filename = f"scalability_results_{CHOSEN_DS}.xlsx"
-    out_df.to_excel(filename, index=False)
-    logger.info(f"\n🎉 Experiments Completed! Results saved to {filename}")
+    out = pd.DataFrame(results)
+    out.to_excel(f"scalability_results_{CHOSEN_DS}.xlsx", index=False)
+    logger.info(f"🎉 Done. Saved to scalability_results_{CHOSEN_DS}.xlsx")

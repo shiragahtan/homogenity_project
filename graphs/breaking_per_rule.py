@@ -23,7 +23,8 @@ EPSILON_RANGE = ds_config.get('EPSILONS', [])
 DELTA_RANGE = ds_config.get('DELTAS', [])
 
 delta_group = "|".join(map(str, DELTA_RANGE))
-FILE_PATTERN = re.compile(rf"{re.escape(CHOSEN_DS)}.*_delta_({delta_group})_(\d+)\.xlsx$", re.IGNORECASE)
+# CHANGED: Regex now looks for .csv extension
+FILE_PATTERN = re.compile(rf"{re.escape(CHOSEN_DS)}.*_delta_({delta_group})_(\d+)\.csv$", re.IGNORECASE)
 
 # --- Helper Functions ---
 
@@ -52,7 +53,8 @@ def parse_attribute_values(attrval_str):
 
 def group_files_by_rule(target_dir):
     files_by_rule = defaultdict(list)
-    search_pattern = os.path.join(target_dir, '*.xlsx')
+    # CHANGED: Look for *.csv files
+    search_pattern = os.path.join(target_dir, '*.csv')
     file_paths = glob.glob(search_pattern)
 
     for file_path in file_paths:
@@ -81,7 +83,9 @@ def process_rule_group(index, file_list, rules_meta):
         delta = file_info['delta']
         
         try:
-            df = pd.read_excel(file_path, sheet_name='Subgroups', engine='openpyxl')
+            # CHANGED: Read CSV instead of Excel
+            # Note: CSVs don't have sheets, so we read the file directly.
+            df = pd.read_csv(file_path)
         except Exception:
             continue
 
@@ -123,8 +127,9 @@ def process_rule_group(index, file_list, rules_meta):
                         'Epsilon': epsilon,
                         'Size': row.get('Size', 'N/A'),
                         'UtilityDiff': row['UtilityDiff'],
-                        'Conditions': row['AttributeValues'], # The full string of conditions
-                        'Attributes_List': ', '.join(keys)
+                        'Conditions': row['AttributeValues'], 
+                        'Attributes_List': ', '.join(keys),
+                        'NumAttr': len(keys) 
                     }
                     breaking_list.append(subgroup_item)
                     all_subgroups_for_this_rule.append(subgroup_item)
@@ -133,7 +138,7 @@ def process_rule_group(index, file_list, rules_meta):
                 if key not in rule_breaking_groups_data: rule_breaking_groups_data[key] = []
                 rule_breaking_groups_data[key].extend(breaking_list)
 
-    # Save Individual Rule File
+    # Save Individual Rule File (Still saving as Excel for multi-sheet support)
     if rule_summary_rows:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         output_path = os.path.join(OUTPUT_DIR, f'rule_breaking_summary_index_{index}.xlsx')
@@ -168,8 +173,13 @@ def main():
 
     if all_rules_summary_data:
         print("\n--- Generating Master Summary File ---")
-        master_output_path = os.path.join(OUTPUT_DIR, 'master_summary_all_rules.xlsx')
-        
+        eps_str = "_".join(str(e) for e in EPSILON_RANGE)
+
+        master_output_path = os.path.join(
+            OUTPUT_DIR,
+            f"{CHOSEN_DS}_master_summary_all_rules_ep_{eps_str}.xlsx"
+        )
+
         # DataFrame 1: The Summary
         master_df = pd.DataFrame(all_rules_summary_data)
         master_df = master_df.sort_values(by=['sort_index', 'Delta', 'Epsilon'])

@@ -5,8 +5,18 @@ import pandas as pd
 from collections import Counter, defaultdict
 
 # --- CONFIGURATION ---
-with open('../configs/config.json', 'r') as f:
-    config = json.load(f)
+# Ensure the config path is correct relative to where you run the script
+config_path = '../configs/config.json'
+if not os.path.exists(config_path):
+    # Fallback if running from a different directory depth
+    config_path = 'configs/config.json'
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Error: Config file not found at {config_path}")
+    exit()
 
 # Change this variable to switch datasets: "german_credit" OR "stackoverflow"
 CHOSEN_DS = config["CHOSEN_DATASET"]
@@ -29,9 +39,10 @@ print(f"   Valid Deltas: {VALID_DELTAS}")
 print(f"   Summary Epsilon: {SUMMARY_EPSILON}")
 
 DIRECTORY = '../algorithms_results/'
-# Pattern matches filenames like: "Algorithm_subgroups_results_delta_100_0.xlsx"
-# It expects the format: ..._delta_{delta}_{index}.xlsx
-file_pattern = re.compile(rf"{re.escape(CHOSEN_DS)}.*_delta_(\d+)_(\d+)\.xlsx$", re.IGNORECASE)
+
+# FIX 1: Updated pattern to match .csv files instead of .xlsx
+# Pattern matches filenames like: "so_..._delta_100_0.csv"
+file_pattern = re.compile(rf"{re.escape(CHOSEN_DS)}.*_delta_(\d+)_(\d+)\.csv$", re.IGNORECASE)
 
 results = defaultdict(lambda: defaultdict(Counter))
 breaking_groups = defaultdict(lambda: defaultdict(list))
@@ -43,7 +54,7 @@ if not os.path.exists(DIRECTORY):
     exit()
 
 for filename in os.listdir(DIRECTORY):
-    match = file_pattern.search(filename)  # Changed to search to match end of string robustly
+    match = file_pattern.search(filename)
     if not match:
         continue
 
@@ -55,9 +66,9 @@ for filename in os.listdir(DIRECTORY):
 
     filepath = os.path.join(DIRECTORY, filename)
     try:
-        xls = pd.ExcelFile(filepath)
-        sheet_name = 'Subgroups' if 'Subgroups' in xls.sheet_names else xls.sheet_names[0]
-        df = pd.read_excel(filepath, sheet_name=sheet_name)
+        # FIX 2: Read CSV instead of Excel
+        # Using engine='python' is safer if you have mixed separators or complex parsing issues
+        df = pd.read_csv(filepath)
     except Exception as e:
         print(f"Skipping {filename}: {e}")
         continue
@@ -91,7 +102,7 @@ for filename in os.listdir(DIRECTORY):
 
                 for key in keys:
                     results[delta][epsilon][key] += 1
-                    # Use dynamic summary epsilon instead of hardcoded 5000
+                    # Use dynamic summary epsilon instead of hardcoded value
                     if epsilon == SUMMARY_EPSILON:
                         summary_counter[key] += 1
             except Exception:
@@ -99,23 +110,44 @@ for filename in os.listdir(DIRECTORY):
 
 # --- OUTPUT SECTION ---
 
-# 1. Write Counts and Summary to Excel
+# 1. Write Counts and Summary to Excel (Output remains Excel to support multiple sheets)
 output_excel = os.path.join(os.path.dirname(__file__), f'attribute_counts_summary_{CHOSEN_DS}.xlsx')
-with pd.ExcelWriter(output_excel) as writer:
-    for delta in sorted(results):
-        all_keys = sorted({k for eps in results[delta] for k in results[delta][eps].keys()})
-        # Create matrix: Rows=Epsilons, Cols=Attributes
-        data = [[results[delta][eps].get(k, 0) for k in all_keys] for eps in sorted(results[delta])]
-        df_out = pd.DataFrame(data, columns=all_keys, index=sorted(results[delta]))
-        df_out.index.name = 'Epsilon'
-        df_out.to_excel(writer, sheet_name=f'delta_{delta}')
 
-    if summary_counter:
-        summary_df = pd.DataFrame(list(summary_counter.items()), columns=['Attribute', 'Count']).sort_values('Count',
-                                                                                                             ascending=False)
-        summary_df.to_excel(writer, sheet_name=f'Summary_Eps_{SUMMARY_EPSILON}', index=False)
+# Check if we actually have data before opening the writer
+if not results and not summary_counter:
+    print(f"⚠️ No matching data found for {CHOSEN_DS} (looked for CSVs).")
+    print("   Skipping Excel creation to prevent errors.")
+else:
+    try:
+        with pd.ExcelWriter(output_excel) as writer:
+            data_written = False
+            
+            for delta in sorted(results):
+                all_keys = sorted({k for eps in results[delta] for k in results[delta][eps].keys()})
+                if not all_keys:
+                    continue
+                
+                # Create matrix: Rows=Epsilons, Cols=Attributes
+                data = [[results[delta][eps].get(k, 0) for k in all_keys] for eps in sorted(results[delta])]
+                df_out = pd.DataFrame(data, columns=all_keys, index=sorted(results[delta]))
+                df_out.index.name = 'Epsilon'
+                df_out.to_excel(writer, sheet_name=f'delta_{delta}')
+                data_written = True
 
-print(f"✅ Summary saved to {output_excel}")
+            if summary_counter:
+                summary_df = pd.DataFrame(list(summary_counter.items()), columns=['Attribute', 'Count']).sort_values('Count',
+                                                                                                                     ascending=False)
+                summary_df.to_excel(writer, sheet_name=f'Summary_Eps_{SUMMARY_EPSILON}', index=False)
+                data_written = True
+            
+            if data_written:
+                print(f"✅ Summary saved to {output_excel}")
+            else:
+                print("⚠️ Logic matched data but resulting DataFrames were empty (no output generated).")
+
+    except IndexError as e:
+        print(f"❌ Error saving Excel: {e}") 
+        print("   (This usually occurs if valid data was found but no sheets could be written.)")
 
 # 2. Write Breaking Groups to CSV
 for delta in breaking_groups:

@@ -3,13 +3,18 @@ import os
 import numpy as np
 import re
 import json
+import argparse
+import sys
 
 # --- Configuration ---
-with open('../configs/config.json', 'r') as f:
-    config = json.load(f)
-
-# Change this variable to switch datasets: "german_credit" OR "stackoverflow"
-CHOSEN_DS = config["CHOSEN_DATASET"]
+try:
+    with open('../configs/config.json', 'r') as f:
+        config = json.load(f)
+    CHOSEN_DS = config["CHOSEN_DATASET"]
+except FileNotFoundError:
+    print("Warning: '../configs/config.json' not found. Defaulting to 'german'.")
+    CHOSEN_DS = "german"
+    config = {"DATASETS": {"german": {"EPSILONS": []}}} # Fallback
 
 RESULTS_FILE = f"{CHOSEN_DS}_homogeneity_results.xlsx"
 OUTPUT_FILE = f"{CHOSEN_DS}_homogeneity_metrics_summary.xlsx"
@@ -24,13 +29,28 @@ def to_boolean(val):
 
 
 def calculate_summary_metrics():
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(description='Calculate homogeneity metrics.')
+    parser.add_argument('-c', '--config', action='store_true', 
+                        help='Config mode: Only process epsilons specified in config.json')
+    args = parser.parse_args()
+
     print("--- Calculating Summarized Metrics (All Algos in One Sheet) ---")
+    if args.config:
+        print("   [Mode: Config-restricted (filtering by config.json epsilons)]")
+    else:
+        print("   [Mode: Auto-detect (processing all epsilons in results file)]")
 
     if not os.path.exists(RESULTS_FILE):
         print(f"Error: {RESULTS_FILE} not found.")
         return
 
-    df = pd.read_excel(RESULTS_FILE)
+    # Try reading as Excel, fallback to CSV if necessary
+    try:
+        df = pd.read_excel(RESULTS_FILE)
+    except Exception:
+        df = pd.read_csv(RESULTS_FILE.replace('.xlsx', '.csv'))
+
     if 'algorithm' in df.columns:
         df['algorithm'] = df['algorithm'].astype(str).str.strip()
 
@@ -51,24 +71,45 @@ def calculate_summary_metrics():
     # Identify Test Algorithms (Everyone else)
     test_algorithms = [algo for algo in unique_algos if algo != GT_NAME]
 
-    # Get unique configs
+    # Get unique configs available in the data
     params = df[['delta', 'epsilon']].drop_duplicates().sort_values(['delta', 'epsilon'])
+
+    # --- FILTERING LOGIC FOR -c FLAG ---
+    if args.config:
+        try:
+            # Get target epsilons from config
+            target_epsilons = config['DATASETS'][CHOSEN_DS].get('EPSILONS', [])
+            # Handle case where it might be a single float instead of a list
+            if isinstance(target_epsilons, (int, float)):
+                target_epsilons = [target_epsilons]
+            
+            if not target_epsilons:
+                print("Warning: Config mode enabled but no EPSILONS found in config.json.")
+            
+            # Filter params
+            original_count = len(params)
+            params = params[params['epsilon'].isin(target_epsilons)]
+            print(f"   > Filtered epsilons: {len(params)} kept out of {original_count} found in file.")
+            
+        except KeyError:
+            print(f"Error: Could not find EPSILONS for dataset {CHOSEN_DS} in config.")
+            return
 
     final_rows = []
 
     # --- 2. Iterate Configs and Algorithms ---
     for _, row in params.iterrows():
-        delta = int(row['delta'])
-        epsilon = float(row['epsilon'])
+        delta = row['delta']
+        epsilon = row['epsilon']
 
         # Get Ground Truth for this config
         gt_subset = df[
-            (df['algorithm'] == GT_NAME) &
-            (df['delta'] == delta) &
+            (df['algorithm'] == GT_NAME) & 
+            (df['delta'] == delta) & 
             (df['epsilon'] == epsilon)
-            ]
+        ]
 
-        # --- ADDED: Explicitly add the Ground Truth row as "Brute Force" ---
+        # --- Explicitly add the Ground Truth row as "Brute Force" ---
         if not gt_subset.empty:
             final_rows.append({
                 "Algorithm": "Brute Force",  # Renaming as requested
@@ -91,10 +132,10 @@ def calculate_summary_metrics():
         # Process each test algorithm against this GT
         for algo_name in test_algorithms:
             algo_subset = df[
-                (df['algorithm'] == algo_name) &
-                (df['delta'] == delta) &
+                (df['algorithm'] == algo_name) & 
+                (df['delta'] == delta) & 
                 (df['epsilon'] == epsilon)
-                ]
+            ]
 
             if algo_subset.empty: continue
 
@@ -149,7 +190,6 @@ def calculate_summary_metrics():
     if final_rows:
         summary_df = pd.DataFrame(final_rows)
         # Sort: Delta -> Epsilon -> Put "Brute Force" first -> Then alphabetical
-        # We create a temp sorter column where Brute Force gets 0 and others get 1
         summary_df['sorter'] = summary_df['Algorithm'].apply(lambda x: 0 if x == 'Brute Force' else 1)
 
         summary_df = summary_df.sort_values(['Delta', 'Epsilon', 'sorter', 'Algorithm'])
@@ -164,7 +204,6 @@ def calculate_summary_metrics():
         print(summary_df)
     else:
         print("No results found.")
-
 
 if __name__ == "__main__":
     calculate_summary_metrics()

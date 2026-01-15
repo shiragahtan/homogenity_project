@@ -1,5 +1,5 @@
 {
-  "CHOSEN_DATASET": "so",
+  "CHOSEN_DATASET": "acs",
   "DATASETS": {
     "german": {
       "FULL_DATASET_PATH": "../german_credit/german_data_not_encoded.csv",
@@ -69,7 +69,7 @@
         100
       ],
       "EPSILONS": [
-        350000.0
+        520000.0
       ],
       "TARGET_COLUMN": "ConvertedSalary",
       "OUTCOME_COL": "ConvertedSalary",
@@ -125,7 +125,7 @@
         100
       ],
       "EPSILONS": [
-        17000
+        17500
       ],
       "TARGET_COLUMN": "Wages or salary income past 12 months",
       "OUTCOME_COL": "Wages or salary income past 12 months",

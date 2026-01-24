@@ -25,152 +25,28 @@ from benchmark_find_epsilon import generate_summary_statistics as gen_epsilon_su
 from benchmark_find_epsilon import create_visualizations as create_epsilon_viz
 
 import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import base64
+from typing import Optional, List
+import json
+import re
 
 
-def generate_runtime_graphs(output_dir):
-    """Generate runtime analysis graphs for both problems."""
-    base_path = Path(output_dir)
-    problem2_csv = base_path / 'problem2_largest_delta' / 'find_delta_benchmark_results.csv'
-    problem3_csv = base_path / 'problem3_smallest_epsilon' / 'find_epsilon_benchmark_results.csv'
-    
-    if not problem2_csv.exists() or not problem3_csv.exists():
-        print("⚠️  Warning: CSV files not found, skipping graph generation")
-        return
-    
-    print("\n📊 Generating runtime analysis graphs...")
-    
-    df_delta = pd.read_csv(problem2_csv)
-    df_epsilon = pd.read_csv(problem3_csv)
-    
-    # Prepare rule labels
-    df_delta['Rule_Label'] = df_delta.apply(
-        lambda x: f"Rule {x['Rule_ID']}: {x['Condition']} → {x['Treatment']}", axis=1
-    )
-    df_epsilon['Rule_Label'] = df_epsilon.apply(
-        lambda x: f"Rule {x['Rule_ID']}: {x['Condition']} → {x['Treatment']}", axis=1
-    )
-    
-    # Define color palette for rules
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', 
-              '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788']
-    
-    # ========== GRAPH 1: Runtime vs Epsilon ==========
-    fig1 = go.Figure()
-    
-    for rule_id, rule_group in df_delta.groupby('Rule_ID'):
-        color_idx = (rule_id - 1) % len(colors)
-        rule_label = rule_group['Rule_Label'].iloc[0]
-        
-        fig1.add_trace(go.Scatter(
-            x=rule_group['Epsilon'],
-            y=rule_group['Runtime_Seconds'],
-            mode='lines+markers',
-            name=rule_label,
-            line=dict(width=3, color=colors[color_idx]),
-            marker=dict(size=10),
-            customdata=rule_group['Largest_Delta_Heterogeneous'],
-            hovertemplate='<b>%{fullData.name}</b><br>' +
-                          'Epsilon: %{x:,.0f}<br>' +
-                          'Found Delta: %{customdata}<br>' +
-                          'Runtime: %{y:.2f}s<br>' +
-                          '<extra></extra>'
-        ))
-    
-    # Get the search range info
-    delta_min = df_delta['Largest_Delta_Heterogeneous'].min()
-    delta_max = df_delta['Largest_Delta_Heterogeneous'].max()
-    
-    fig1.update_layout(
-        title=f"Problem 2: Runtime vs Epsilon (Finding Largest Delta)<br><sub>Searching for delta in range [{delta_min:,.0f}, {delta_max:,.0f}] for each epsilon</sub>",
-        xaxis_title="Epsilon (Homogeneity Threshold) - Fixed for each test",
-        yaxis_title="Runtime (seconds)",
-        template="plotly_white",
-        font=dict(size=14),
-        height=600,
-        hovermode='closest',
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
-    )
-    
-    # ========== GRAPH 2: Runtime vs Delta ==========
-    fig2 = go.Figure()
-    
-    for rule_id, rule_group in df_epsilon.groupby('Rule_ID'):
-        color_idx = (rule_id - 1) % len(colors)
-        rule_label = rule_group['Rule_Label'].iloc[0]
-        
-        fig2.add_trace(go.Scatter(
-            x=rule_group['Delta'],
-            y=rule_group['Runtime_Seconds'],
-            mode='lines+markers',
-            name=rule_label,
-            line=dict(width=3, color=colors[color_idx]),
-            marker=dict(size=10),
-            customdata=rule_group['Smallest_Epsilon_Homogeneous'],
-            hovertemplate='<b>%{fullData.name}</b><br>' +
-                          'Delta (Fixed): %{x}<br>' +
-                          'Found Epsilon: %{customdata:,.2f}<br>' +
-                          'Runtime: %{y:.2f}s<br>' +
-                          '<extra></extra>'
-        ))
-    
-    # Get the epsilon search range info
-    epsilon_min = df_epsilon['Smallest_Epsilon_Homogeneous'].min()
-    epsilon_max = df_epsilon['Smallest_Epsilon_Homogeneous'].max()
-    
-    fig2.update_layout(
-        title=f"Problem 3: Runtime vs Delta (Finding Smallest Epsilon)<br><sub>Searching for epsilon (found range: [{epsilon_min:,.0f}, {epsilon_max:,.0f}]) for each fixed delta</sub>",
-        xaxis_title="Delta (Minimum Subgroup Size) - Fixed for each test",
-        yaxis_title="Runtime (seconds)",
-        template="plotly_white",
-        font=dict(size=14),
-        height=600,
-        hovermode='closest',
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
-    )
-    
-    # ========== GRAPH 3: Combined View ==========
-    fig3 = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=('Runtime vs Epsilon (Problem 2)', 'Runtime vs Delta (Problem 3)'),
-        horizontal_spacing=0.12
-    )
-    
-    for rule_id, rule_group in df_delta.groupby('Rule_ID'):
-        color_idx = (rule_id - 1) % len(colors)
-        fig3.add_trace(go.Scatter(
-            x=rule_group['Epsilon'], y=rule_group['Runtime_Seconds'],
-            mode='lines+markers', name=f"Rule {rule_id}",
-            line=dict(width=2, color=colors[color_idx]),
-            marker=dict(size=8), legendgroup=f"rule{rule_id}", showlegend=True
-        ), row=1, col=1)
-    
-    for rule_id, rule_group in df_epsilon.groupby('Rule_ID'):
-        color_idx = (rule_id - 1) % len(colors)
-        fig3.add_trace(go.Scatter(
-            x=rule_group['Delta'], y=rule_group['Runtime_Seconds'],
-            mode='lines+markers', name=f"Rule {rule_id}",
-            line=dict(width=2, color=colors[color_idx]),
-            marker=dict(size=8), legendgroup=f"rule{rule_id}", showlegend=False
-        ), row=1, col=2)
-    
-    fig3.update_xaxes(title_text="Epsilon", row=1, col=1)
-    fig3.update_xaxes(title_text="Delta", row=1, col=2)
-    fig3.update_yaxes(title_text="Runtime (seconds)", type="log", row=1, col=1)
-    fig3.update_yaxes(title_text="Runtime (seconds)", type="log", row=1, col=2)
-    
-    fig3.update_layout(
-        title_text="Combined Runtime Analysis (Log Scale)<br><sub>Comparing both problems side by side</sub>",
-        template="plotly_white", font=dict(size=13), height=550
-    )
-    
-    # Save graphs
-    fig1.write_html(str(base_path / "graph_runtime_vs_epsilon.html"))
-    fig2.write_html(str(base_path / "graph_runtime_vs_delta.html"))
-    fig3.write_html(str(base_path / "graph_combined_analysis.html"))
-    
-    print(f"✅ Runtime graphs saved to {base_path}/")
+def _encode_png_as_data_uri(png_path: Path) -> Optional[str]:
+    if not png_path.exists():
+        return None
+    b64 = base64.b64encode(png_path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
+def _safe_read_csv(csv_path: Path) -> Optional[pd.DataFrame]:
+    if not csv_path.exists():
+        return None
+    return pd.read_csv(csv_path)
+
+
+def _df_to_html_table(df: pd.DataFrame) -> str:
+    # Wide tables: wrap in a scroll container and keep a reasonable font size.
+    return "<div class='table-scroll'>" + df.to_html(index=False, escape=False) + "</div>"
 
 
 def generate_delta_html_report(results_df, summary_df, output_dir):
@@ -187,262 +63,473 @@ def generate_epsilon_html_report(results_df, summary_df, output_dir):
     save_results(results_df, summary_df, output_dir)
 
 
-def generate_combined_summary(delta_summary, epsilon_summary, output_dir):
-    """Generate a combined summary HTML report."""
+def generate_combined_summary_single_html(output_dir: str) -> Path:
+    """
+    Generate a single self-contained HTML report (no links/iframes to other HTML files).
+    It embeds:
+      - Full CSV tables for Problem 2 and Problem 3
+      - Summary stats for each problem
+      - Key PNG plots (base64-embedded)
+      - Epsilon comparison table (if present)
+    """
     output_path = Path(output_dir)
-    html_path = output_path / 'summary_report.html'
-    
-    html = f"""
-<!DOCTYPE html>
+    html_path = output_path / "summary_report.html"
+
+    # Inputs
+    p2_dir = output_path / "problem2_largest_delta"
+    p3_dir = output_path / "problem3_smallest_epsilon"
+    p2_csv = p2_dir / "find_delta_benchmark_results.csv"
+    p3_csv = p3_dir / "find_epsilon_benchmark_results.csv"
+
+    df_p2 = _safe_read_csv(p2_csv)
+    df_p3 = _safe_read_csv(p3_csv)
+
+    # Optional: epsilon comparison (lives next to this script, not inside output_dir)
+    comparison_dir = Path(__file__).resolve().parent / "benchmark_results_epsilon_comparison"
+    comp_csv = comparison_dir / "epsilon_comparison_results.csv"
+    df_comp = _safe_read_csv(comp_csv)
+
+    # Embedded images (if present)
+    p2_heat = _encode_png_as_data_uri(p2_dir / "oracle_calls_heatmap.png")
+    p3_heat = _encode_png_as_data_uri(p3_dir / "oracle_calls_heatmap.png")
+
+    # Summaries (compute from CSV if available)
+    delta_summary = generate_summary_statistics(df_p2) if df_p2 is not None else None
+    epsilon_summary = gen_epsilon_summary(df_p3) if df_p3 is not None else None
+
+    def _load_rule_metrics_from_existing_results(dataset_key: str = "so") -> dict[int, dict]:
+        """
+        Load per-rule Coverage/Utility/Prevalence from the existing repo output:
+        `graphs/rules_summary_from_existing_results.csv`.
+        """
+        metrics: dict[int, dict] = {}
+        csv_path = Path(__file__).resolve().parent.parent / "graphs" / "rules_summary_from_existing_results.csv"
+        if not csv_path.exists():
+            return metrics
+
+        try:
+            df_rules = pd.read_csv(csv_path)
+        except Exception:
+            return metrics
+
+        # Normalize expected columns
+        needed = {"Dataset", "Rule #", "Coverage (%)", "Utility", "Prevalence (%)"}
+        if not needed.issubset(set(df_rules.columns)):
+            return metrics
+
+        df_rules = df_rules[df_rules["Dataset"].astype(str).str.lower() == dataset_key.lower()].copy()
+        if df_rules.empty:
+            return metrics
+
+        for _, r in df_rules.iterrows():
+            try:
+                rule_id = int(r["Rule #"])
+            except Exception:
+                continue
+            def _to_float(x):
+                try:
+                    return float(x)
+                except Exception:
+                    return None
+            metrics[rule_id] = {
+                "coverage_pct": _to_float(r["Coverage (%)"]),
+                "utility": _to_float(r["Utility"]),
+                "prevalence_pct": _to_float(r["Prevalence (%)"]),
+            }
+
+        return metrics
+
+    # Use the canonical "existing results" summary as requested by the user
+    rule_metrics = _load_rule_metrics_from_existing_results(dataset_key="so")
+
+    # Glossary (high-signal columns; supports both benchmark tables)
+    glossary_rows = [
+        ("Rule_ID", "Index of the tested rule (1..N)."),
+        ("Condition", "Antecedent attributes describing a subgroup definition for the rule."),
+        ("Treatment", "Treatment attribute/value used by the rule."),
+        ("Dataset_Size", "Number of rows in the dataset for that rule."),
+        ("Oracle_Calls", "Number of oracle evaluations performed by binary search."),
+        ("Runtime_Seconds", "Total wall-clock runtime for that experiment (seconds)."),
+        ("Runtime_Minutes", "Runtime_Seconds / 60."),
+        ("Theoretical_Max_Iterations", "⌈log2(search_range_size)⌉ for the binary search."),
+        ("Efficiency_Ratio", "Oracle_Calls / Theoretical_Max_Iterations (closer to 1.0 is better)."),
+        ("Population_Utility", "Utility/ATE over the full population (utility_all)."),
+        ("Violating_Subgroup", "Subgroup (attributes) that caused boundary decision (the violation witness)."),
+        ("Subgroup_Size", "Size of that subgroup."),
+        ("Subgroup_Utility", "Utility/ATE within that subgroup."),
+        ("Utility_Difference", "Subgroup_Utility - Population_Utility."),
+        ("Abs_Utility_Difference", "|Utility_Difference|."),
+        ("Epsilon", "Homogeneity threshold ε (fixed input for Problem 2)."),
+        ("Largest_Delta_Heterogeneous", "Problem 2 output: largest δ such that a violation still exists."),
+        ("Delta", "Minimum subgroup size δ (fixed input for Problem 3)."),
+        ("Smallest_Epsilon_Homogeneous", "Problem 3 output: smallest ε such that no violation exists (or 'None' if not found within ε_max)."),
+        ("Coverage (%)", "From `graphs/rules_summary_from_existing_results.csv`: % of data matching the rule’s condition."),
+        ("Utility", "From `graphs/rules_summary_from_existing_results.csv`: rule utility (CATE-like metric) for the subpopulation."),
+        ("Prevalence (%)", "From `graphs/rules_summary_from_existing_results.csv`: % of subgroups violating homogeneity (|UtilityDiff| > ε)."),
+    ]
+    glossary_df = pd.DataFrame(glossary_rows, columns=["Column", "Meaning / How it's computed"])
+
+    def _summary_block(summary_df: Optional[pd.DataFrame]) -> str:
+        if summary_df is None or summary_df.empty:
+            return "<p><em>No summary available (missing CSV).</em></p>"
+        return _df_to_html_table(summary_df)
+
+    def _table_block(df: Optional[pd.DataFrame]) -> str:
+        if df is None or df.empty:
+            return "<p><em>No results available (missing CSV).</em></p>"
+        return _df_to_html_table(df)
+
+    def _img_block(title: str, data_uri: Optional[str]) -> str:
+        if not data_uri:
+            return ""
+        return (
+            f"<h3 style='margin-top:18px;margin-bottom:10px;'>{title}</h3>"
+            f"<img class='img' src='{data_uri}' alt='{title}'/>"
+        )
+
+    def _build_plotly_runtime_log_charts() -> tuple[str, str]:
+        """
+        Return (problem2_plot_html, problem3_plot_html).
+        Each is a Plotly chart rendered to an HTML snippet, with log-scale runtime (y-axis).
+        Legend shows full rule description: Condition → Treatment.
+        """
+        if df_p2 is None and df_p3 is None:
+            return "", ""
+
+        try:
+            import plotly.graph_objects as go  # type: ignore
+            import plotly.io as pio  # type: ignore
+        except ModuleNotFoundError:
+            note = (
+                "<p><em>Plotly is not installed, so interactive runtime charts are unavailable. "
+                "Install with <code>pip install plotly</code> and regenerate with "
+                "<code>python run_all_benchmarks.py --output benchmark_results_full --only_summary --prune_html</code>.</em></p>"
+            )
+            return note, note
+
+        colors = [
+            "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+            "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52B788",
+        ]
+
+        p2_html = ""
+        p3_html = ""
+
+        if df_p2 is not None and not df_p2.empty:
+            fig_p2 = go.Figure()
+            for i, (rule_id, g) in enumerate(df_p2.groupby("Rule_ID"), start=0):
+                g = g.sort_values("Epsilon")
+                condition = str(g["Condition"].iloc[0])
+                treatment = str(g["Treatment"].iloc[0])
+                rid = int(rule_id)
+                m = rule_metrics.get(rid, {})
+                cov = m.get("coverage_pct")
+                util = m.get("utility")
+                prev = m.get("prevalence_pct")
+                cov_s = f"{cov:.2f}%" if isinstance(cov, (int, float)) else "N/A"
+                util_s = f"{util:,.2f}" if isinstance(util, (int, float)) else "N/A"
+                prev_s = f"{prev:.2f}%" if isinstance(prev, (int, float)) else "N/A"
+                rule_label = f"Rule {rid} (Cov {cov_s}, Util {util_s}, Prev {prev_s}): {condition} → {treatment}"
+                color = colors[i % len(colors)]
+
+                fig_p2.add_trace(
+                    go.Scatter(
+                        x=g["Epsilon"],
+                        y=g["Runtime_Seconds"],
+                        mode="lines+markers",
+                        name=rule_label,
+                        line=dict(width=2, color=color),
+                        marker=dict(size=8, color=color),
+                        customdata=g[["Largest_Delta_Heterogeneous", "Oracle_Calls"]].to_numpy(),
+                        hovertemplate=(
+                            "<b>%{fullData.name}</b><br>"
+                            "ε: %{x:,.0f}<br>"
+                            "Runtime: %{y:.3f}s<br>"
+                            "δ*: %{customdata[0]}<br>"
+                            "Oracle calls: %{customdata[1]}<br>"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
+            fig_p2.update_layout(
+                title="Runtime vs ε (Problem 2) — log scale",
+                xaxis_title="ε (fixed for each experiment)",
+                yaxis_title="Runtime (seconds, log scale)",
+                yaxis_type="log",
+                template="plotly_white",
+                height=620,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
+                margin=dict(l=60, r=360, t=60, b=60),
+            )
+            p2_html = pio.to_html(
+                fig_p2,
+                include_plotlyjs="cdn",
+                full_html=False,
+                config={"displayModeBar": False, "responsive": True},
+            )
+
+        if df_p3 is not None and not df_p3.empty:
+            fig_p3 = go.Figure()
+            for i, (rule_id, g) in enumerate(df_p3.groupby("Rule_ID"), start=0):
+                g = g.sort_values("Delta")
+                condition = str(g["Condition"].iloc[0])
+                treatment = str(g["Treatment"].iloc[0])
+                rid = int(rule_id)
+                m = rule_metrics.get(rid, {})
+                cov = m.get("coverage_pct")
+                util = m.get("utility")
+                prev = m.get("prevalence_pct")
+                cov_s = f"{cov:.2f}%" if isinstance(cov, (int, float)) else "N/A"
+                util_s = f"{util:,.2f}" if isinstance(util, (int, float)) else "N/A"
+                prev_s = f"{prev:.2f}%" if isinstance(prev, (int, float)) else "N/A"
+                rule_label = f"Rule {rid} (Cov {cov_s}, Util {util_s}, Prev {prev_s}): {condition} → {treatment}"
+                color = colors[i % len(colors)]
+
+                fig_p3.add_trace(
+                    go.Scatter(
+                        x=g["Delta"],
+                        y=g["Runtime_Seconds"],
+                        mode="lines+markers",
+                        name=rule_label,
+                        line=dict(width=2, color=color),
+                        marker=dict(size=8, color=color),
+                        customdata=g[["Smallest_Epsilon_Homogeneous", "Oracle_Calls"]].to_numpy(),
+                        hovertemplate=(
+                            "<b>%{fullData.name}</b><br>"
+                            "δ: %{x}<br>"
+                            "Runtime: %{y:.3f}s<br>"
+                            "ε*: %{customdata[0]}<br>"
+                            "Oracle calls: %{customdata[1]}<br>"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
+            fig_p3.update_layout(
+                title="Runtime vs δ (Problem 3) — log scale",
+                xaxis_title="δ (fixed for each experiment)",
+                yaxis_title="Runtime (seconds, log scale)",
+                yaxis_type="log",
+                template="plotly_white",
+                height=620,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
+                margin=dict(l=60, r=360, t=60, b=60),
+            )
+            # plotlyjs already included above (from p2); if p2 missing, include CDN here.
+            include_js = False if p2_html else "cdn"
+            p3_html = pio.to_html(
+                fig_p3,
+                include_plotlyjs=include_js,
+                full_html=False,
+                config={"displayModeBar": False, "responsive": True},
+            )
+
+        return p2_html, p3_html
+
+    p2_runtime_plot_html, p3_runtime_plot_html = _build_plotly_runtime_log_charts()
+
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Benchmark Results Summary - Problems 2 & 3</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            min-height: 100vh;
-        }}
-        .container {{
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }}
-        header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
-        }}
-        h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
-        .subtitle {{ font-size: 1.2em; opacity: 0.9; }}
-        .content {{ padding: 40px; }}
-        
-        .problem-section {{
-            margin: 30px 0;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            overflow: hidden;
-        }}
-        .problem-header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            font-size: 1.3em;
-            font-weight: bold;
-        }}
-        .problem-content {{
-            padding: 20px;
-        }}
-        
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }}
-        thead {{
-            background: #f8f9fa;
-        }}
-        th {{
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
-        }}
-        td {{
-            padding: 12px;
-            border-bottom: 1px solid #e9ecef;
-        }}
-        tbody tr:hover {{
-            background: #f8f9fa;
-        }}
-        
-        .btn {{
-            display: inline-block;
-            padding: 12px 24px;
-            margin: 10px 5px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: transform 0.2s;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }}
-        .btn:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
-        }}
-        
-        .btn-epsilon {{
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }}
-        
-        .emoji {{ font-size: 1.2em; }}
-        
-        footer {{
-            background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            color: #6c757d;
-            font-size: 0.9em;
-        }}
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benchmark Results (Single Report) - Problems 2 & 3</title>
+  <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }}
+    .container {{
+      max-width: 1500px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }}
+    header {{
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 36px;
+      text-align: center;
+    }}
+    h1 {{ font-size: 2.2em; margin-bottom: 8px; }}
+    .subtitle {{ font-size: 1.05em; opacity: 0.95; }}
+    .content {{ padding: 28px; }}
+    .section {{
+      margin: 18px 0 28px 0;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      overflow: hidden;
+    }}
+    .section-title {{
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 14px 18px;
+      font-size: 1.15em;
+      font-weight: 700;
+    }}
+    .section-body {{ padding: 18px; }}
+    h2 {{ margin: 6px 0 12px 0; color: #2d2d2d; }}
+    h3 {{ margin: 14px 0 10px 0; color: #2d2d2d; }}
+    p {{ margin: 8px 0 10px 0; color: #333; line-height: 1.45; }}
+    details {{ margin: 10px 0 4px 0; }}
+    summary {{ cursor: pointer; font-weight: 700; color: #3949ab; }}
+
+    .table-scroll {{
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      margin: 12px 0 14px 0;
+    }}
+    table {{
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }}
+    thead tr {{ background: #f5f6fa; }}
+    th, td {{
+      padding: 10px 10px;
+      border-bottom: 1px solid #e9ecef;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }}
+    tbody tr:nth-child(even) {{ background: #fafbff; }}
+    tbody tr:hover {{ background: #eef2ff; }}
+    .img {{
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+    }}
+    footer {{
+      background: #f8f9fa;
+      padding: 18px;
+      text-align: center;
+      color: #6c757d;
+      font-size: 0.9em;
+    }}
+    .note {{
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 10px 0 14px 0;
+    }}
+    .plot-wrap {{
+      width: 100%;
+      margin: 12px 0 16px 0;
+    }}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><span class="emoji">🎯</span> Homogeneity Algorithm Benchmarks</h1>
-            <p class="subtitle">Problems 2 & 3: Binary Search Performance Analysis</p>
-            <p class="subtitle" style="font-size: 0.9em; margin-top: 10px;">
-                Generated on {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-            </p>
-        </header>
-        
-        <div class="content">
-            <div class="problem-section">
-                <div class="problem-header">
-                    <span class="emoji">📊</span> Problem 2: Find Largest Delta Breaking Homogeneity
-                </div>
-                <div class="problem-content">
-                    <p style="margin-bottom: 15px;">
-                        <strong>Objective:</strong> Given a fixed epsilon (ε), find the largest minimum subgroup size (δ*) 
-                        where the rule remains heterogeneous.
-                    </p>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Metric</th>
-                                <th>Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-"""
-    
-    for _, row in delta_summary.iterrows():
-        html += f"""
-                            <tr>
-                                <td><strong>{row['Metric']}</strong></td>
-                                <td>{row['Value']}</td>
-                            </tr>
-"""
-    
-    html += """
-                        </tbody>
-                    </table>
-                    <div style="margin-top: 20px; text-align: center;">
-                        <a href="problem2_largest_delta/benchmark_report.html" class="btn">
-                            <span class="emoji">📈</span> View Detailed Report
-                        </a>
-                        <a href="problem2_largest_delta/find_delta_benchmark_results.xlsx" class="btn">
-                            <span class="emoji">📊</span> Download Excel
-                        </a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="problem-section">
-                <div class="problem-header btn-epsilon">
-                    <span class="emoji">🎯</span> Problem 3: Find Smallest Epsilon Achieving Homogeneity
-                </div>
-                <div class="problem-content">
-                    <p style="margin-bottom: 15px;">
-                        <strong>Objective:</strong> Given a fixed delta (δ), find the smallest epsilon (ε*) 
-                        where the rule becomes homogeneous.
-                    </p>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Metric</th>
-                                <th>Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-"""
-    
-    for _, row in epsilon_summary.iterrows():
-        html += f"""
-                            <tr>
-                                <td><strong>{row['Metric']}</strong></td>
-                                <td>{row['Value']}</td>
-                            </tr>
-"""
-    
-    html += """
-                        </tbody>
-                    </table>
-                    <div style="margin-top: 20px; text-align: center;">
-                        <a href="problem3_smallest_epsilon/benchmark_report.html" class="btn btn-epsilon">
-                            <span class="emoji">📈</span> View Detailed Report
-                        </a>
-                        <a href="problem3_smallest_epsilon/find_epsilon_benchmark_results.xlsx" class="btn btn-epsilon">
-                            <span class="emoji">📊</span> Download Excel
-                        </a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="problem-section">
-                <div class="problem-header">
-                    <span class="emoji">📊</span> Runtime Analysis Graphs
-                </div>
-                <div class="problem-content">
-                    <p style="margin-bottom: 15px;">
-                        <strong>Interactive visualizations</strong> showing how runtime varies with epsilon and delta values.
-                        Each rule is shown in a different color for easy comparison.
-                    </p>
-                    
-                    <div style="margin-top: 20px; text-align: center;">
-                        <a href="graph_runtime_vs_epsilon.html" class="btn" target="_blank">
-                            <span class="emoji">📈</span> Runtime vs Epsilon (Problem 2)
-                        </a>
-                        <a href="graph_runtime_vs_delta.html" class="btn btn-epsilon" target="_blank">
-                            <span class="emoji">📉</span> Runtime vs Delta (Problem 3)
-                        </a>
-                        <a href="graph_combined_analysis.html" class="btn" target="_blank">
-                            <span class="emoji">📊</span> Combined Analysis
-                        </a>
-                    </div>
-                    
-                    <div style="margin-top: 30px;">
-                        <h3 style="text-align: center; margin-bottom: 20px;">Runtime vs Epsilon (Problem 2)</h3>
-                        <iframe src="graph_runtime_vs_epsilon.html" width="100%" height="650" frameborder="0"></iframe>
-                    </div>
-                    
-                    <div style="margin-top: 30px;">
-                        <h3 style="text-align: center; margin-bottom: 20px;">Runtime vs Delta (Problem 3)</h3>
-                        <iframe src="graph_runtime_vs_delta.html" width="100%" height="650" frameborder="0"></iframe>
-                    </div>
-                    
-                    <div style="margin-top: 30px;">
-                        <h3 style="text-align: center; margin-bottom: 20px;">Combined Analysis (Log Scale)</h3>
-                        <iframe src="graph_combined_analysis.html" width="100%" height="600" frameborder="0"></iframe>
-                    </div>
-                </div>
-            </div>
+  <div class="container">
+    <header>
+      <h1>🎯 Homogeneity Algorithm Benchmarks (Single Report)</h1>
+      <div class="subtitle">Problems 2 & 3 — generated on {now_str}</div>
+    </header>
+
+    <div class="content">
+      <div class="section">
+        <div class="section-title">📚 Glossary (how columns are computed)</div>
+        <div class="section-body">
+          <details open>
+            <summary>Show / hide</summary>
+            {_df_to_html_table(glossary_df)}
+          </details>
         </div>
-        
-        <footer>
-            <p><span class="emoji">⚡</span> Both algorithms use binary search with FPGrowth oracle</p>
-            <p>Dataset: Stack Overflow Developer Survey</p>
-        </footer>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📊 Problem 2 — Find Largest Delta Breaking Homogeneity (fixed ε)</div>
+        <div class="section-body">
+          <div class="note"><strong>Interpretation:</strong> δ* is the <em>largest</em> minimum subgroup size such that a violation still exists (heterogeneous). For δ &gt; δ*, the rule becomes homogeneous.</div>
+          <h2>Summary</h2>
+          {_summary_block(delta_summary)}
+          <h2>Runtime vs ε (log scale) — by rule</h2>
+          <div class="plot-wrap">{p2_runtime_plot_html}</div>
+          <h2>All experiments (full table)</h2>
+          {_table_block(df_p2)}
+          <details>
+            <summary>Other plots (optional)</summary>
+            {_img_block("Oracle-calls heatmap (Problem 2)", p2_heat)}
+          </details>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">🎯 Problem 3 — Find Smallest Epsilon Achieving Homogeneity (fixed δ)</div>
+        <div class="section-body">
+          <div class="note"><strong>Interpretation:</strong> ε* is the <em>smallest</em> threshold such that no subgroup violates homogeneity. For ε ≥ ε*, the rule stays homogeneous.</div>
+          <h2>Summary</h2>
+          {_summary_block(epsilon_summary)}
+          <h2>Runtime vs δ (log scale) — by rule</h2>
+          <div class="plot-wrap">{p3_runtime_plot_html}</div>
+          <h2>All experiments (full table)</h2>
+          {_table_block(df_p3)}
+          <details>
+            <summary>Other plots (optional)</summary>
+            {_img_block("Oracle-calls heatmap (Problem 3)", p3_heat)}
+          </details>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">⚖️ Optional — Smallest ε method comparison (Binary Search vs Brute Force)</div>
+        <div class="section-body">
+          <p>This section is populated if <code>benchmark_results_epsilon_comparison/epsilon_comparison_results.csv</code> exists.</p>
+          {_table_block(df_comp)}
+        </div>
+      </div>
     </div>
+
+    <footer>
+      <div>Single-file report: no links/iframes to other HTML needed.</div>
+      <div>CSV outputs are still saved in the output folders for programmatic use.</div>
+    </footer>
+  </div>
 </body>
 </html>
 """
-    
-    with open(html_path, 'w', encoding='utf-8') as f:
-        f.write(html)
-    
-    print(f"✅ Combined summary report saved: {html_path}")
+
+    html_path.write_text(html, encoding="utf-8")
+    print(f"✅ Single-file summary report saved: {html_path}")
+    return html_path
+
+
+def prune_html_files(keep_html: Path, additional_dirs: Optional[List[Path]] = None) -> None:
+    """
+    Delete all .html files under keep_html.parent (and optionally additional dirs),
+    except keep_html itself.
+    """
+    keep_html = keep_html.resolve()
+    dirs = [keep_html.parent]
+    if additional_dirs:
+        dirs.extend(additional_dirs)
+
+    removed = 0
+    for d in dirs:
+        if not d.exists():
+            continue
+        for p in d.rglob("*.html"):
+            if p.resolve() == keep_html:
+                continue
+            try:
+                p.unlink()
+                removed += 1
+            except OSError:
+                pass
+    print(f"🧹 Pruned HTML files (kept {keep_html.name}): removed {removed}")
 
 
 def main():
@@ -459,6 +546,10 @@ def main():
     parser.add_argument('--epsilon_max', type=float, default=3000000.0, help='Max epsilon for Problem 3')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory (default: benchmark_results)')
+    parser.add_argument('--only_summary', action='store_true',
+                       help='Only (re)generate the single summary_report.html from existing CSV/PNG outputs (no benchmarks).')
+    parser.add_argument('--prune_html', action='store_true',
+                       help='After generating summary_report.html, delete other .html files so only one remains.')
     
     args = parser.parse_args()
     
@@ -492,6 +583,13 @@ def main():
     print("="*80)
     
     total_start = time.time()
+
+    if args.only_summary:
+        keep = generate_combined_summary_single_html(str(base_output))
+        if args.prune_html:
+            comparison_dir = Path(__file__).resolve().parent / "benchmark_results_epsilon_comparison"
+            prune_html_files(keep_html=keep, additional_dirs=[comparison_dir])
+        return
     
     # ===== PROBLEM 2: FIND LARGEST DELTA =====
     print("\n" + "="*80)
@@ -549,15 +647,15 @@ def main():
     
     print(f"\n✅ Problem 3 completed in {problem3_time/60:.2f} minutes")
     
-    # ===== GENERATE COMBINED SUMMARY =====
+    # ===== GENERATE SINGLE SUMMARY =====
     print("\n" + "="*80)
-    print("GENERATING COMBINED SUMMARY REPORT")
+    print("GENERATING SINGLE SUMMARY REPORT")
     print("="*80)
     
-    generate_combined_summary(delta_summary, epsilon_summary, str(base_output))
-    
-    # ===== GENERATE RUNTIME GRAPHS =====
-    generate_runtime_graphs(str(base_output))
+    keep = generate_combined_summary_single_html(str(base_output))
+    if args.prune_html:
+        comparison_dir = Path(__file__).resolve().parent / "benchmark_results_epsilon_comparison"
+        prune_html_files(keep_html=keep, additional_dirs=[comparison_dir])
     
     total_time = time.time() - total_start
     
@@ -586,13 +684,8 @@ def main():
     print(f"\n🌐 Combined Summary:")
     print(f"   - {base_output}/summary_report.html")
     
-    print(f"\n📊 Runtime Analysis Graphs:")
-    print(f"   - {base_output}/graph_runtime_vs_epsilon.html")
-    print(f"   - {base_output}/graph_runtime_vs_delta.html")
-    print(f"   - {base_output}/graph_combined_analysis.html")
-    
     print("\n" + "="*80)
-    print("✨ Open summary_report.html in your browser to view all results with interactive graphs!")
+    print("✨ Open summary_report.html in your browser to view all results!")
     print("="*80)
 
 

@@ -47,7 +47,7 @@ print("🔬 ABLATION STUDY - FPGrowth vs RW_Direct")
 print("="*70)
 print(f"Dataset: {CHOSEN_DS}")
 print(f"Path: {FULL_DATASET_PATH}")
-print(f"Rules: {RULES_FILE}")
+print(f"Rules: {Path(__file__).resolve().parent / RULES_FILE}")
 print("="*70)
 
 
@@ -208,9 +208,10 @@ def run_ablation_study():
     dataset_size = len(full_df)
     print(f"Dataset size: {dataset_size} rows")
     
-    # Load rules
-    print(f"Loading rules from {RULES_FILE}...")
-    with open(RULES_FILE, "r") as f:
+    # Load rules - use path relative to this script's location
+    rules_path = Path(__file__).resolve().parent / RULES_FILE
+    print(f"Loading rules from {rules_path}...")
+    with open(rules_path, "r") as f:
         rules_list = [json.loads(line) for line in f]
     print(f"Loaded {len(rules_list)} rules")
     

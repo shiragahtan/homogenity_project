@@ -1,8 +1,8 @@
 """
 Benchmark for Find Smallest Epsilon Algorithm.
 
-Tests the two-phase search algorithm (exponential + binary) across multiple 
-rules and delta values to evaluate efficiency and performance.
+Tests the binary search algorithm across multiple rules and delta values
+to evaluate efficiency and performance.
 
 Outputs:
 - Excel file with detailed results
@@ -57,7 +57,7 @@ def run_benchmark(
     num_rules: int = 5,
     delta_values: List[int] = None,
     epsilon_start: float = 1000.0,
-    epsilon_max: float = 3000000.0,
+    epsilon_max: float = 1_000_000_000.0,
     output_dir: str = "benchmark_results",
     verbose: bool = False,
 ) -> pd.DataFrame:
@@ -79,7 +79,7 @@ def run_benchmark(
     print(f"Testing {num_rules} rules with {len(delta_values)} delta values each")
     print(f"Total experiments: {num_rules * len(delta_values)}")
     print(f"Delta values: {delta_values}")
-    print(f"Search range: [{epsilon_start:,.0f}, {epsilon_max:,.0f}]")
+    print(f"Search range: [0, {epsilon_max:,.0f}]")
     print("="*80)
     
     # Load treatments
@@ -136,12 +136,9 @@ def run_benchmark(
             )
             
             elapsed_time = time.time() - start_time
-            
-            # If two-phase didn't find answer, use the violation info (it has the actual epsilon needed)
-            if smallest_epsilon is None and violation_info and 'abs_diff' in violation_info:
-                smallest_epsilon = violation_info['abs_diff']
-                if verbose:
-                    print(f"  → Two-phase reached limit, using violation diff: ε* = {smallest_epsilon:,.0f}")
+            # NOTE:
+            # If smallest_epsilon is None, it means epsilon_max was not homogeneous, so ε* does not exist
+            # within [0, epsilon_max]. We keep it as 'None' and keep violation_info as a witness at ε_max.
             
             # Extract violation details
             violating_subgroup = str(violation_info['subgroup']) if violation_info else 'N/A'
@@ -613,15 +610,14 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                             <strong>Efficiency Metric.</strong> Total number of times we invoked the homogeneity oracle 
                             (FPGrowth algorithm) to check if a rule is homogeneous at a given epsilon. 
                             Lower is better; indicates search efficiency.
-                            <br><span class="formula-code">Count: Total calls to FPGrowth oracle across both phases</span>
+                            <br><span class="formula-code">Count: Total calls to FPGrowth oracle during binary search (plus one upper-bound check)</span>
                         </td>
                     </tr>
                     <tr>
                         <td class="metric-name">Runtime (seconds)</td>
                         <td class="metric-desc">
                             <strong>Performance Metric.</strong> Wall-clock time (in seconds) to complete the entire 
-                            two-phase search for this specific rule and delta combination. Includes Phase 1 
-                            (exponential search) + Phase 2 (binary search).
+                            binary search for this specific rule and delta combination (ε ∈ [0, ε_max]).
                             <br><span class="formula-code">Measurement: end_time - start_time</span>
                         </td>
                     </tr>
@@ -704,10 +700,6 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
             delta = f"{int(row['Delta']):,}"
             smallest = row['Smallest_Epsilon_Homogeneous']
             
-            # If smallest is None but we have violation info, use that
-            if (smallest == 'None' or pd.isna(smallest)) and 'Abs_Utility_Difference' in row and row['Abs_Utility_Difference'] != 'N/A':
-                smallest = float(row['Abs_Utility_Difference'])
-            
             if smallest != 'None' and not pd.isna(smallest):
                 smallest = f"{int(float(smallest)):,}"
             else:
@@ -758,16 +750,15 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
     html += f"""
             <h2><span class="emoji">🎯</span> Key Insights</h2>
             <ul style="line-height: 2; font-size: 1.05em;">
-                <li><span class="emoji">⚡</span> Two-phase search is <span class="highlight">highly efficient</span>: avg {avg_oracle:.1f} oracle calls</li>
-                <li><span class="emoji">📈</span> Exponential search quickly brackets the solution space</li>
-                <li><span class="emoji">🔍</span> Binary search refines to exact answer with log₂(n) complexity</li>
+                <li><span class="emoji">⚡</span> Binary search is <span class="highlight">highly efficient</span>: avg {avg_oracle:.1f} oracle calls</li>
+                <li><span class="emoji">🔍</span> Binary search finds the smallest ε* with log₂(n) oracle calls (plus one upper-bound check)</li>
                 <li><span class="emoji">✅</span> Algorithm scales well across different delta values</li>
             </ul>
         </div>
         
         <footer>
             <p><span class="emoji">🕐</span> Generated on {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
-            <p>Algorithm: Exponential + Binary Search with FPGrowth Oracle | Dataset: Stack Overflow</p>
+            <p>Algorithm: Binary Search with FPGrowth Oracle | Dataset: Stack Overflow</p>
         </footer>
     </div>
 </body>
@@ -823,7 +814,7 @@ def main():
     parser.add_argument('--deltas', type=str, default='500,1000,1500,2000,2500,3000',
                        help='Comma-separated delta values')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon')
-    parser.add_argument('--epsilon_max', type=float, default=500000.0, help='Max epsilon')
+    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Max epsilon')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory')
     

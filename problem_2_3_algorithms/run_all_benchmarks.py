@@ -543,7 +543,7 @@ def main():
     parser.add_argument('--delta_min', type=int, default=100, help='Min delta for Problem 2 search')
     parser.add_argument('--delta_max', type=int, default=10000, help='Max delta for Problem 2 search')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon for Problem 3')
-    parser.add_argument('--epsilon_max', type=float, default=3000000.0, help='Max epsilon for Problem 3')
+    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Max epsilon for Problem 3')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory (default: benchmark_results)')
     parser.add_argument('--only_summary', action='store_true',

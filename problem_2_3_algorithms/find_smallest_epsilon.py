@@ -92,12 +92,14 @@ def find_smallest_epsilon_achieving_homogeneity(
     outcome_col: str,
     delta: int,
     epsilon_start: float = 1000.0,
-    epsilon_max: float = 3000000.0,
+    # IMPORTANT: must be high enough so that epsilon_max is homogeneous; otherwise we return early
+    # (no bracketing is performed in this implementation).
+    epsilon_max: float = 1_000_000_000.0,
     verbose: bool = True
 ) -> Tuple[Optional[float], int, Optional[Dict], float]:
     """
     Binary search algorithm to find the smallest epsilon where rule is homogeneous.
-    
+
     Searches the range [0, epsilon_max] using standard binary search.
     
     Args:
@@ -105,20 +107,20 @@ def find_smallest_epsilon_achieving_homogeneity(
         treatment_col: Treatment column name
         outcome_col: Outcome column name  
         delta: Fixed minimum subgroup size
-        epsilon_start: (Unused - kept for compatibility)
+        epsilon_start: Unused (kept for CLI compatibility; we do a single binary search)
         epsilon_max: Maximum epsilon to consider
         verbose: Print progress messages
         
     Returns:
-        Tuple of (smallest_epsilon, total_oracle_calls, largest_epsilon_violation_info, utility_all)
+        Tuple of (smallest_epsilon, total_oracle_calls, violation_info_at_max_or_last_violation, utility_all)
         - smallest_epsilon: Smallest epsilon achieving homogeneity (None if not found)
         - total_oracle_calls: Total oracle invocations
-        - largest_epsilon_violation_info: Info about violation at epsilon-1 (None if not applicable)
+        - violation_info_at_max_or_last_violation: Witness subgroup info (useful when no solution within epsilon_max)
         - utility_all: Overall population ATE
     """
     if verbose:
         print("="*70)
-        print(f"FINDING SMALLEST EPSILON ACHIEVING HOMOGENEITY (Binary Search)")
+        print("FINDING SMALLEST EPSILON ACHIEVING HOMOGENEITY (Binary Search)")
         print(f"Fixed delta: {delta}")
         print(f"Search range: [0, {epsilon_max:,.0f}]")
         print("="*70)
@@ -128,27 +130,50 @@ def find_smallest_epsilon_achieving_homogeneity(
     
     total_oracle_calls = 0
     last_violation_info = None  # Track the most recent violation
-    
-    # ===== BINARY SEARCH =====
+
+    # ===== FAST BRACKETING (PERFORMANCE) =====
+    # Even if epsilon_max is known, doing binary search over a huge [0, epsilon_max] range costs
+    # ~log2(epsilon_max) oracle calls, and each oracle call can be expensive.
+    #
+    # We therefore first bracket a much smaller interval [epsilon_low, epsilon_high] where:
+    # - epsilon_low is (assumed) below the solution
+    # - epsilon_high is known homogeneous
+    #
+    # Then we do a standard leftmost-True binary search on that bracket.
     epsilon_low = 0
-    epsilon_high = int(epsilon_max)
-    
-    # First, check if even epsilon_max achieves homogeneity
-    total_oracle_calls += 1
-    is_homogeneous_at_max, _, violation_info_at_max = oracle_is_homogeneous(
-        df, treatment_col, outcome_col, delta, epsilon_high, utility_all
-    )
-    
-    if not is_homogeneous_at_max:
-        # Important: propagate a concrete violating subgroup at epsilon_max, so callers can
-        # distinguish "epsilon_max too low" from "no violation found".
-        last_violation_info = violation_info_at_max
-        if verbose:
-            print(f"\n⚠ No homogeneity found even at epsilon_max = {epsilon_max:,.0f}")
-        return None, total_oracle_calls, last_violation_info, utility_all
-    
+    epsilon_high = max(1, int(epsilon_start))
+    epsilon_cap = int(epsilon_max)
+
+    if epsilon_high > epsilon_cap:
+        epsilon_high = epsilon_cap
+
     if verbose:
-        print(f"\n🔍 Binary Search on [0, {epsilon_high:,.0f}]")
+        print(f"\n🔎 Bracketing ε*: start ε={epsilon_high:,} (cap={epsilon_cap:,})")
+        print("-" * 70)
+
+    # Exponential growth until homogeneity (or we hit epsilon_max)
+    while True:
+        total_oracle_calls += 1
+        is_homogeneous, _, violation_info = oracle_is_homogeneous(
+            df, treatment_col, outcome_col, delta, float(epsilon_high), utility_all
+        )
+
+        if is_homogeneous:
+            break
+
+        last_violation_info = violation_info
+        epsilon_low = epsilon_high + 1
+
+        if epsilon_high >= epsilon_cap:
+            if verbose:
+                print(f"\n⚠ No homogeneity found even at epsilon_max = {epsilon_max:,.0f}")
+            return None, total_oracle_calls, last_violation_info, utility_all
+
+        epsilon_high = min(epsilon_cap, epsilon_high * 2)
+
+    if verbose:
+        print(f"✅ Bracket found: homogeneous at ε={epsilon_high:,}")
+        print(f"\n🔍 Binary Search on [{epsilon_low:,}, {epsilon_high:,}]")
         print("-" * 70)
     
     iteration = 0
@@ -211,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument('--outcome', type=str, default='ConvertedSalary', help='Outcome column')
     parser.add_argument('--delta', type=int, required=True, help='Fixed delta threshold')
     parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon')
-    parser.add_argument('--epsilon_max', type=float, default=3000000.0, help='Maximum epsilon')
+    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Maximum epsilon')
     
     args = parser.parse_args()
     

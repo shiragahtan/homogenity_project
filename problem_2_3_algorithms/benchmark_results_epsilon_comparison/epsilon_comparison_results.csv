@@ -1,3 +1,0 @@
-Rule_ID,Condition,Treatment,Delta,Epsilon_TwoPhase,Epsilon_BruteForce,Match,OracleCalls_TwoPhase,SubgroupsExamined_BruteForce,Runtime_TwoPhase,Runtime_BruteForce,Speedup_TwoPhase,Winner,Dataset_Size
-1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},1000,1278862.0,1278861.3339604985,No,32,164589,5235.231,162.598,0.03,Brute Force,35112
-1,{'Gender': 'Male'},{'Exercise': 'Daily or almost every day'},2000,1278862.0,1278861.3339604985,No,32,41340,792.643,52.14,0.07,Brute Force,35112

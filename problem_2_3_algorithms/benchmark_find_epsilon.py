@@ -56,13 +56,21 @@ def load_treatments(treatment_file: str = None) -> List[Dict]:
 def run_benchmark(
     num_rules: int = 5,
     delta_values: List[int] = None,
-    epsilon_start: float = 1000.0,
-    epsilon_max: float = 1_000_000_000.0,
+    epsilon_0: float = None,
+    epsilon_max_cap: float = 1_000_000_000.0,
     output_dir: str = "benchmark_results",
     verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and delta values.
+    
+    Args:
+        num_rules: Number of rules to test
+        delta_values: List of delta values to test for each rule
+        epsilon_0: Initial ε₀ for Phase 1 exponential search (None = auto, default 1000)
+        epsilon_max_cap: Maximum epsilon cap to prevent infinite search
+        output_dir: Directory for output files
+        verbose: Print detailed progress
     """
     if delta_values is None:
         delta_values = [500, 1000, 1500, 2000, 2500, 3000]
@@ -74,12 +82,17 @@ def run_benchmark(
     output_path.mkdir(exist_ok=True, parents=True)
     
     print("="*80)
-    print("BENCHMARK: Find Smallest Epsilon Algorithm")
+    print("BENCHMARK: Two-Phase Find Smallest Epsilon Algorithm")
     print("="*80)
     print(f"Testing {num_rules} rules with {len(delta_values)} delta values each")
     print(f"Total experiments: {num_rules * len(delta_values)}")
     print(f"Delta values: {delta_values}")
-    print(f"Search range: [0, {epsilon_max:,.0f}]")
+    if epsilon_0 is None:
+        print(f"Phase 1: Exponential search to find ε_max (starting from ε₀ = 1000)")
+    else:
+        print(f"Phase 1: Exponential search to find ε_max (starting from ε₀ = {epsilon_0:,.0f})")
+    print(f"Phase 2: Binary search on [0, ε_max]")
+    print(f"Maximum epsilon cap: {epsilon_max_cap:,.0f}")
     print("="*80)
     
     # Load treatments
@@ -125,13 +138,13 @@ def run_benchmark(
             # Run algorithm and measure time
             start_time = time.time()
             
-            smallest_epsilon, oracle_calls, violation_info, utility_all = find_smallest_epsilon_achieving_homogeneity(
+            smallest_epsilon, oracle_calls, violation_info, utility_all, phase1_calls, phase2_calls = find_smallest_epsilon_achieving_homogeneity(
                 df=df,
                 treatment_col=TREATMENT_COL,
                 outcome_col='ConvertedSalary',
                 delta=delta,
-                epsilon_start=epsilon_start,
-                epsilon_max=epsilon_max,
+                epsilon_0=epsilon_0,
+                epsilon_max_cap=epsilon_max_cap,
                 verbose=False  # Suppress detailed output
             )
             
@@ -155,6 +168,8 @@ def run_benchmark(
                 'Delta': delta,
                 'Smallest_Epsilon_Homogeneous': smallest_epsilon if smallest_epsilon is not None else 'None',
                 'Oracle_Calls': oracle_calls,
+                'Phase1_Calls': phase1_calls,
+                'Phase2_Calls': phase2_calls,
                 'Runtime_Seconds': round(elapsed_time, 3),
                 'Runtime_Minutes': round(elapsed_time / 60, 3),
                 'Dataset_Size': len(df),
@@ -689,7 +704,9 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                             <th>Delta (δ)</th>
                             <th>Smallest ε*<br/>(Achieves Homogeneity)</th>
                             <th>Violating Subgroup<br/>(Reason for Boundary)</th>
-                            <th>Oracle Calls</th>
+                            <th>Phase 1<br/>(Bracketing)</th>
+                            <th>Phase 2<br/>(Binary Search)</th>
+                            <th>Total<br/>Oracle Calls</th>
                             <th>Runtime</th>
                         </tr>
                     </thead>
@@ -706,6 +723,8 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                 smallest = 'N/A'
                 
             oracle = int(row['Oracle_Calls'])
+            phase1 = int(row['Phase1_Calls'])
+            phase2 = int(row['Phase2_Calls'])
             runtime = row['Runtime_Seconds']
             
             # Format violation details
@@ -735,7 +754,9 @@ def generate_html_report(results_df: pd.DataFrame, summary_df: pd.DataFrame, out
                             <td><strong>{delta}</strong></td>
                             <td><span class="badge badge-homogeneous">{smallest}</span></td>
                             <td>{violation_details}</td>
-                            <td><span class="badge badge-oracle">{oracle} calls</span></td>
+                            <td><span class="badge badge-oracle">{phase1}</span></td>
+                            <td><span class="badge badge-oracle">{phase2}</span></td>
+                            <td><span class="badge badge-oracle">{oracle}</span></td>
                             <td><span class="badge badge-runtime">{runtime:.2f}s</span></td>
                         </tr>
 """
@@ -809,14 +830,32 @@ def main():
     """Main benchmark execution."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Benchmark Find Smallest Epsilon algorithm')
-    parser.add_argument('--rules', type=int, default=5, help='Number of rules (default: 5)')
+    parser = argparse.ArgumentParser(
+        description='Benchmark Two-Phase Find Smallest Epsilon Algorithm',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Example usage:
+  # Automatic (recommended - Phase 1 starts from ε₀ = 1000)
+  python benchmark_find_epsilon.py --rules 10 --deltas "300,500,1000"
+  
+  # Custom ε₀ for Phase 1
+  python benchmark_find_epsilon.py --rules 5 --epsilon_0 5000 --epsilon_max 10000000
+  
+Algorithm:
+  Phase 1: Find ε_max by testing ε₀, 2ε₀, 4ε₀, ... until homogeneous
+  Phase 2: Binary search on [0, ε_max] to find smallest ε*
+        """
+    )
+    parser.add_argument('--rules', type=int, default=5, 
+                       help='Number of rules to test (default: 5)')
     parser.add_argument('--deltas', type=str, default='500,1000,1500,2000,2500,3000',
-                       help='Comma-separated delta values')
-    parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon')
-    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Max epsilon')
+                       help='Comma-separated delta values (default: 500,1000,1500,2000,2500,3000)')
+    parser.add_argument('--epsilon_0', type=float, default=None,
+                       help='Initial ε₀ for Phase 1 exponential search (default: None = auto 1000)')
+    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0,
+                       help='Maximum epsilon cap (default: 1 billion)')
     parser.add_argument('--output', type=str, default='benchmark_results',
-                       help='Output directory')
+                       help='Output directory (default: benchmark_results)')
     
     args = parser.parse_args()
     
@@ -828,8 +867,8 @@ def main():
     results_df = run_benchmark(
         num_rules=args.rules,
         delta_values=delta_values,
-        epsilon_start=args.epsilon_start,
-        epsilon_max=args.epsilon_max,
+        epsilon_0=args.epsilon_0,
+        epsilon_max_cap=args.epsilon_max,
         output_dir=args.output
     )
     

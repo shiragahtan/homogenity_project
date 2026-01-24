@@ -542,8 +542,8 @@ def main():
                        help='Comma-separated delta values for Problem 3')
     parser.add_argument('--delta_min', type=int, default=100, help='Min delta for Problem 2 search')
     parser.add_argument('--delta_max', type=int, default=10000, help='Max delta for Problem 2 search')
-    parser.add_argument('--epsilon_start', type=float, default=1000.0, help='Starting epsilon for Problem 3')
-    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Max epsilon for Problem 3')
+    parser.add_argument('--epsilon_0', type=float, default=None, help='Initial ε₀ for Problem 3 Phase 1 (default: None = auto 1000)')
+    parser.add_argument('--epsilon_max', type=float, default=1_000_000_000.0, help='Max epsilon cap for Problem 3')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory (default: benchmark_results)')
     parser.add_argument('--only_summary', action='store_true',
@@ -629,8 +629,8 @@ def main():
     epsilon_results = run_epsilon_benchmark(
         num_rules=args.rules,
         delta_values=delta_values,
-        epsilon_start=args.epsilon_start,
-        epsilon_max=args.epsilon_max,
+        epsilon_0=args.epsilon_0,
+        epsilon_max_cap=args.epsilon_max,
         output_dir=str(problem3_dir)
     )
     

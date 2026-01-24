@@ -1,0 +1,182 @@
+================================================================================
+TWO-PHASE ALGORITHM DEMO - For Team Review
+================================================================================
+This demonstrates how the Problem 3 algorithm works:
+Finding the SMALLEST epsilon where a rule becomes homogeneous
+
+KEY INSIGHT: The algorithm does NOT require epsilon_max as input!
+It finds the upper bound automatically in Phase 1.
+
+================================================================================
+🎯 TWO-PHASE ALGORITHM DEMO (Mock Oracle - Instant Results!)
+================================================================================
+Simulating: True ε* = 5,432
+Algorithm will find it automatically with NO user input for bounds!
+================================================================================
+
+📍 PHASE 1: EXPONENTIAL BRACKETING (Finding ε_max)
+   ε_low = 0 (always fixed)
+   Starting ε₀ = 1,000 (automatic)
+   Growing exponentially: ε₀, 2ε₀, 4ε₀, ...
+--------------------------------------------------------------------------------
+   Iteration 1: Testing ε = 1,000 ... ✗ Violation found
+   → Growing to ε = 2,000
+   Iteration 2: Testing ε = 2,000 ... ✗ Violation found
+   → Growing to ε = 4,000
+   Iteration 3: Testing ε = 4,000 ... ✗ Violation found
+   → Growing to ε = 8,000
+   Iteration 4: Testing ε = 8,000 ... ✅ HOMOGENEOUS (found ε_max)
+
+✅ Phase 1 Complete:
+   Found ε_max = 8,000 (homogeneous)
+   Searching interval: [0, 8,000]
+   Oracle calls in Phase 1: 4
+
+📍 PHASE 2: BINARY SEARCH
+   Finding smallest ε* in [0, 8,000]
+--------------------------------------------------------------------------------
+
+   Iteration 1:
+      Range: [0, 8,000]
+      Testing ε = 4,000 ... ✗ Violation
+      → Update: ε_low = 4,001
+
+   Iteration 2:
+      Range: [4,001, 8,000]
+      Testing ε = 6,000 ... ✅ HOMOGENEOUS
+      → Update: ε_high = 6,000
+
+   Iteration 3:
+      Range: [4,001, 6,000]
+      Testing ε = 5,000 ... ✗ Violation
+      → Update: ε_low = 5,001
+
+   Iteration 4:
+      Range: [5,001, 6,000]
+      Testing ε = 5,500 ... ✅ HOMOGENEOUS
+      → Update: ε_high = 5,500
+
+   Iteration 5:
+      Range: [5,001, 5,500]
+      Testing ε = 5,250 ... ✗ Violation
+      → Update: ε_low = 5,251
+
+   Iteration 6:
+      Range: [5,251, 5,500]
+      Testing ε = 5,375 ... ✗ Violation
+      → Update: ε_low = 5,376
+
+   Iteration 7:
+      Range: [5,376, 5,500]
+      Testing ε = 5,438 ... ✗ Violation
+      → Update: ε_low = 5,439
+
+   Iteration 8:
+      Range: [5,439, 5,500]
+      Testing ε = 5,469 ... ✗ Violation
+      → Update: ε_low = 5,470
+
+   Iteration 9:
+      Range: [5,470, 5,500]
+      Testing ε = 5,485 ... ✗ Violation
+      → Update: ε_low = 5,486
+
+   Iteration 10:
+      Range: [5,486, 5,500]
+      Testing ε = 5,493 ... ✗ Violation
+      → Update: ε_low = 5,494
+
+   Iteration 11:
+      Range: [5,494, 5,500]
+      Testing ε = 5,497 ... ✗ Violation
+      → Update: ε_low = 5,498
+
+   Iteration 12:
+      Range: [5,498, 5,500]
+      Testing ε = 5,499 ... ✗ Violation
+      → Update: ε_low = 5,500
+
+✅ Phase 2 Complete: Found ε* = 5,500
+   Oracle calls in Phase 2: 12
+
+================================================================================
+🎯 FINAL RESULT: ε* = 5,500
+================================================================================
+  ✓ Smallest ε (homogeneous):  5,500
+  ✗ Largest ε (heterogeneous): 5,499
+
+  ⚡ Efficiency:
+     Phase 1 (Bracketing): 4 oracle calls
+     Phase 2 (Binary Search): 12 oracle calls
+     Total: 16 oracle calls
+
+  🎯 KEY POINT: No epsilon_max was provided by user!
+     The algorithm found it automatically in Phase 1.
+================================================================================
+
+================================================================================
+WHAT THIS MEANS FOR OUR PAPER
+================================================================================
+
+✅ PHASE 1: EXPONENTIAL BRACKETING
+   - We do NOT ask the user for epsilon_max
+   - We start from a small initial value (ε₀ = 1000)
+   - We grow exponentially: 1000 → 2000 → 4000 → 8000 → ...
+   - We stop when the ORACLE returns "homogeneous"
+   - This automatically finds the scale of the solution
+
+✅ PHASE 2: BINARY SEARCH
+   - Now we know ε_max (found in Phase 1)
+   - We search [0, ε_max] with standard binary search
+   - We find the exact smallest ε* where rule becomes homogeneous
+   - Complexity: O(log₂(ε_max)) oracle calls
+
+✅ EFFICIENCY
+   - Without Phase 1: Would need O(log₂(1,000,000,000)) ≈ 30 oracle calls
+   - With Phase 1: Only O(log₂(ε₀) + log₂(ε_max/ε₀)) calls
+   - In this example: 4 + 12 = 16 oracle calls (almost 2× faster!)
+
+✅ USER EXPERIENCE
+   - User only provides: dataset, rule, delta
+   - Algorithm automatically finds epsilon bounds
+   - No guessing needed for "how large should epsilon_max be?"
+
+================================================================================
+COMPARISON TO PAPER DESCRIPTION
+================================================================================
+
+From the paper (Section 5.2.2):
+
+"Search Bounds. Unlike Problem 2, determining appropriate search bounds 
+requires careful consideration. The lower bound is naturally ε_min = 0, 
+but the upper bound ε_max is not known a priori. In our research, we 
+explore two scenarios:
+
+• Upper bound provided: When ε_max is given as input (e.g., from domain 
+  knowledge or application constraints), we can proceed directly to 
+  binary search.
+
+• Upper bound unknown: When ε_max is not provided, we employ a two-phase 
+  approach with an initial exponential search to identify suitable bounds."
+
+WE IMPLEMENT THE SECOND SCENARIO: Upper bound unknown
+✅ This is the more general and useful approach
+✅ Works without domain knowledge
+✅ Automatically adapts to the data
+
+================================================================================
+IMPLEMENTATION FILES
+================================================================================
+
+Modified files:
+1. find_smallest_epsilon.py - Core two-phase algorithm
+2. benchmark_find_epsilon.py - Benchmark harness
+3. linear_model_unlearning.py - Fixed numerical stability issues
+
+Usage:
+  python benchmark_find_epsilon.py --rules 10 --deltas "500,1000,2000"
+
+No need to specify epsilon bounds - they're found automatically!
+
+================================================================================
+

@@ -97,7 +97,7 @@ def find_smallest_epsilon_achieving_homogeneity(
 ) -> Tuple[Optional[float], int, Optional[Dict], float]:
     """
     Two-Phase algorithm to find the smallest epsilon where rule is homogeneous.
-    
+
     Phase 1 (Bracketing): Exponential search to find upper bound ε_max
         - Initialize ε_low = 0 (always)
         - Start with ε₀ (default: 1000)
@@ -192,7 +192,7 @@ def find_smallest_epsilon_achieving_homogeneity(
 
         if verbose:
             print("✗ Violation found")
-        
+
         last_violation_info = violation_info
 
         if epsilon_high >= epsilon_cap:

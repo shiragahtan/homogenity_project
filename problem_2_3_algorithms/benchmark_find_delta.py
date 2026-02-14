@@ -112,6 +112,7 @@ def run_benchmark(
             continue
         
         df = pd.read_csv(dataset_path)
+        df = df.rename(columns={'TempTreatment': 'treatment'})  # Fix: rename treatment column
         
         print(f"\n{'='*80}")
         print(f"RULE {rule_idx}/{num_rules}")

@@ -13,6 +13,8 @@ import argparse
 import time
 import datetime
 from pathlib import Path
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -47,6 +49,213 @@ def _safe_read_csv(csv_path: Path) -> Optional[pd.DataFrame]:
 def _df_to_html_table(df: pd.DataFrame) -> str:
     # Wide tables: wrap in a scroll container and keep a reasonable font size.
     return "<div class='table-scroll'>" + df.to_html(index=False, escape=False) + "</div>"
+
+
+def _process_single_rule_delta(args_tuple):
+    """
+    Process a single rule for Problem 2 (find largest delta).
+    Designed to be called by multiprocessing.Pool.
+    
+    Args:
+        args_tuple: (rule_idx, num_rules, epsilon_values, delta_min, delta_max, output_dir)
+    
+    Returns:
+        List of result dictionaries for this rule
+    """
+    rule_idx, num_rules, epsilon_values, delta_min, delta_max, output_dir = args_tuple
+    
+    # Import here to avoid issues with multiprocessing
+    import pandas as pd
+    from pathlib import Path
+    import time
+    from find_largest_delta import find_largest_delta_breaking_homogeneity
+    import json
+    
+    TREATMENT_COL = 'treatment'
+    
+    # Load treatments (JSON Lines format)
+    treatment_file = Path(__file__).parent / "Chosen10Treatments.json"
+    treatments = []
+    with open(treatment_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                treatments.append(json.loads(line))
+    
+    treatment_data = treatments[rule_idx - 1]  # rule_idx is 1-based
+    condition = treatment_data['condition']
+    treatment = treatment_data['treatment']
+    
+    # Load dataset
+    dataset_path = Path(__file__).parent / f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv'
+    
+    if not dataset_path.exists():
+        print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
+        return []
+    
+    df = pd.read_csv(dataset_path)
+    df = df.rename(columns={'TempTreatment': 'treatment'})  # Fix: rename treatment column
+    
+    print(f"\n[Worker Process] RULE {rule_idx}/{num_rules}")
+    print(f"Condition: {condition}")
+    print(f"Treatment: {treatment}")
+    print(f"Dataset size: {len(df)} rows")
+    
+    results = []
+    
+    for epsilon in epsilon_values:
+        print(f"[Worker Process] Rule {rule_idx}, Testing epsilon = {epsilon:,}")
+        
+        start_time = time.time()
+        
+        largest_delta, oracle_calls, violation_info, utility_all = find_largest_delta_breaking_homogeneity(
+            df=df,
+            treatment_col=TREATMENT_COL,
+            outcome_col='ConvertedSalary',
+            epsilon=epsilon,
+            delta_min=delta_min,
+            delta_max=delta_max
+        )
+        
+        runtime = time.time() - start_time
+        
+        # Calculate theoretical maximum iterations and efficiency
+        import math
+        theoretical_max = math.ceil(math.log2(delta_max - delta_min + 1))
+        efficiency_ratio = oracle_calls / theoretical_max if theoretical_max > 0 else 1.0
+        
+        result = {
+            'Rule_ID': rule_idx,
+            'Condition': str(condition),
+            'Treatment': str(treatment),
+            'Epsilon': epsilon,
+            'Largest_Delta_Heterogeneous': largest_delta if largest_delta is not None else 'None',
+            'Oracle_Calls': oracle_calls,
+            'Runtime_Seconds': round(runtime, 3),
+            'Runtime_Minutes': round(runtime / 60, 3),
+            'Theoretical_Max_Iterations': theoretical_max,
+            'Efficiency_Ratio': round(efficiency_ratio, 3),
+            'Dataset_Size': len(df),
+            'Population_Utility': round(utility_all, 2) if utility_all else 'N/A',
+            'Violating_Subgroup': str(violation_info['subgroup']) if violation_info else 'N/A',
+            'Subgroup_Size': violation_info['size'] if violation_info else 'N/A',
+            'Subgroup_Utility': violation_info['utility'] if violation_info else 'N/A',
+            'Utility_Difference': violation_info['utility_diff'] if violation_info else 'N/A',
+            'Abs_Utility_Difference': violation_info['abs_diff'] if violation_info else 'N/A'
+        }
+        
+        results.append(result)
+        
+        print(f"[Worker Process] Rule {rule_idx}, epsilon={epsilon}: δ*={largest_delta}, calls={oracle_calls}, time={runtime:.1f}s")
+    
+    return results
+
+
+def _process_single_rule_epsilon(args_tuple):
+    """
+    Process a single rule for Problem 3 (find smallest epsilon).
+    Designed to be called by multiprocessing.Pool.
+    
+    Args:
+        args_tuple: (rule_idx, num_rules, delta_values, epsilon_0, epsilon_max_cap, output_dir)
+    
+    Returns:
+        List of result dictionaries for this rule
+    """
+    rule_idx, num_rules, delta_values, epsilon_0, epsilon_max_cap, output_dir = args_tuple
+    
+    # Import here to avoid issues with multiprocessing
+    import pandas as pd
+    from pathlib import Path
+    import time
+    from find_smallest_epsilon import find_smallest_epsilon_achieving_homogeneity
+    import json
+    
+    TREATMENT_COL = 'treatment'
+    
+    # Load treatments (JSON Lines format)
+    treatment_file = Path(__file__).parent / "Chosen10Treatments.json"
+    treatments = []
+    with open(treatment_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                treatments.append(json.loads(line))
+    
+    treatment_data = treatments[rule_idx - 1]  # rule_idx is 1-based
+    condition = treatment_data['condition']
+    treatment = treatment_data['treatment']
+    
+    # Load dataset
+    dataset_path = Path(__file__).parent / f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv'
+    
+    if not dataset_path.exists():
+        print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
+        return []
+    
+    df = pd.read_csv(dataset_path)
+    df = df.rename(columns={'TempTreatment': 'treatment'})  # Fix: rename treatment column
+    
+    print(f"\n[Worker Process] RULE {rule_idx}/{num_rules}")
+    print(f"Condition: {condition}")
+    print(f"Treatment: {treatment}")
+    print(f"Dataset size: {len(df)} rows")
+    
+    results = []
+    
+    for delta in delta_values:
+        if len(df) < delta:
+            print(f"[Worker Process] Rule {rule_idx}, δ={delta}: SKIPPED (dataset too small)")
+            continue
+        
+        print(f"[Worker Process] Rule {rule_idx}, Testing delta = {delta:,}")
+        
+        start_time = time.time()
+        
+        smallest_epsilon, total_calls, last_violation, utility_all, phase1_calls, phase2_calls = \
+            find_smallest_epsilon_achieving_homogeneity(
+                df=df,
+                treatment_col=TREATMENT_COL,
+                outcome_col='ConvertedSalary',
+                delta=delta,
+                epsilon_0=epsilon_0,
+                epsilon_max_cap=epsilon_max_cap
+            )
+        
+        runtime = time.time() - start_time
+        
+        # Extract violation details
+        violating_subgroup = str(last_violation['subgroup']) if last_violation else 'N/A'
+        subgroup_size = last_violation['size'] if last_violation else 'N/A'
+        subgroup_utility = last_violation['utility'] if last_violation else 'N/A'
+        utility_diff = last_violation['utility_diff'] if last_violation else 'N/A'
+        abs_diff = last_violation['abs_diff'] if last_violation else 'N/A'
+        
+        result = {
+            'Rule_ID': rule_idx,
+            'Condition': str(condition),
+            'Treatment': str(treatment),
+            'Delta': delta,
+            'Smallest_Epsilon_Homogeneous': smallest_epsilon if smallest_epsilon is not None else 'None',
+            'Oracle_Calls': total_calls,
+            'Phase1_Calls': phase1_calls,
+            'Phase2_Calls': phase2_calls,
+            'Runtime_Seconds': round(runtime, 3),
+            'Runtime_Minutes': round(runtime / 60, 3),
+            'Dataset_Size': len(df),
+            'Population_Utility': round(utility_all, 2) if utility_all else 'N/A',
+            'Violating_Subgroup': violating_subgroup,
+            'Subgroup_Size': subgroup_size,
+            'Subgroup_Utility': round(float(subgroup_utility), 2) if subgroup_utility != 'N/A' else 'N/A',
+            'Utility_Difference': round(float(utility_diff), 2) if utility_diff != 'N/A' else 'N/A',
+            'Abs_Utility_Difference': round(float(abs_diff), 2) if abs_diff != 'N/A' else 'N/A'
+        }
+        
+        results.append(result)
+        
+        print(f"[Worker Process] Rule {rule_idx}, delta={delta}: ε*={smallest_epsilon}, Phase1={phase1_calls}, Phase2={phase2_calls}, time={runtime:.1f}s")
+    
+    return results
 
 
 def generate_delta_html_report(results_df, summary_df, output_dir):
@@ -550,6 +759,8 @@ def main():
                        help='Only (re)generate the single summary_report.html from existing CSV/PNG outputs (no benchmarks).')
     parser.add_argument('--prune_html', action='store_true',
                        help='After generating summary_report.html, delete other .html files so only one remains.')
+    parser.add_argument('--parallel', type=int, default=1,
+                       help='Number of parallel workers (default: 1 = sequential). Recommended: 2-4 for faster execution.')
     
     args = parser.parse_args()
     
@@ -596,15 +807,37 @@ def main():
     print("PROBLEM 2: FINDING LARGEST DELTA BREAKING HOMOGENEITY")
     print("="*80)
     
+    if args.parallel > 1:
+        print(f"🚀 Using {args.parallel} parallel workers for faster execution")
+    
     problem2_start = time.time()
     
-    delta_results = run_delta_benchmark(
-        num_rules=args.rules,
-        epsilon_values=epsilon_values,
-        delta_min=args.delta_min,
-        delta_max=args.delta_max,
-        output_dir=str(problem2_dir)
-    )
+    if args.parallel > 1:
+        # Parallel execution
+        print(f"Processing {args.rules} rules in parallel...")
+        
+        # Prepare arguments for each rule
+        rule_args = [
+            (rule_idx, args.rules, epsilon_values, args.delta_min, args.delta_max, str(problem2_dir))
+            for rule_idx in range(1, args.rules + 1)
+        ]
+        
+        # Use multiprocessing Pool
+        with Pool(processes=args.parallel) as pool:
+            results_nested = pool.map(_process_single_rule_delta, rule_args)
+        
+        # Flatten results
+        results_list = [item for sublist in results_nested for item in sublist]
+        delta_results = pd.DataFrame(results_list)
+    else:
+        # Sequential execution (original)
+        delta_results = run_delta_benchmark(
+            num_rules=args.rules,
+            epsilon_values=epsilon_values,
+            delta_min=args.delta_min,
+            delta_max=args.delta_max,
+            output_dir=str(problem2_dir)
+        )
     
     problem2_time = time.time() - problem2_start
     
@@ -626,13 +859,32 @@ def main():
     
     problem3_start = time.time()
     
-    epsilon_results = run_epsilon_benchmark(
-        num_rules=args.rules,
-        delta_values=delta_values,
-        epsilon_0=args.epsilon_0,
-        epsilon_max_cap=args.epsilon_max,
-        output_dir=str(problem3_dir)
-    )
+    if args.parallel > 1:
+        # Parallel execution
+        print(f"Processing {args.rules} rules in parallel...")
+        
+        # Prepare arguments for each rule
+        rule_args = [
+            (rule_idx, args.rules, delta_values, args.epsilon_0, args.epsilon_max, str(problem3_dir))
+            for rule_idx in range(1, args.rules + 1)
+        ]
+        
+        # Use multiprocessing Pool
+        with Pool(processes=args.parallel) as pool:
+            results_nested = pool.map(_process_single_rule_epsilon, rule_args)
+        
+        # Flatten results
+        results_list = [item for sublist in results_nested for item in sublist]
+        epsilon_results = pd.DataFrame(results_list)
+    else:
+        # Sequential execution (original)
+        epsilon_results = run_epsilon_benchmark(
+            num_rules=args.rules,
+            delta_values=delta_values,
+                epsilon_0=args.epsilon_0,
+                epsilon_max_cap=args.epsilon_max,
+            output_dir=str(problem3_dir)
+        )
     
     problem3_time = time.time() - problem3_start
     
@@ -690,5 +942,17 @@ def main():
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing on macOS/Windows
+    import multiprocessing
+    multiprocessing.freeze_support()
+    
+    # Use 'fork' instead of 'spawn' for better compatibility on macOS
+    # (fork is faster and more reliable for our use case)
+    try:
+        multiprocessing.set_start_method('fork', force=False)
+    except RuntimeError:
+        # Start method already set, continue
+        pass
+    
     main()
 

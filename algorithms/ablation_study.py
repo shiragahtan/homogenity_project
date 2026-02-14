@@ -35,10 +35,25 @@ ATTRIBUTE_WEIGHTS = ds_config.get('ATTRIBUTE_WEIGHTS', {})
 TREATMENT_COL = config['TREATMENT_COL']
 OPTIMIZATION_MODES = config.get('OPTIMIZATION_MODES', ['direct'])
 
-# Ablation parameters
-EPSILON_VALUES = [250000.0, 300000.0, 350000.0, 400000.0, 450000.0]
+# Ablation parameters (per-dataset)
+_ABLATION_PARAMS = {
+    "so": {
+        "EPSILON_VALUES": [250000.0, 300000.0, 350000.0, 400000.0, 450000.0],
+        "FIXED_EPSILON": 350000.0,
+    },
+    "acs": {
+        "EPSILON_VALUES": [5000.0, 10000.0, 15000.0, 17500.0, 20000.0],
+        "FIXED_EPSILON": 17500.0,
+    },
+    "german": {
+        "EPSILON_VALUES": [0.1, 0.3, 0.5, 0.7, 0.9],
+        "FIXED_EPSILON": 0.5,
+    },
+}
+_ds_ablation = _ABLATION_PARAMS.get(CHOSEN_DS, {"EPSILON_VALUES": [250000.0, 300000.0, 350000.0, 400000.0, 450000.0], "FIXED_EPSILON": 350000.0})
+EPSILON_VALUES = _ds_ablation["EPSILON_VALUES"]
+FIXED_EPSILON = _ds_ablation["FIXED_EPSILON"]
 DELTA_PERCENTAGES = [0.05, 0.10, 0.15, 0.20]  # 5%, 10%, 15%, 20%
-FIXED_EPSILON = 350000.0
 FIXED_DELTA_PERCENTAGE = 0.10  # 10%
 NUM_RW_RUNS = 3
 
@@ -435,7 +450,9 @@ def generate_visualizations(results_df, results_dir):
         xaxis_title="Delta (% of Dataset)",
         yaxis_title="Agreement with FPGrowth (%)",
         yaxis=dict(range=[0, 105]),
-        xaxis=dict(tickformat='.0%'),
+        # NOTE: delta_pct is stored in *percent units* (e.g., 5, 10, 15, 20),
+        # so using Plotly percent tickformat would incorrectly scale (5 -> 500%).
+        xaxis=dict(tickformat='.0f', ticksuffix='%'),
         template="plotly_white",
         font=dict(size=14),
         height=500
@@ -481,7 +498,8 @@ def generate_visualizations(results_df, results_dir):
         title=f"Runtime: FPGrowth vs RW - Varying Delta<br><sub>Shows RW speedup</sub>",
         xaxis_title="Delta (% of Dataset)",
         yaxis_title="Average Runtime (seconds)",
-        xaxis=dict(tickformat='.0%'),
+        # delta_pct is already in percent units (5, 10, 15, 20)
+        xaxis=dict(tickformat='.0f', ticksuffix='%'),
         template="plotly_white",
         font=dict(size=14),
         height=500,
@@ -520,7 +538,8 @@ def generate_visualizations(results_df, results_dir):
             ), row=1, col=2)
     
     fig5.update_xaxes(title_text="Epsilon", row=1, col=1)
-    fig5.update_xaxes(title_text="Delta (%)", tickformat='.0%', row=1, col=2)
+    # delta_pct is already in percent units (5, 10, 15, 20)
+    fig5.update_xaxes(title_text="Delta (%)", tickformat='.0f', ticksuffix='%', row=1, col=2)
     fig5.update_yaxes(title_text="% Rules Homogeneous", row=1, col=1)
     fig5.update_yaxes(title_text="% Rules Homogeneous", row=1, col=2)
     

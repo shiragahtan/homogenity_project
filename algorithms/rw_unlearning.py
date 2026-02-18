@@ -215,7 +215,7 @@ def calc_utility_for_subgroups(
     outcome_col = outcome_col or tgtO
     if outcome_col is None: raise ValueError("Need outcome_col")
     if utility_all is None: raise ValueError("Need utility_all for Random Walk")
-    if mode == 0:
+    if mode != 1:
         return _homog_random_walks_direct(
             df,
             treatment_col=treatment_col,

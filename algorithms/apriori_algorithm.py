@@ -127,8 +127,8 @@ def calc_utility_for_subgroups(
     Calculate utility for subgroups using Apriori.
 
     Returns:
-        If mode == 0: (is_homogeneous, count_checked, enum_time, iter_time)
-        If mode != 0: (subgroup_records, count_checked, enum_time, iter_time)
+        If mode != 1: (is_homogeneous, count_checked, enum_time, iter_time)
+        If mode == 1: (subgroup_records, count_checked, enum_time, iter_time)
     """
     exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
 
@@ -167,8 +167,8 @@ def calc_utility_for_subgroups(
         except (LinAlgError, ValueError):
             continue
 
-        # Check for violation (Mode 0)
-        if mode == 0:
+        # Check for violation (Mode 0/2/3)
+        if mode != 1:
             if abs(utility_all - cate) > epsilon:
                 print(f"breaking subgroup = {filt} size {sz} cate {cate}")
                 print(f"Total unique subgroups checked: {cate_calc_count}")
@@ -199,7 +199,7 @@ def calc_utility_for_subgroups(
     # End timer if loop finishes without returning
     iteration_time = time.time() - start_iter
 
-    if mode == 0:
+    if mode != 1:
         # Returns: (Passed?, Count, Enum Time, Iter Time, Violation Info)
         print(f"Total unique subgroups checked: {cate_calc_count}")
         return True, cate_calc_count, enumeration_time, iteration_time, None

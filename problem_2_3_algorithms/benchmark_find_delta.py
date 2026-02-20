@@ -17,6 +17,7 @@ from typing import List, Dict, Tuple
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import re
 
 # seaborn is optional; fall back to matplotlib-only plots if it's not installed.
 try:
@@ -41,8 +42,8 @@ TREATMENT_COL = config['TREATMENT_COL']
 def load_treatments(treatment_file: str = None) -> List[Dict]:
     """Load treatment-condition pairs from JSON file."""
     if treatment_file is None:
-        # Use the canonical treatments file from algorithms folder
-        treatment_file = Path(__file__).resolve().parent.parent / "algorithms" / "Chosen10Treatments.json"
+        # Use the local treatments file in problem_2_3_algorithms/
+        treatment_file = Path(__file__).resolve().parent / "Chosen10Treatments.json"
     
     treatments = []
     with open(treatment_file, "r") as f:
@@ -51,22 +52,77 @@ def load_treatments(treatment_file: str = None) -> List[Dict]:
     return treatments
 
 
+def _prepare_rule_df(base_df, rule, outcome_col):
+    """Prepare a filtered DataFrame for one rule on-the-fly (no pre-computed CSV).
+
+    Used when a base encoded dataset exists (e.g. ACS) instead of pre-computed
+    per-rule CSVs (SO path).
+
+    Returns
+    -------
+    (df, actual_outcome_col)  or  (None, outcome_col) if the rule is empty.
+    """
+    condition = rule['condition']
+    treatment_dict = rule['treatment']
+
+    cond_attr, cond_val = list(condition.items())[0]
+    treat_attr, treat_val = list(treatment_dict.items())[0]
+
+    sub_df = base_df[base_df[cond_attr] == cond_val].copy()
+    if sub_df.empty:
+        return None, outcome_col
+
+    # Drop condition column (invariant after filtering)
+    sub_df = sub_df.drop(columns=[cond_attr])
+
+    # Create binary treatment column
+    sub_df[TREATMENT_COL] = (sub_df[treat_attr] == treat_val).astype(int)
+
+    # Drop treatment source column
+    if treat_attr in sub_df.columns:
+        sub_df = sub_df.drop(columns=[treat_attr])
+
+    if sub_df[TREATMENT_COL].sum() == 0:
+        return None, outcome_col
+
+    # Clean column names (special chars like commas cause FPGrowth issues)
+    sub_df = sub_df.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
+    actual_outcome_col = re.sub(r'[,:\[\]\{\}"]', '_', outcome_col)
+
+    # Ensure outcome is numeric
+    sub_df[actual_outcome_col] = pd.to_numeric(sub_df[actual_outcome_col], errors='coerce')
+
+    return sub_df, actual_outcome_col
+
+
 def run_benchmark(
     num_rules: int = 5,
     epsilon_values: List[float] = None,
     delta_min: int = 100,
     delta_max: int = 10000,
-    output_dir: str = "benchmark_results"
+    output_dir: str = "benchmark_results",
+    # ── Dataset-specific parameters ──
+    treatment_file: str = None,
+    outcome_col: str = 'ConvertedSalary',
+    base_dataset_path: str = None,
+    delta_min_pct: float = None,
+    delta_max_pct: float = None,
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and epsilon values.
     
     Args:
-        num_rules: Number of rules to test (from Chosen10Treatments.json)
+        num_rules: Number of rules to test
         epsilon_values: List of epsilon values to test
-        delta_min: Minimum delta for search
-        delta_max: Maximum delta for search
+        delta_min: Minimum delta for search (absolute, used for SO)
+        delta_max: Maximum delta for search (absolute, used for SO)
         output_dir: Directory to save results
+        treatment_file: Path to treatments JSON (None → default SO file)
+        outcome_col: Name of the outcome column in the dataset
+        base_dataset_path: Path to the encoded base CSV for on-the-fly prep.
+                           If None, pre-computed per-rule SO CSVs are used.
+        delta_min_pct: Override *delta_min* with a % of the per-rule dataset.
+        delta_max_pct: Override *delta_max* with a % of the per-rule dataset.
         
     Returns:
         DataFrame with benchmark results
@@ -86,11 +142,23 @@ def run_benchmark(
     print(f"Testing {num_rules} rules with {len(epsilon_values)} epsilon values each")
     print(f"Total experiments: {num_rules * len(epsilon_values)}")
     print(f"Epsilon values: {epsilon_values}")
-    print(f"Delta range: [{delta_min}, {delta_max}]")
+    if delta_min_pct is not None:
+        print(f"Delta range: [{delta_min_pct}% .. {delta_max_pct}%] of per-rule dataset")
+    else:
+        print(f"Delta range: [{delta_min}, {delta_max}]")
     print("="*80)
     
     # Load treatments
-    treatments = load_treatments()[:num_rules]
+    treatments = load_treatments(treatment_file)[:num_rules]
+    
+    # Pre-load base dataset once for on-the-fly mode (ACS path)
+    base_df = None
+    if base_dataset_path is not None:
+        print(f"\nLoading base dataset: {base_dataset_path}")
+        base_df = pd.read_csv(base_dataset_path)
+        # Remove Unnamed columns (same as ablation study - line 220)
+        base_df = base_df.loc[:, ~base_df.columns.str.startswith('Unnamed')]
+        print(f"  → {len(base_df)} rows, {len(base_df.columns)} columns")
     
     # Results storage
     results = []
@@ -104,21 +172,32 @@ def run_benchmark(
         condition = treatment_data['condition']
         treatment = treatment_data['treatment']
         
-        # Load corresponding dataset
-        dataset_path = Path(f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv')
+        # ── Prepare dataset for this rule ──
+        if base_df is not None:
+            # On-the-fly preparation (ACS / generic path)
+            df, actual_outcome_col = _prepare_rule_df(base_df, treatment_data, outcome_col)
+            if df is None:
+                print(f"\n⚠️  Warning: Rule {rule_idx} produced empty dataset. Skipping.")
+                continue
+        else:
+            # Pre-computed per-rule CSVs (SO path)
+            dataset_path = Path(f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv')
+            if not dataset_path.exists():
+                print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
+                continue
+            df = pd.read_csv(dataset_path)
+            actual_outcome_col = outcome_col
         
-        if not dataset_path.exists():
-            print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
-            continue
-        
-        df = pd.read_csv(dataset_path)
-        df = df.rename(columns={'TempTreatment': 'treatment'})  # Fix: rename treatment column
+        # ── Per-rule delta bounds ──
+        rule_delta_min = max(1, int(len(df) * delta_min_pct / 100)) if delta_min_pct is not None else delta_min
+        rule_delta_max = int(len(df) * delta_max_pct / 100) if delta_max_pct is not None else delta_max
         
         print(f"\n{'='*80}")
         print(f"RULE {rule_idx}/{num_rules}")
         print(f"Condition: {condition}")
         print(f"Treatment: {treatment}")
         print(f"Dataset size: {len(df)} rows")
+        print(f"Delta range for this rule: [{rule_delta_min}, {rule_delta_max}]")
         print(f"{'='*80}")
         
         for epsilon in epsilon_values:
@@ -131,10 +210,10 @@ def run_benchmark(
             largest_delta, oracle_calls, violation_info, utility_all = find_largest_delta_breaking_homogeneity(
                 df=df,
                 treatment_col=TREATMENT_COL,
-                outcome_col='ConvertedSalary',
+                outcome_col=actual_outcome_col,
                 epsilon=epsilon,
-                delta_min=delta_min,
-                delta_max=delta_max,
+                delta_min=rule_delta_min,
+                delta_max=rule_delta_max,
                 verbose=False  # Suppress detailed output for benchmark
             )
             
@@ -615,11 +694,25 @@ def main():
     parser.add_argument('--delta_max', type=int, default=10000, help='Maximum delta (default: 10000)')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory (default: benchmark_results)')
+    parser.add_argument('--dataset', type=str, default='so', choices=['so', 'acs'],
+                       help='Dataset to benchmark (default: so)')
     
     args = parser.parse_args()
     
     # Parse epsilon values
     epsilon_values = [float(x.strip()) for x in args.epsilons.split(',')]
+    
+    # ── Dataset-specific configuration ──
+    ds_kwargs = {}
+    if args.dataset == 'acs':
+        proj_root = Path(__file__).resolve().parent.parent
+        ds_kwargs = dict(
+            treatment_file=str(proj_root / "algorithms" / "ACSChosen10Treatments.json"),
+            outcome_col="Wages or salary income past 12 months",
+            base_dataset_path=str(proj_root / "acs" / "acs_encoded.csv"),
+            delta_min_pct=5.0,
+            delta_max_pct=20.0,
+        )
     
     # Run benchmark
     print("\n🚀 Starting benchmark...\n")
@@ -630,7 +723,8 @@ def main():
         epsilon_values=epsilon_values,
         delta_min=args.delta_min,
         delta_max=args.delta_max,
-        output_dir=args.output
+        output_dir=args.output,
+        **ds_kwargs
     )
     
     total_time = time.time() - start_total

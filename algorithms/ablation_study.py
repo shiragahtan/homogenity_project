@@ -42,8 +42,8 @@ _ABLATION_PARAMS = {
         "FIXED_EPSILON": 350000.0,
     },
     "acs": {
-        "EPSILON_VALUES": [5000.0, 10000.0, 15000.0, 17500.0, 20000.0],
-        "FIXED_EPSILON": 17500.0,
+        "EPSILON_VALUES": [50.0, 100.0, 200.0, 500.0, 1000.0],  # Very small epsilon = many subgroups to check = strong RW advantage
+        "FIXED_EPSILON": 500.0,  # Fixed epsilon for delta experiment (smaller = more subgroups)
     },
     "german": {
         "EPSILON_VALUES": [0.1, 0.3, 0.5, 0.7, 0.9],
@@ -53,8 +53,10 @@ _ABLATION_PARAMS = {
 _ds_ablation = _ABLATION_PARAMS.get(CHOSEN_DS, {"EPSILON_VALUES": [250000.0, 300000.0, 350000.0, 400000.0, 450000.0], "FIXED_EPSILON": 350000.0})
 EPSILON_VALUES = _ds_ablation["EPSILON_VALUES"]
 FIXED_EPSILON = _ds_ablation["FIXED_EPSILON"]
-DELTA_PERCENTAGES = [0.05, 0.10, 0.15, 0.20]  # 5%, 10%, 15%, 20%
-FIXED_DELTA_PERCENTAGE = 0.10  # 10%
+# Delta percentages - use smaller values for ACS to show RW advantage
+# For ACS (~600k rows): 0.01% = 60, 0.02% = 120, 0.05% = 300, 0.1% = 600
+DELTA_PERCENTAGES = [0.01, 0.02, 0.05, 0.10]  # 0.01%, 0.02%, 0.05%, 0.10% (smaller = more subgroups)
+FIXED_DELTA_PERCENTAGE = 0.05  # 0.05% (was 10%)
 NUM_RW_RUNS = 3
 
 print("\n" + "="*70)
@@ -245,7 +247,7 @@ def run_ablation_study():
     
     # Experiment 1: Varying Epsilon (Fixed Delta)
     print("\n" + "="*70)
-    print("EXPERIMENT 1: Varying Epsilon (Fixed Delta = 10% of each rule's subset)")
+    print(f"EXPERIMENT 1: Varying Epsilon (Fixed Delta = {FIXED_DELTA_PERCENTAGE*100:.2f}% of each rule's subset)")
     print("="*70)
     
     for eps_idx, epsilon in enumerate(EPSILON_VALUES):
@@ -263,27 +265,32 @@ def run_ablation_study():
             
             # FPGrowth
             result = process_rule(rule, full_df, TARGET_COLUMN_NAME, None, epsilon, "FPGrowth", FIXED_DELTA_PERCENTAGE)
+            fp_runtime = result['runtime_seconds'] if result else 0
             if result:
                 result['experiment'] = 'varying_epsilon'
                 results.append(result)
-                print(f" | FPGrowth: {'✓' if result['is_homogeneous'] else '✗'}", end="")
+                print(f" | FPGrowth: {'✓' if result['is_homogeneous'] else '✗'} ({fp_runtime:.2f}s)", end="")
             completed_runs += 1
             
             # RW_Direct (3 runs)
+            rw_runtimes = []
             for run in range(NUM_RW_RUNS):
                 result = process_rule(rule, full_df, TARGET_COLUMN_NAME, None, epsilon, "RW_Direct", FIXED_DELTA_PERCENTAGE)
                 if result:
+                    rw_runtimes.append(result['runtime_seconds'])
                     result['experiment'] = 'varying_epsilon'
                     result['run_number'] = run + 1
                     results.append(result)
                     if run == 0:
-                        print(f" | RW: {'✓' if result['is_homogeneous'] else '✗'}", end="")
+                        rw_avg = sum(rw_runtimes) / len(rw_runtimes) if rw_runtimes else 0
+                        speedup = fp_runtime / rw_avg if rw_avg > 0 else 0
+                        print(f" | RW: {'✓' if result['is_homogeneous'] else '✗'} ({rw_avg:.2f}s, {speedup:.2f}x)", end="")
             completed_runs += 1
             print()
     
     # Experiment 2: Varying Delta (Fixed Epsilon)
     print("\n" + "="*70)
-    print("EXPERIMENT 2: Varying Delta (Fixed Epsilon = 350k)")
+    print(f"EXPERIMENT 2: Varying Delta (Fixed Epsilon = {FIXED_EPSILON:,.0f})")
     print("="*70)
     
     for delta_idx, delta_pct in enumerate(DELTA_PERCENTAGES):
@@ -302,21 +309,26 @@ def run_ablation_study():
             
             # FPGrowth
             result = process_rule(rule, full_df, TARGET_COLUMN_NAME, None, FIXED_EPSILON, "FPGrowth", delta_pct)
+            fp_runtime = result['runtime_seconds'] if result else 0
             if result:
                 result['experiment'] = 'varying_delta'
                 results.append(result)
-                print(f" | FPGrowth: {'✓' if result['is_homogeneous'] else '✗'}", end="")
+                print(f" | FPGrowth: {'✓' if result['is_homogeneous'] else '✗'} ({fp_runtime:.2f}s)", end="")
             completed_runs += 1
             
             # RW_Direct (3 runs)
+            rw_runtimes = []
             for run in range(NUM_RW_RUNS):
                 result = process_rule(rule, full_df, TARGET_COLUMN_NAME, None, FIXED_EPSILON, "RW_Direct", delta_pct)
                 if result:
+                    rw_runtimes.append(result['runtime_seconds'])
                     result['experiment'] = 'varying_delta'
                     result['run_number'] = run + 1
                     results.append(result)
                     if run == 0:
-                        print(f" | RW: {'✓' if result['is_homogeneous'] else '✗'}", end="")
+                        rw_avg = sum(rw_runtimes) / len(rw_runtimes) if rw_runtimes else 0
+                        speedup = fp_runtime / rw_avg if rw_avg > 0 else 0
+                        print(f" | RW: {'✓' if result['is_homogeneous'] else '✗'} ({rw_avg:.2f}s, {speedup:.2f}x)", end="")
             completed_runs += 1
             print()
     

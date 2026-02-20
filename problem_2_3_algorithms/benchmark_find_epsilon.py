@@ -19,6 +19,7 @@ from typing import List, Dict
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import re
 
 # seaborn is optional; we fall back to matplotlib-only plots if it's not installed.
 try:
@@ -43,14 +44,57 @@ TREATMENT_COL = config['TREATMENT_COL']
 def load_treatments(treatment_file: str = None) -> List[Dict]:
     """Load treatment-condition pairs from JSON file."""
     if treatment_file is None:
-        # Use the canonical treatments file from algorithms folder
-        treatment_file = Path(__file__).resolve().parent.parent / "algorithms" / "Chosen10Treatments.json"
+        # Use the local treatments file in problem_2_3_algorithms/
+        treatment_file = Path(__file__).resolve().parent / "Chosen10Treatments.json"
     
     treatments = []
     with open(treatment_file, "r") as f:
         for line in f:
             treatments.append(json.loads(line))
     return treatments
+
+
+def _prepare_rule_df(base_df, rule, outcome_col):
+    """Prepare a filtered DataFrame for one rule on-the-fly (no pre-computed CSV).
+
+    Used when a base encoded dataset exists (e.g. ACS) instead of pre-computed
+    per-rule CSVs (SO path).
+
+    Returns
+    -------
+    (df, actual_outcome_col)  or  (None, outcome_col) if the rule is empty.
+    """
+    condition = rule['condition']
+    treatment_dict = rule['treatment']
+
+    cond_attr, cond_val = list(condition.items())[0]
+    treat_attr, treat_val = list(treatment_dict.items())[0]
+
+    sub_df = base_df[base_df[cond_attr] == cond_val].copy()
+    if sub_df.empty:
+        return None, outcome_col
+
+    # Drop condition column (invariant after filtering)
+    sub_df = sub_df.drop(columns=[cond_attr])
+
+    # Create binary treatment column
+    sub_df[TREATMENT_COL] = (sub_df[treat_attr] == treat_val).astype(int)
+
+    # Drop treatment source column
+    if treat_attr in sub_df.columns:
+        sub_df = sub_df.drop(columns=[treat_attr])
+
+    if sub_df[TREATMENT_COL].sum() == 0:
+        return None, outcome_col
+
+    # Clean column names (special chars like commas cause FPGrowth issues)
+    sub_df = sub_df.rename(columns=lambda x: re.sub(r'[,:\[\]\{\}"]', '_', x))
+    actual_outcome_col = re.sub(r'[,:\[\]\{\}"]', '_', outcome_col)
+
+    # Ensure outcome is numeric
+    sub_df[actual_outcome_col] = pd.to_numeric(sub_df[actual_outcome_col], errors='coerce')
+
+    return sub_df, actual_outcome_col
 
 
 def run_benchmark(
@@ -60,19 +104,31 @@ def run_benchmark(
     epsilon_max_cap: float = 1_000_000_000.0,
     output_dir: str = "benchmark_results",
     verbose: bool = False,
+    # ── Dataset-specific parameters ──
+    treatment_file: str = None,
+    outcome_col: str = 'ConvertedSalary',
+    base_dataset_path: str = None,
+    delta_percentages: List[float] = None,
 ) -> pd.DataFrame:
     """
     Run comprehensive benchmark across multiple rules and delta values.
     
     Args:
         num_rules: Number of rules to test
-        delta_values: List of delta values to test for each rule
+        delta_values: List of absolute delta values to test (SO path).
         epsilon_0: Initial ε₀ for Phase 1 exponential search (None = auto, default 1000)
         epsilon_max_cap: Maximum epsilon cap to prevent infinite search
         output_dir: Directory for output files
         verbose: Print detailed progress
+        treatment_file: Path to treatments JSON (None → default SO file)
+        outcome_col: Name of the outcome column
+        base_dataset_path: Path to encoded base CSV for on-the-fly prep.
+                           If None, pre-computed per-rule SO CSVs are used.
+        delta_percentages: If set, overrides *delta_values* with percentages of
+                           each rule's per-rule dataset size (e.g. [5, 10, 15, 20]).
     """
-    if delta_values is None:
+    use_pct = delta_percentages is not None
+    if delta_values is None and not use_pct:
         delta_values = [500, 1000, 1500, 2000, 2500, 3000]
     
     # Create output directory
@@ -84,9 +140,16 @@ def run_benchmark(
     print("="*80)
     print("BENCHMARK: Two-Phase Find Smallest Epsilon Algorithm")
     print("="*80)
-    print(f"Testing {num_rules} rules with {len(delta_values)} delta values each")
-    print(f"Total experiments: {num_rules * len(delta_values)}")
-    print(f"Delta values: {delta_values}")
+    if use_pct:
+        n_delta = len(delta_percentages)
+        print(f"Testing {num_rules} rules with {n_delta} delta-% values each")
+        print(f"Total experiments: {num_rules * n_delta}")
+        print(f"Delta percentages: {delta_percentages}")
+    else:
+        n_delta = len(delta_values)
+        print(f"Testing {num_rules} rules with {n_delta} delta values each")
+        print(f"Total experiments: {num_rules * n_delta}")
+        print(f"Delta values: {delta_values}")
     if epsilon_0 is None:
         print(f"Phase 1: Exponential search to find ε_max (starting from ε₀ = 1000)")
     else:
@@ -96,13 +159,22 @@ def run_benchmark(
     print("="*80)
     
     # Load treatments
-    treatments = load_treatments()[:num_rules]
+    treatments = load_treatments(treatment_file)[:num_rules]
+    
+    # Pre-load base dataset once for on-the-fly mode (ACS path)
+    base_df = None
+    if base_dataset_path is not None:
+        print(f"\nLoading base dataset: {base_dataset_path}")
+        base_df = pd.read_csv(base_dataset_path)
+        # Remove Unnamed columns (same as ablation study - line 220)
+        base_df = base_df.loc[:, ~base_df.columns.str.startswith('Unnamed')]
+        print(f"  → {len(base_df)} rows, {len(base_df.columns)} columns")
     
     # Results storage
     results = []
     
     # Counter for progress
-    total_experiments = num_rules * len(delta_values)
+    total_experiments = num_rules * (len(delta_percentages) if use_pct else len(delta_values))
     current_experiment = 0
     
     # Run benchmark
@@ -110,24 +182,36 @@ def run_benchmark(
         condition = treatment_data['condition']
         treatment = treatment_data['treatment']
         
-        # Load corresponding dataset
-        dataset_path = Path(f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv')
+        # ── Prepare dataset for this rule ──
+        if base_df is not None:
+            df, actual_outcome_col = _prepare_rule_df(base_df, treatment_data, outcome_col)
+            if df is None:
+                print(f"\n⚠️  Warning: Rule {rule_idx} produced empty dataset. Skipping.")
+                continue
+        else:
+            dataset_path = Path(f'../stackoverflow/processed_db/so_countries_treatment_{rule_idx}_encoded.csv')
+            if not dataset_path.exists():
+                print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
+                continue
+            df = pd.read_csv(dataset_path)
+            actual_outcome_col = outcome_col
         
-        if not dataset_path.exists():
-            print(f"\n⚠️  Warning: Dataset for rule {rule_idx} not found. Skipping.")
-            continue
-        
-        df = pd.read_csv(dataset_path)
-        df = df.rename(columns={'TempTreatment': 'treatment'})  # Fix: rename treatment column
+        # ── Resolve delta values for this rule ──
+        if use_pct:
+            rule_deltas = [max(1, int(len(df) * pct / 100)) for pct in delta_percentages]
+        else:
+            rule_deltas = delta_values
         
         print(f"\n{'='*80}")
         print(f"RULE {rule_idx}/{num_rules}")
         print(f"Condition: {condition}")
         print(f"Treatment: {treatment}")
         print(f"Dataset size: {len(df)} rows")
+        if use_pct:
+            print(f"Delta values (from %): {rule_deltas}")
         print(f"{'='*80}")
         
-        for delta in delta_values:
+        for delta in rule_deltas:
             current_experiment += 1
             
             if len(df) < delta:
@@ -142,7 +226,7 @@ def run_benchmark(
             smallest_epsilon, oracle_calls, violation_info, utility_all, phase1_calls, phase2_calls = find_smallest_epsilon_achieving_homogeneity(
                 df=df,
                 treatment_col=TREATMENT_COL,
-                outcome_col='ConvertedSalary',
+                outcome_col=actual_outcome_col,
                 delta=delta,
                 epsilon_0=epsilon_0,
                 epsilon_max_cap=epsilon_max_cap,
@@ -857,10 +941,23 @@ Algorithm:
                        help='Maximum epsilon cap (default: 1 billion)')
     parser.add_argument('--output', type=str, default='benchmark_results',
                        help='Output directory (default: benchmark_results)')
+    parser.add_argument('--dataset', type=str, default='so', choices=['so', 'acs'],
+                       help='Dataset to benchmark (default: so)')
     
     args = parser.parse_args()
     
     delta_values = [int(x.strip()) for x in args.deltas.split(',')]
+    
+    # ── Dataset-specific configuration ──
+    ds_kwargs = {}
+    if args.dataset == 'acs':
+        proj_root = Path(__file__).resolve().parent.parent
+        ds_kwargs = dict(
+            treatment_file=str(proj_root / "algorithms" / "ACSChosen10Treatments.json"),
+            outcome_col="Wages or salary income past 12 months",
+            base_dataset_path=str(proj_root / "acs" / "acs_encoded.csv"),
+            delta_percentages=[5, 10, 15, 20],
+        )
     
     print("\n🚀 Starting benchmark...\n")
     start_total = time.time()
@@ -870,7 +967,8 @@ Algorithm:
         delta_values=delta_values,
         epsilon_0=args.epsilon_0,
         epsilon_max_cap=args.epsilon_max,
-        output_dir=args.output
+        output_dir=args.output,
+        **ds_kwargs
     )
     
     total_time = time.time() - start_total

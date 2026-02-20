@@ -18,6 +18,7 @@ from mlxtend.frequent_patterns import fpgrowth
 # Add project paths
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'algorithms'))
 
 from ATE_update import calculate_ate_safe
 from apriori_algorithm import calc_utility_for_subgroups as fpgrowth_oracle

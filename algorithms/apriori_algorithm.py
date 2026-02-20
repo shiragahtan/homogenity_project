@@ -131,6 +131,14 @@ def calc_utility_for_subgroups(
         If mode == 1: (subgroup_records, count_checked, enum_time, iter_time)
     """
     exclude_cols = [treatment_col, BINARY_TREATMENT, tgtO]
+    
+    # Exclude index columns (like "Unnamed: 0") that have one unique value per row
+    # These create massive one-hot matrices and shouldn't be used for subgroup mining.
+    # Note: The ablation study also excludes these (see ablation_study.py line 220).
+    # Subgroups from such columns would be size 1, which never meets delta threshold.
+    for col in df.columns:
+        if col.startswith('Unnamed:') or df[col].nunique() == len(df):
+            exclude_cols.append(col)
 
     # --- PHASE 1: ENUMERATION (Mining) ---
     start_enum = time.time()  # <--- Start Timer

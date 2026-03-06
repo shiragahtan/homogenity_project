@@ -68,7 +68,7 @@ def choose_random_key(weights_optimization_method, random_choice, global_key_val
         return random.choices(keys, weights=normalized_weights, k=1)[0]
 
 
-def k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method):
+def k_rw(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method):
     total_ate_calculations = 0
     total_ate_time = 0
     global_used_combinations = set()
@@ -260,7 +260,7 @@ def main(csv_name, attributes_for_apriori, treatment, outcome, desired_ate, k, s
     print(frequent_itemsets[['formatted_itemsets', 'itemset_size']])
 
     df = df.astype(original_types)
-    k_random_walks(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method)
+    k_rw(k, treatment, outcome, df, desired_ate, size_threshold, weights_optimization_method)
     elapsed_time = time.time() - start_time
     print(f"Total execution time: {elapsed_time / 60:.2f} minutes")
 

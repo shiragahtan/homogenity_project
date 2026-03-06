@@ -1,5 +1,5 @@
 """
-Core subgroup analysis algorithms using Apriori.
+Core subgroup analysis algorithms using BruteForce (naive enumeration over all subgroups).
 This module contains functions for finding subgroups and calculating their utility.
 """
 import sys
@@ -63,7 +63,7 @@ def mine_subgroups(
 
     onehot = pd.concat(onehot_parts, axis=1)
 
-    # Apriori algorithm for frequent itemsets
+    # BruteForce: frequent itemsets (apriori/fpgrowth from mlxtend)
     min_sup = delta / len(df)
     freq = algorithm(onehot, min_support=min_sup, use_colnames=True)
 
@@ -124,7 +124,7 @@ def calc_utility_for_subgroups(
     utility_all: float
 ) -> Union[Tuple[bool, int, float, float], Tuple[List[dict], int, float, float]]:
     """
-    Calculate utility for subgroups using Apriori.
+    Calculate utility for subgroups using BruteForce (enumeration).
 
     Returns:
         If mode != 1: (is_homogeneous, count_checked, enum_time, iter_time)

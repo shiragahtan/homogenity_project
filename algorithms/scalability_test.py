@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 
 # Import Algorithms
 import rw_unlearning as rw_algo
-import apriori_algorithm as bf_algo
+import brute_force_algorithm as bf_algo
 from ATE_update import calculate_ate_safe
 
 # --- LOGGING SETUP ---

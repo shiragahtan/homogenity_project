@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'yarden_files'))
 from ATE_update import calculate_ate_safe
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from bruteForce_algorithm import calc_utility_for_subgroups as naive_calc_utility_for_subgroups
-from apriori_algorithm import calc_utility_for_subgroups as apriori_calc_utility_for_subgroups
+from brute_force_algorithm import calc_utility_for_subgroups as brute_force_calc_utility_for_subgroups
 from algorithms.multiProcessing_algorithm import \
     calc_utility_for_subgroups as multiProcessing_calc_utility_for_subgroups
 from rw_unlearning import calc_utility_for_subgroups as rw_unlearning_calc_utility_for_subgroups
@@ -277,9 +277,9 @@ def run_experiments(chosen_mode, chosen_algorithm_name, delta, df, tgtO, attr_va
         rw_common = common.copy()
         rw_common['mode'] = 0
         algo_dispatch = {
-            "BruteForce": (naive_calc_utility_for_subgroups, dict(common, attr_vals=attr_vals)),
-            "Apriori": (apriori_calc_utility_for_subgroups, dict(common, algorithm=apriori)),
-            "FPGrowth": (apriori_calc_utility_for_subgroups, dict(common, algorithm=fpgrowth)),
+            "BruteForce": (brute_force_calc_utility_for_subgroups, dict(common, algorithm=fpgrowth)),
+            "Apriori": (brute_force_calc_utility_for_subgroups, dict(common, algorithm=apriori)),
+            "FPGrowth": (brute_force_calc_utility_for_subgroups, dict(common, algorithm=fpgrowth)),
             "MultiProcessing": (multiProcessing_calc_utility_for_subgroups, dict(common, n_jobs=mp.cpu_count())),
             "RW": (rw_unlearning_calc_utility_for_subgroups,
                    dict(rw_common, algorithm=apriori, size_stop=0.8, attribute_weights=ATTRIBUTE_WEIGHTS)),
